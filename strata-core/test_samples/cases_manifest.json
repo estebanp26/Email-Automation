@@ -1,0 +1,102 @@
+[
+  {
+    "case_id": 1,
+    "title": "Incapacidad médica EPS Sanitas válida con sello y fecha actual",
+    "file": "case_01_sanitas_valida.pdf",
+    "email_subject": "Justificante inasistencia médica - Carlos Restrepo",
+    "email_body": "Adjunto incapacidad médica de EPS Sanitas por el día de hoy por cuadro gastrointestinal.",
+    "expected_valido": true,
+    "expected_tipo": "inasistencia_medica",
+    "expected_manual_review": false
+  },
+  {
+    "case_id": 2,
+    "title": "Escaneo de Incapacidad SURA EPS con sello profesional",
+    "file": "case_02_sura_escaner.png",
+    "email_subject": "Incapacidad médica por 2 días - Laura Mejía",
+    "email_body": "Buenos días, adjunto la foto del certificado médico de SURA por cefalea severa.",
+    "expected_valido": true,
+    "expected_tipo": "inasistencia_medica",
+    "expected_manual_review": false
+  },
+  {
+    "case_id": 3,
+    "title": "Incapacidad médica extemporánea (fecha vencida hace 15 días)",
+    "file": "case_03_fecha_vencida.pdf",
+    "email_subject": "Excusa de falta atrasada - Andrés Gómez",
+    "email_body": "Profe adjunto la incapacidad médica de hace dos semanas que no alcancé a enviar antes.",
+    "expected_valido": false,
+    "expected_tipo": "inasistencia_medica",
+    "expected_manual_review": true
+  },
+  {
+    "case_id": 4,
+    "title": "Constancia médica informal sin firma ni sello profesional",
+    "file": "case_04_sin_firma_ni_sello.pdf",
+    "email_subject": "Justificación médica - Mateo Herrera",
+    "email_body": "Fui al médico particular y me dieron esta constancia de reposo.",
+    "expected_valido": false,
+    "expected_tipo": "inasistencia_medica",
+    "expected_manual_review": true
+  },
+  {
+    "case_id": 5,
+    "title": "Calamidad doméstica en texto plano (sin adjunto)",
+    "file": null,
+    "email_subject": "Inasistencia por calamidad doméstica grave - Isabella Mendoza",
+    "email_body": "Equipo HSE, lamentablemente en la madrugada falleció mi abuela y me encuentro realizando los trámites funerarios. No podré conectarme hoy.",
+    "expected_valido": false,
+    "expected_tipo": "calamidad",
+    "expected_manual_review": true
+  },
+  {
+    "case_id": 6,
+    "title": "Reporte de falla técnica de proveedor de internet",
+    "file": "case_06_falla_internet.png",
+    "email_subject": "Sin internet en el sector - Sofía Ramírez",
+    "email_body": "Se cayó la fibra óptica de Tigo en mi barrio. Adjunto captura del ticket oficial de falla.",
+    "expected_valido": true,
+    "expected_tipo": "falla_tecnica",
+    "expected_manual_review": false
+  },
+  {
+    "case_id": 7,
+    "title": "Fórmula médica de farmacia (no es incapacidad)",
+    "file": "case_07_formula_no_incapacidad.pdf",
+    "email_subject": "Soporte de medicamentos - Esteban Padilla",
+    "email_body": "Adjunto el papel que me dio el médico en urgencias con los medicamentos.",
+    "expected_valido": false,
+    "expected_tipo": "inasistencia_medica",
+    "expected_manual_review": true
+  },
+  {
+    "case_id": 8,
+    "title": "Salida temprana con cita odontológica programada",
+    "file": "case_08_salida_temprana_cita.pdf",
+    "email_subject": "Permiso para retirarme 1 hora antes - Valentina Ríos",
+    "email_body": "Tengo procedimiento quirúrgico dental a las 11:30 AM. Adjunto la constancia de la clínica.",
+    "expected_valido": true,
+    "expected_tipo": "salida_temprana",
+    "expected_manual_review": false
+  },
+  {
+    "case_id": 9,
+    "title": "Fotografía totalmente borrosa e ilegible",
+    "file": "case_09_foto_borrosa_ilegible.png",
+    "email_subject": "Justificante médico - Daniel Vargas",
+    "email_body": "Adjunto foto de la excusa que me dieron en el puesto de salud.",
+    "expected_valido": false,
+    "expected_tipo": "no_identificado",
+    "expected_manual_review": true
+  },
+  {
+    "case_id": 10,
+    "title": "Correo de Spam / Asunto no relacionado con asistencia",
+    "file": null,
+    "email_subject": "Descuentos en cursos de React y certificación cloud",
+    "email_body": "Aprovecha el 50% de descuento en suscripciones anuales ingresando a nuestra plataforma web.",
+    "expected_valido": false,
+    "expected_tipo": "no_identificado",
+    "expected_manual_review": true
+  }
+]
