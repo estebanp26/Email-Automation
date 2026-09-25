@@ -287,3 +287,34 @@ REGLAS:
             "pages_consulted": pages_used,
             "error": error_msg,
         }
+
+    async def evaluate_hse_excuse(
+        self,
+        document_data: Dict[str, Any],
+        system_prompt_template: str,
+        rules: Dict[str, Any],
+        email_subject: Optional[str] = None,
+        email_body: Optional[str] = None,
+        model: str = DEFAULT_MODEL
+    ) -> Tuple[Dict[str, Any], List[int], Optional[str]]:
+        """Evaluates an attendance excuse using calibrated prompt and dynamic HSE rules."""
+        keywords = ["incapacidad", "paciente", "medico", "diagnostico", "fecha", "sello", "eps", "firma", "calamidad", "tardanza"]
+        context_text, pages_used = self.build_pruned_context(document_data, keywords, max_chars=3500)
+        
+        rules_str = json.dumps(rules, indent=2, ensure_ascii=False)
+        rendered_prompt = system_prompt_template.replace("{{dynamic_rules}}", rules_str)
+        
+        doc_section = "\n\n--- INFORMACIÓN DEL CORREO Y DOCUMENTO ---\n"
+        if email_subject:
+            doc_section += f"ASUNTO: {email_subject}\n"
+        if email_body:
+            doc_section += f"CUERPO DEL CORREO: {email_body}\n"
+        if context_text:
+            doc_section += f"\nCONTENIDO DEL DOCUMENTO/ADJUNTO:\n{context_text}\n"
+        else:
+            doc_section += "\n[No se detectó documento adjunto o el soporte está vacío]\n"
+            
+        full_prompt = rendered_prompt + doc_section + "\n\nResponde ÚNICAMENTE con el JSON estipulado:"
+        
+        raw, error = await self._generate(full_prompt, model=model)
+        return raw, pages_used, error

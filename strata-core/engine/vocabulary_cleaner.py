@@ -17,7 +17,7 @@ VOCABULARY_LIST = [
     "nacimiento", "direccion", "telefono", "celular", "correo", "electronico", "municipio",
     "ciudad", "departamento", "pais", "zona", "barrio", "localidad", "afiliado",
 
-    # Medical & Healthcare
+    # Medical & Healthcare (Colombian EPS & Institutions)
     "diagnostico", "medico", "especialista", "prestador", "clinica", "hospital", "salud",
     "entidad", "primaria", "cooperativa", "asociado", "integral", "sociedad", "habilitacion",
     "procedimiento", "procedimientos", "examen", "examenes", "estudio", "laboratorio",
@@ -25,7 +25,15 @@ VOCABULARY_LIST = [
     "monitoreo", "continuo", "holter", "consulta", "urgencias", "hospitalizacion",
     "terapia", "tratamiento", "cirugia", "medicamento", "medicamentos", "dosis",
     "losartan", "hidroclorotiazida", "hidroxido", "aluminio", "previsalud", "semedical",
-    "ceminsa", "coosalud", "sabanalarga",
+    "ceminsa", "coosalud", "sabanalarga", "sanitas", "sura", "compensar", "famisanar",
+    "saludtotal", "capresoca", "asmet", "coosalud", "savia", "mutser", "incapacidad",
+    "reposo", "tratante", "remision",
+
+    # HSE Attendance & Justification terms
+    "inasistencia", "justificacion", "tardanza", "permiso", "salida", "temprana",
+    "calamidad", "domestica", "defuncion", "judicial", "notarial", "conectividad",
+    "falla", "suministro", "energia", "sello", "profesional", "oficial", "asistencia",
+    "coder", "estudiante", "cohorte", "docente", "formador",
 
     # Financial / Invoicing
     "factura", "proveedor", "cliente", "empresa", "subtotal", "descuento", "impuesto",
@@ -56,6 +64,9 @@ DISPLAY_FORMS: Dict[str, str] = {
     "previsalud": "Previsalud", "semedical": "Semedical", "losartan": "Losartán",
     "hidroclorotiazida": "Hidroclorotiazida", "hidroxido": "Hidróxido",
     "ceminsa": "CEMINSA", "coosalud": "COOSALUD", "sabanalarga": "Sabanalarga",
+    "sanitas": "Sanitas", "sura": "SURA", "compensar": "Compensar", "famisanar": "Famisanar",
+    "saludtotal": "Salud Total", "incapacidad": "Incapacidad", "inasistencia": "Inasistencia",
+    "justificacion": "Justificación", "tardanza": "Tardanza", "reposo": "Reposo",
 }
 
 def strip_accents(s: str) -> str:

@@ -122,6 +122,9 @@ async def evaluate_excuse(
     t_start = time.perf_counter()
     temp_file_path = None
     
+    if not isinstance(model, str) or not model:
+        model = DEFAULT_MODEL
+        
     try:
         rules = DEFAULT_HSE_RULES
         if rules_json:
@@ -146,58 +149,55 @@ async def evaluate_excuse(
             
         doc_data = _process_input_to_doc_data(temp_file_path, combined_text if not temp_file_path else None)
         
-        # Extracción de campos clave usando Strata Core
-        target_fields = [
-            "Nombre del Coder",
-            "Fecha o Rango de Inasistencia",
-            "Institucion Emisora o EPS",
-            "Motivo o Diagnostico CIE-10",
-            "Tiene Firma o Sello Oficial"
-        ]
-        
-        ai_res = await ai_client.extract_values(doc_data, target_fields, model=model)
-        raw_values = ai_res.get("values", {})
-        
-        # Ponderación y Veredicto con reglas de negocio HSE
-        extracted_name = raw_values.get("Nombre del Coder") or "No identificado"
-        extracted_date = raw_values.get("Fecha o Rango de Inasistencia") or "No identificada"
-        extracted_reason = raw_values.get("Motivo o Diagnostico CIE-10") or "Inasistencia general"
-        extracted_stamp = raw_values.get("Tiene Firma o Sello Oficial")
-        has_stamp = bool(extracted_stamp and any(w in str(extracted_stamp).lower() for w in ["si", "válido", "valido", "sello", "firma", "oficial"]))
-        
-        # Determinar validez según reglas dinámicas
-        is_valid = True
-        decision_reasons = []
-        requires_manual_review = False
-        
-        if rules.get("requires_attachment", True) and not temp_file_path:
-            is_valid = False
-            decision_reasons.append("No se adjuntó soporte documental o constancia válida.")
+        PROMPT_PATH = os.path.join(BASE_DIR, "prompts", "evaluator_system_prompt.md")
+        with open(PROMPT_PATH, "r", encoding="utf-8") as f:
+            system_prompt_template = f.read()
             
-        if temp_file_path and not has_stamp:
-            decision_reasons.append("El documento adjunto no presenta firma o sello profesional visible.")
-            requires_manual_review = True
-            
-        if not decision_reasons:
-            decision_reasons.append("Documento médico/oficial válido con fecha y soporte verificable.")
-            
-        confidence = 0.95 if (is_valid and not requires_manual_review) else 0.70
+        ai_verdict, pages_used, error_msg = await ai_client.evaluate_hse_excuse(
+            document_data=doc_data,
+            system_prompt_template=system_prompt_template,
+            rules=rules,
+            email_subject=email_subject,
+            email_body=email_body,
+            model=model
+        )
         
+        # Validación y saneamiento del veredicto para cumplir con evaluation_schema.json
+        valido = bool(ai_verdict.get("valido", False))
+        tipo_novedad = ai_verdict.get("tipo_novedad") or "no_identificado"
+        valid_types = ["inasistencia_medica", "calamidad", "tramite_oficial", "falla_tecnica", "tardanza", "salida_temprana", "no_identificado"]
+        if tipo_novedad not in valid_types:
+            tipo_novedad = "no_identificado"
+            
+        fecha_afectada = str(ai_verdict.get("fecha_afectada") or "No identificada")
+        motivo_decision = str(ai_verdict.get("motivo_decision") or "Evaluación completada.")
+        
+        try:
+            confianza_score = float(ai_verdict.get("confianza_score", 0.8))
+            confianza_score = max(0.0, min(1.0, confianza_score))
+        except (ValueError, TypeError):
+            confianza_score = 0.80
+            
+        requiere_revision_manual = bool(ai_verdict.get("requiere_revision_manual", False))
+        
+        detalles_adjunto = ai_verdict.get("detalles_adjunto") or {}
+        if not isinstance(detalles_adjunto, dict):
+            detalles_adjunto = {}
+            
+        detalles_adjunto["paginas_consultadas"] = pages_used
+        if error_msg:
+            detalles_adjunto["warning_modelo"] = error_msg
+            
         t_elapsed = time.perf_counter() - t_start
         
         return {
-            "valido": is_valid and not requires_manual_review,
-            "tipo_novedad": "inasistencia_medica" if "med" in extracted_reason.lower() else "inasistencia_general",
-            "fecha_afectada": extracted_date,
-            "motivo_decision": ". ".join(decision_reasons),
-            "confianza_score": round(confidence, 2),
-            "requiere_revision_manual": requires_manual_review,
-            "detalles_adjunto": {
-                "coder_detectado": extracted_name,
-                "motivo_extraido": extracted_reason,
-                "tiene_firma_o_sello": has_stamp,
-                "paginas_consultadas": ai_res.get("pages_consulted", [])
-            },
+            "valido": valido,
+            "tipo_novedad": tipo_novedad,
+            "fecha_afectada": fecha_afectada,
+            "motivo_decision": motivo_decision,
+            "confianza_score": round(confianza_score, 2),
+            "requiere_revision_manual": requiere_revision_manual,
+            "detalles_adjunto": detalles_adjunto,
             "tiempo_procesamiento_segundos": round(t_elapsed, 2)
         }
         
