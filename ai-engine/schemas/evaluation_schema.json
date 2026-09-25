@@ -1,0 +1,50 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "HSEEvaluationResult",
+  "type": "object",
+  "properties": {
+    "valido": {
+      "type": "boolean",
+      "description": "Indica si la justificación cumple con los criterios de HSE."
+    },
+    "tipo_novedad": {
+      "type": "string",
+      "enum": ["inasistencia_medica", "calamidad", "tramite_oficial", "falla_tecnica", "tardanza", "salida_temprana", "no_identificado"],
+      "description": "Categoría de la justificación."
+    },
+    "fecha_afectada": {
+      "type": "string",
+      "description": "Fecha o rango de fechas que cubre la justificación (formato YYYY-MM-DD o texto si es rango)."
+    },
+    "motivo_decision": {
+      "type": "string",
+      "description": "Explicación concisa y clara de por qué se aprueba, rechaza o envía a revisión."
+    },
+    "confianza_score": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1,
+      "description": "Nivel de certeza del modelo (0.0 a 1.0)."
+    },
+    "requiere_revision_manual": {
+      "type": "boolean",
+      "description": "True si el documento es ilegible, dudoso o está por debajo del umbral de confianza."
+    },
+    "detalles_adjunto": {
+      "type": "object",
+      "properties": {
+        "es_legible": { "type": "boolean" },
+        "tiene_firma_o_sello": { "type": "boolean" },
+        "institucion_emisora": { "type": "string" }
+      }
+    }
+  },
+  "required": [
+    "valido",
+    "tipo_novedad",
+    "fecha_afectada",
+    "motivo_decision",
+    "confianza_score",
+    "requiere_revision_manual"
+  ]
+}
