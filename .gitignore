@@ -3,6 +3,17 @@ node_modules/
 .pnp
 .pnp.js
 
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+temp_processing/
+uploads/
+
+# Documentation binaries
+*.pdf
+
 # Environment variables
 .env
 .env.local
