@@ -11,7 +11,7 @@ import os, json, io, time
 import pymupdf as fitz
 from PIL import Image, ImageDraw, ImageFilter
 
-SAMPLES_DIR = "/home/andres/Projects/Email-Automation/strata-core/test_samples"
+SAMPLES_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "test_samples")
 os.makedirs(SAMPLES_DIR, exist_ok=True)
 
 # 1. Caso 1: Incapacidad EPS Sanitas válida con sello y fecha actual (PDF)
@@ -278,7 +278,7 @@ def main():
     with open(manifest_path, "w", encoding="utf-8") as f:
         json.dump(manifest, f, indent=2, ensure_ascii=False)
 
-    print(f"[✓] Manifiesto guardado con los 10 casos en:\n    {manifest_path}")
+    print(f"[OK] Manifiesto guardado con los 10 casos en:\n    {manifest_path}")
 
 if __name__ == "__main__":
     main()
