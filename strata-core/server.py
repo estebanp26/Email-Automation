@@ -22,6 +22,7 @@ import base64
 from engine.pdf_reader import PDFEngineReader
 from engine.search_index import SearchEngine
 from engine.ai_extractor import AIExtractor, DEFAULT_MODEL
+from engine.telemetry import metrics_tracker
 
 app = FastAPI(
     title="Strata Core — Document Perception & Evidence Verification API",
@@ -63,6 +64,12 @@ async def health_check():
         "default_model": DEFAULT_MODEL,
         "timestamp": time.time()
     }
+
+
+@app.get("/api/stats")
+async def get_system_stats():
+    """Métricas de rendimiento, latencia y volumen en tiempo real para el Dashboard de Squad 3."""
+    return metrics_tracker.get_stats()
 
 
 def _process_input_to_doc_data(file_path: Optional[str], text_content: Optional[str]) -> Dict[str, Any]:
@@ -220,23 +227,31 @@ async def evaluate_excuse(
             model=model
         )
         
-        # Validación y saneamiento del veredicto para cumplir con evaluation_schema.json
-        valido = bool(ai_verdict.get("valido", False))
-        tipo_novedad = ai_verdict.get("tipo_novedad") or "no_identificado"
-        valid_types = ["inasistencia_medica", "calamidad", "tramite_oficial", "falla_tecnica", "tardanza", "salida_temprana", "no_identificado"]
-        if tipo_novedad not in valid_types:
+        # Validación y saneamiento del veredicto con Failover ante fallos de Ollama
+        if error_msg or not ai_verdict:
+            valido = False
+            requiere_revision_manual = True
+            confianza_score = 0.0
             tipo_novedad = "no_identificado"
+            fecha_afectada = "No identificada"
+            motivo_decision = f"Motor de IA temporalmente no disponible (Ollama Offline o Timeout). Derivado automáticamente a revisión manual del Team Leader. Detalle: {error_msg or 'Respuesta vacía del modelo'}"
+        else:
+            valido = bool(ai_verdict.get("valido", False))
+            tipo_novedad = ai_verdict.get("tipo_novedad") or "no_identificado"
+            valid_types = ["inasistencia_medica", "calamidad", "tramite_oficial", "falla_tecnica", "tardanza", "salida_temprana", "no_identificado"]
+            if tipo_novedad not in valid_types:
+                tipo_novedad = "no_identificado"
+                
+            fecha_afectada = str(ai_verdict.get("fecha_afectada") or "No identificada")
+            motivo_decision = str(ai_verdict.get("motivo_decision") or "Evaluación completada.")
             
-        fecha_afectada = str(ai_verdict.get("fecha_afectada") or "No identificada")
-        motivo_decision = str(ai_verdict.get("motivo_decision") or "Evaluación completada.")
-        
-        try:
-            confianza_score = float(ai_verdict.get("confianza_score", 0.8))
-            confianza_score = max(0.0, min(1.0, confianza_score))
-        except (ValueError, TypeError):
-            confianza_score = 0.80
-            
-        requiere_revision_manual = bool(ai_verdict.get("requiere_revision_manual", False))
+            try:
+                confianza_score = float(ai_verdict.get("confianza_score", 0.8))
+                confianza_score = max(0.0, min(1.0, confianza_score))
+            except (ValueError, TypeError):
+                confianza_score = 0.80
+                
+            requiere_revision_manual = bool(ai_verdict.get("requiere_revision_manual", False))
 
         # Guardrails deterministas de negocio HSE
         text_lower = ((email_subject or "") + " " + (email_body or "")).lower()
@@ -280,6 +295,12 @@ async def evaluate_excuse(
             detalles_adjunto["warning_modelo"] = error_msg
             
         t_elapsed = time.perf_counter() - t_start
+        metrics_tracker.record_evaluation(
+            valido=valido,
+            manual=requiere_revision_manual,
+            tipo=tipo_novedad,
+            latency=round(t_elapsed, 2)
+        )
         
         return {
             "valido": valido,
