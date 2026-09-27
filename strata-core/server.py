@@ -12,10 +12,12 @@ os.environ["OMP_THREAD_LIMIT"] = "1"
 os.environ["OMP_NUM_THREADS"] = "1"
 
 import pymupdf as fitz
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Request
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+from typing import List, Optional, Dict, Any, Union
+import base64
 
 from engine.pdf_reader import PDFEngineReader
 from engine.search_index import SearchEngine
@@ -107,35 +109,90 @@ def _process_input_to_doc_data(file_path: Optional[str], text_content: Optional[
 
 @app.post("/api/evaluate-excuse")
 async def evaluate_excuse(
-    file: Optional[UploadFile] = File(None),
-    email_body: Optional[str] = Form(None),
-    email_subject: Optional[str] = Form(None),
-    rules_json: Optional[str] = Form(None),
-    model: Optional[str] = Form(DEFAULT_MODEL)
+    request: Request = None,
+    file: Optional[UploadFile] = None,
+    email_body: Optional[str] = None,
+    email_subject: Optional[str] = None,
+    rules_json: Optional[Union[str, Dict[str, Any]]] = None,
+    model: Optional[str] = DEFAULT_MODEL
 ):
     """
     Endpoint principal llamado por n8n:
     Recibe el archivo (PDF/Foto) y/o el cuerpo del correo,
+    soporta tanto 'multipart/form-data' como 'application/json',
     evalúa con Strata Core (PyMuPDF + OCR + Qwen 2.5) contra las reglas HSE,
     y retorna el JSON estandarizado para decisión y despacho.
     """
     t_start = time.perf_counter()
     temp_file_path = None
     
+    # 1. Resolver payload dependiendo del medio de invocación (HTTP con Request vs función directa)
+    if request is not None:
+        content_type = request.headers.get("content-type", "").lower()
+        if "application/json" in content_type:
+            try:
+                body_data = await request.json()
+            except Exception:
+                body_data = {}
+            email_body = body_data.get("email_body") or email_body
+            email_subject = body_data.get("email_subject") or email_subject
+            rules_val = body_data.get("rules_json") or body_data.get("rules")
+            if rules_val is not None:
+                rules_json = rules_val
+            model = body_data.get("model") or model
+            
+            # Soporte de adjunto en Base64 desde el JSON (según API_CONTRACTS.md)
+            b64_str = body_data.get("file_base64") or body_data.get("data_base64")
+            b64_filename = body_data.get("file_name") or body_data.get("filename") or "adjunto.pdf"
+            
+            if not b64_str and isinstance(body_data.get("attachments"), list) and len(body_data["attachments"]) > 0:
+                first_att = body_data["attachments"][0]
+                b64_str = first_att.get("data_base64") or first_att.get("file_base64")
+                b64_filename = first_att.get("filename") or first_att.get("file_name") or "adjunto.pdf"
+                
+            if b64_str:
+                try:
+                    if "," in b64_str:
+                        b64_str = b64_str.split(",", 1)[1]
+                    raw_bytes = base64.b64decode(b64_str)
+                    ext = os.path.splitext(b64_filename)[1] or ".pdf"
+                    temp_file_path = os.path.join(TEMP_DIR, f"upload_b64_{uuid.uuid4().hex[:8]}{ext}")
+                    with open(temp_file_path, "wb") as bf:
+                        bf.write(raw_bytes)
+                except Exception as b64_err:
+                    print(f"Warning: Fallo al decodificar adjunto base64: {b64_err}")
+                    temp_file_path = None
+                    
+        elif "multipart/form-data" in content_type or "application/x-www-form-urlencoded" in content_type:
+            try:
+                form = await request.form()
+                form_file = form.get("file")
+                if form_file and hasattr(form_file, "filename") and form_file.filename:
+                    file = form_file
+                email_body = form.get("email_body") or email_body
+                email_subject = form.get("email_subject") or email_subject
+                rules_json = form.get("rules_json") or rules_json
+                model = form.get("model") or model
+            except Exception as form_err:
+                print(f"Error parsing form data: {form_err}")
+
     if not isinstance(model, str) or not model:
         model = DEFAULT_MODEL
         
     try:
         rules = DEFAULT_HSE_RULES
         if rules_json:
-            try:
-                rules = json.loads(rules_json)
-            except Exception:
-                pass
+            if isinstance(rules_json, dict):
+                rules = rules_json
+            elif isinstance(rules_json, str):
+                try:
+                    rules = json.loads(rules_json)
+                except Exception:
+                    pass
                 
-        # Guardar archivo temporal si existe
-        if file and file.filename:
-            file_ext = os.path.splitext(file.filename)[1]
+        # Guardar archivo UploadFile si no se había generado desde base64
+        if not temp_file_path and file and hasattr(file, "filename") and file.filename:
+            file_ext = os.path.splitext(file.filename)[1] or ".bin"
             temp_file_path = os.path.join(TEMP_DIR, f"upload_{uuid.uuid4().hex[:8]}{file_ext}")
             with open(temp_file_path, "wb") as buffer:
                 shutil.copyfileobj(file.file, buffer)
@@ -203,16 +260,21 @@ async def evaluate_excuse(
         
     except Exception as e:
         t_elapsed = time.perf_counter() - t_start
-        return JSONResponse(
-            status_code=500,
-            content={
+        error_payload = {
                 "valido": False,
-                "error": str(e),
-                "requiere_revision_manual": True,
+                "tipo_novedad": "no_identificado",
+                "fecha_afectada": "No identificada",
                 "motivo_decision": f"Error interno en Strata Core al procesar documento: {str(e)}",
+                "confianza_score": 0.0,
+                "requiere_revision_manual": True,
+                "error": str(e),
                 "tiempo_procesamiento_segundos": round(t_elapsed, 2)
-            }
-        )
+        }
+        # Si hay request HTTP real, devolver JSONResponse con status 500;
+        # si se invocó directamente (test runner), devolver dict plano.
+        if request is not None:
+            return JSONResponse(status_code=500, content=error_payload)
+        return error_payload
     finally:
         if temp_file_path and os.path.exists(temp_file_path):
             try:

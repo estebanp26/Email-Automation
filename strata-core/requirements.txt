@@ -8,3 +8,6 @@ python-multipart>=0.0.9
 pydantic>=2.0.0
 numpy>=1.24.0
 augly>=1.0.0
+jsonschema>=4.20.0
+rich>=13.0.0
+tabulate>=0.9.0

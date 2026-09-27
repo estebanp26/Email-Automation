@@ -33,6 +33,10 @@ yarn-debug.log*
 yarn-error.log*
 *.log
 
+# Generated evaluation reports (strata-core runner outputs)
+strata-core/EVALUATION_REPORT.md
+strata-core/EVALUATION_REPORT_SEBAS.json
+
 # OS Files
 .DS_Store
 Thumbs.db

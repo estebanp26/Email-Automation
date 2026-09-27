@@ -2,15 +2,14 @@
 # run.sh - Inicia el microservicio Strata Core en el puerto 8001
 set -e
 
-PORT=8001
-VENV_PYTHON="/home/andres/Projects/PDF-Engine/.venv/bin/python3"
+PORT=${PORT:-8001}
 
-if [ -f "$VENV_PYTHON" ]; then
-    PYTHON_CMD="$VENV_PYTHON"
-elif [ -d ".venv" ]; then
+if [ -f ".venv/bin/python3" ]; then
     PYTHON_CMD=".venv/bin/python3"
-else
+elif command -v python3 &>/dev/null; then
     PYTHON_CMD="python3"
+else
+    PYTHON_CMD="python"
 fi
 
 echo "[*] Iniciando Strata Core Microservice en puerto $PORT..."
