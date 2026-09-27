@@ -1,8 +1,9 @@
-# 🗄️ Squad Database (PostgreSQL & Storage)
+# 🗄️ Squad Database (PostgreSQL, Storage & Riwi Coders Directory)
 
 **Responsables:** Eliam (`Lead DB`) & Sergio (`Storage & Optimization`)  
 **Tecnología Base:** PostgreSQL 16 (Alpine auto-hospedado) con compatibilidad nativa para Supabase  
-**Misión:** Garantizar la persistencia inmutable, el cumplimiento estricto de la **Ley 1581 de Habeas Data (soberanía médica on-premise)**, consultas al Dashboard con SLA inferior a **50ms** y el soporte de almacenamiento para evidencias probatorias.
+**Entorno Operativo:** Riwi (Habilidades para la Vida - HSE | Moodle ID: 132 | Team Leader: Paola)  
+**Misión:** Garantizar la persistencia inmutable, el cumplimiento estricto de la **Ley 1581 de Habeas Data (soberanía médica on-premise)**, consultas al Dashboard con SLA inferior a **50ms**, soporte de almacenamiento para evidencias probatorias y la resolución automática de identidad de los ~310 coders.
 
 ---
 
@@ -10,6 +11,19 @@
 
 ```mermaid
 erDiagram
+    coders {
+        uuid id PK "Identificador único"
+        varchar(50) moodle_id "ID en moodle.riwi.io"
+        varchar(255) name_coder "Nombre completo oficial"
+        varchar(20) cc_coder UK "Cédula de ciudadanía"
+        varchar(255) email_coder UK "Correo institucional @riwi.io"
+        varchar(100) academic_route "Ruta (Node, Java, Python AI...)"
+        varchar(100) cohort_group "Grupo/Salón (Sputnik, Artemis...)"
+        varchar(50) status "ACTIVO, GRADUADO, INACTIVO"
+        timestamptz created_at
+        timestamptz updated_at
+    }
+
     hse_system_config {
         varchar(50) key PK "Clave del parámetro"
         jsonb value "Configuración flexible en JSON"
@@ -18,7 +32,7 @@ erDiagram
     }
 
     email_templates {
-        varchar(50) id PK "APPROVED, REJECTED, MANUAL_REVIEW"
+        varchar(50) id PK "APPROVED, REJECTED, MANUAL_REVIEW, UNIDENTIFIED_CODER"
         text subject "Asunto con variables"
         text body_html "Cuerpo con {{variables}}"
         timestamptz updated_at "Última modificación"
@@ -26,9 +40,12 @@ erDiagram
 
     justifications {
         uuid id PK "Identificador único (gen_random_uuid)"
-        varchar(255) sender_email "Correo del coder"
-        varchar(255) sender_name "Nombre completo"
-        varchar(100) cohort_group "Cohorte académica"
+        uuid coder_id FK "Vínculo al coder de Riwi"
+        varchar(20) cc_coder "Cédula extraída de la EPS o vinculada"
+        varchar(30) identification_method "EMAIL_EXACT, CC_EPS_MATCH, NAME_FUZZY, UNIDENTIFIED"
+        varchar(255) sender_email "Correo del remitente"
+        varchar(255) sender_name "Nombre del remitente"
+        varchar(100) cohort_group "Cohorte / Grupo"
         text email_subject "Asunto del correo"
         text email_body "Cuerpo del correo"
         varchar(20) source_provider "OUTLOOK o GMAIL"
@@ -36,7 +53,7 @@ erDiagram
         jsonb ai_verdict "Salida estructurada Strata Core"
         numeric(3,2) ai_confidence "Confianza (0.00 a 1.00)"
         text[] attachment_urls "URLs de las evidencias"
-        text tl_notes "Notas de la Team Leader"
+        text tl_notes "Notas de Paola (Team Leader)"
         numeric(4,2) processed_in_seconds "Latencia total del pipeline"
         timestamptz created_at "Fecha y hora de recepción"
     }
@@ -53,12 +70,28 @@ erDiagram
         timestamptz created_at "Fecha de subida"
     }
 
+    coders ||--o{ justifications : "presenta"
     justifications ||--o{ justification_attachments : "contiene"
 ```
 
 ---
 
-## 📂 2. Estructura de Migraciones Idempotentes
+## 🔍 2. Resolución de Identidad Multivariable [NOMBRE, CC, EMAIL]
+
+Ante la realidad operativa de que un **~15% de coders** no estructuran sus correos formalmente (olvidan su ruta o escriben desde un correo personal alternativo), el sistema implementa la función SQL:
+```sql
+SELECT * FROM fn_resolve_coder_identity('correo@ejemplo.com', '1098765432', 'Carlos Mendoza');
+```
+
+### Algoritmo de Emparejamiento en Cascada:
+1. **Intento 1 (`EMAIL_EXACT`):** Busca coincidencia directa del `sender_email` en `coders.email_coder`.
+2. **Intento 2 (`CC_EPS_MATCH`):** Si el correo es personal o desconocido, Strata Core extrae la Cédula de Ciudadanía del certificado médico de la EPS (sello o encabezado clínico). La función busca coincidencia numérica exacta contra `coders.cc_coder`.
+3. **Intento 3 (`NAME_FUZZY`):** Búsqueda por aproximación de nombres si el coder firma su correo.
+4. **Contingencia 15% (`UNIDENTIFIED`):** Si no hay coincidencia, el caso se asigna con `status = 'REVISION_MANUAL'` para **Paola (Team Leader HSE)** y se despacha la plantilla `UNIDENTIFIED_CODER` solicitando amablemente al coder que envíe su Cédula y Nombre Completo.
+
+---
+
+## 📂 3. Estructura de Migraciones Idempotentes
 
 Las migraciones se ubican en `database/migrations/` y se ejecutan automáticamente en orden alfabético al iniciar el contenedor de Docker:
 
@@ -67,82 +100,27 @@ Las migraciones se ubican en `database/migrations/` y se ejecutan automáticamen
 | **`001_initial_schema.sql`** | Creación de extensión `pgcrypto`, ENUM `justification_status`, tablas principales (`hse_system_config`, `email_templates`, `justifications`) e índices base. | Eliam (`DB-01`) |
 | **`002_seed_data.sql`** | Datos semilla de reglas dinámicas, instituciones médicas reconocidas (EPS), plantillas HTML y 5 casos reales precargados de prueba. | Eliam (`DB-03`) |
 | **`003_storage_and_indexes.sql`** | Tabla `justification_attachments`, índices GIN sobre JSONB, índices compuestos para el Split-View, vistas SQL (`vw_dashboard_kpis`, `vw_recent_justifications`) y triggers. | Sergio (`DB-02` / `DB-04`) |
+| **`004_riwi_coders_directory.sql`** | Tabla `coders` para los ~310 coders de Riwi Moodle (ID 132), campos `cc_coder`, función `fn_resolve_coder_identity` y plantilla `UNIDENTIFIED_CODER`. | Eliam & Sergio |
 
 ---
 
-## ⚡ 3. Optimización y Rendimiento (SLA < 50ms)
+## ⚡ 4. Optimización y Rendimiento (SLA < 50ms)
 
-Para soportar ráfagas matutinas de más de **200 correos diarios** y visualización instantánea en el Frontend:
-
-1. **Índice GIN sobre `ai_verdict`:**
-   ```sql
-   CREATE INDEX idx_justifications_ai_verdict_gin 
-       ON justifications USING gin (ai_verdict jsonb_path_ops);
-   ```
-   Permite filtrar en < 5ms por cualquier propiedad interna de la IA, por ejemplo:
-   ```sql
-   SELECT * FROM justifications 
-   WHERE ai_verdict @> '{"tipo_novedad": "inasistencia_medica", "valido": true}';
-   ```
-
-2. **Índice Compuesto `(status, created_at DESC)`:**
-   Acelera la bandeja dividida (*Split-View*) del Frontend (`FRONT-02`), permitiendo paginar y filtrar por estado sin escaneo secuencial de la tabla.
-
-3. **Vistas Pre-calculadas:**
-   * **`vw_dashboard_kpis`**: Agrega en una única consulta todos los contadores necesarios para las tarjetas KPI de la cabecera:
-     ```sql
-     SELECT * FROM vw_dashboard_kpis;
-     ```
-   * **`vw_recent_justifications`**: Devuelve los registros formateados con el tipo de novedad y total de adjuntos desglosado.
+* **Índice GIN sobre `ai_verdict`:** Permite filtrar por tipo de novedad o validez en `< 5ms`.
+* **Índice Compuesto `(status, created_at DESC)`:** Paginación y filtrado instantáneo en la bandeja de entrada del Frontend.
+* **Índices en `coders`:** Búsquedas por `cc_coder` y `email_coder` en tiempo O(1) con índice B-Tree.
 
 ---
 
-## 🚀 4. Guía de Ejecución Local con Docker
+## 🚀 5. Guía de Ejecución Local con Docker
 
-### Iniciar la base de datos:
 ```powershell
+# Iniciar base de datos
 docker compose up -d
-```
 
-### Verificar el estado y salud del contenedor:
-```powershell
-docker compose ps
-```
+# Validar integridad y consistencia de todas las migraciones
+python database/verify_schema.py
 
-### Conectarse a través de `psql` (dentro del contenedor):
-```powershell
+# Conectarse a psql en el contenedor
 docker compose exec postgres psql -U hse_admin -d hse_email_automation
 ```
-
-### Detener el servicio conservando los datos:
-```powershell
-docker compose down
-```
-
-### Reiniciar y aplicar migraciones desde cero (recrear volumen):
-```powershell
-docker compose down -v
-docker compose up -d
-```
-
----
-
-## 🔗 5. Variables de Conexión (`.env`)
-
-```ini
-# Configuración local de PostgreSQL
-POSTGRES_USER=hse_admin
-POSTGRES_PASSWORD=hse_segura_123
-POSTGRES_DB=hse_email_automation
-POSTGRES_PORT=5432
-DATABASE_URL=postgresql://hse_admin:hse_segura_123@localhost:5432/hse_email_automation
-```
-
----
-
-## ☁️ 6. Compatibilidad con Supabase Cloud / Self-Hosted
-
-Si el equipo decide desplegar sobre un proyecto de Supabase:
-1. Copiar y pegar secuencialmente los archivos `001`, `002` y `003` en el **SQL Editor** del dashboard de Supabase.
-2. Todas las sentencias son 100% compatibles con la sintaxis de PostgreSQL de Supabase.
-3. Para el almacenamiento de adjuntos en Supabase Storage, crear el bucket `justification-attachments` con política pública de lectura o acceso autenticado.

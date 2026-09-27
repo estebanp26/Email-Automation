@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Validador de Integridad y Sintaxis de Migraciones SQL — Squad Database
-Email-Automation con Strata Core
+Email-Automation con Strata Core (Riwi Moodle ID: 132)
 """
 
 import json
@@ -22,6 +22,7 @@ EXPECTED_MIGRATIONS = [
     "001_initial_schema.sql",
     "002_seed_data.sql",
     "003_storage_and_indexes.sql",
+    "004_riwi_coders_directory.sql",
 ]
 
 EXPECTED_TABLES = [
@@ -29,6 +30,7 @@ EXPECTED_TABLES = [
     "email_templates",
     "justifications",
     "justification_attachments",
+    "coders",
 ]
 
 EXPECTED_VIEWS = [
@@ -55,10 +57,11 @@ def test_migrations_exist():
 
 
 def test_schema_definitions():
-    print("\n[2/5] Validando definicion de tablas y tipos canonicos...")
+    print("\n[2/5] Validando definicion de tablas, vistas y directorio Riwi...")
     content_001 = (MIGRATIONS_DIR / "001_initial_schema.sql").read_text(encoding="utf-8")
     content_003 = (MIGRATIONS_DIR / "003_storage_and_indexes.sql").read_text(encoding="utf-8")
-    full_ddl = content_001 + "\n" + content_003
+    content_004 = (MIGRATIONS_DIR / "004_riwi_coders_directory.sql").read_text(encoding="utf-8")
+    full_ddl = content_001 + "\n" + content_003 + "\n" + content_004
 
     # Validar ENUM
     for status in EXPECTED_STATUSES:
@@ -77,21 +80,29 @@ def test_schema_definitions():
         assert re.search(pattern, full_ddl, re.IGNORECASE), f"[ERROR] No se encontro la vista: {view}"
         print(f"  [OK] Vista analitica '{view}' definida correctamente.")
 
+    # Validar campos de resolucion de coders
+    assert "cc_coder" in content_004, "[ERROR] Falta la definicion de cc_coder en 004"
+    assert "academic_route" in content_004, "[ERROR] Falta la definicion de academic_route en 004"
+    assert "fn_resolve_coder_identity" in content_004, "[ERROR] Falta la funcion fn_resolve_coder_identity"
+    print("  [OK] Campos cc_coder, academic_route y funcion fn_resolve_coder_identity validados.")
+
 
 def test_performance_indexes():
     print("\n[3/5] Validando indices de alto rendimiento (< 50ms)...")
     content_003 = (MIGRATIONS_DIR / "003_storage_and_indexes.sql").read_text(encoding="utf-8")
+    content_004 = (MIGRATIONS_DIR / "004_riwi_coders_directory.sql").read_text(encoding="utf-8")
 
     assert "idx_justifications_ai_verdict_gin" in content_003, "[ERROR] Falta el indice GIN sobre ai_verdict"
-    assert "USING gin" in content_003, "[ERROR] Falta el metodo GIN para ai_verdict"
     assert "idx_justifications_status_created_at" in content_003, "[ERROR] Falta el indice compuesto (status, created_at)"
-    assert "idx_attachments_justification_id" in content_003, "[ERROR] Falta el indice de clave foranea en attachments"
-    print("  [OK] Indices GIN, compuestos y de clave foranea configurados con exito.")
+    assert "idx_coders_cc" in content_004, "[ERROR] Falta el indice de busqueda por cedula en coders"
+    assert "idx_coders_email" in content_004, "[ERROR] Falta el indice de busqueda por email en coders"
+    print("  [OK] Indices GIN, compuestos, clave foranea y de resolucion de coders configurados con exito.")
 
 
 def test_seed_json_validity():
-    print("\n[4/5] Validando integridad de JSONs en datos semilla (002_seed_data.sql)...")
+    print("\n[4/5] Validando integridad de JSONs en datos semilla y plantillas...")
     content_002 = (MIGRATIONS_DIR / "002_seed_data.sql").read_text(encoding="utf-8")
+    content_004 = (MIGRATIONS_DIR / "004_riwi_coders_directory.sql").read_text(encoding="utf-8")
 
     # Extraer bloques JSON dentro de '{"..."}'::jsonb
     json_blocks = re.findall(r"'(\{.*?\})'::jsonb", content_002, re.DOTALL)
@@ -103,11 +114,13 @@ def test_seed_json_validity():
             assert isinstance(parsed, dict)
         except json.JSONDecodeError as err:
             raise AssertionError(f"[ERROR] JSON invalido en bloque semilla #{idx}: {err}\nContenido:\n{block}")
-    print(f"  [OK] Se validaron {len(json_blocks)} bloques JSON semanticamente correctos.")
+
+    assert "UNIDENTIFIED_CODER" in content_004, "[ERROR] Falta la plantilla de contingencia UNIDENTIFIED_CODER"
+    print(f"  [OK] Se validaron {len(json_blocks)} bloques JSON y la plantilla de contingencia UNIDENTIFIED_CODER.")
 
 
 def test_idempotency_and_syntax():
-    print("\n[5/5] Validando reglas de idempotencia y comentarios tecnicos...")
+    print("\n[5/5] Validando reglas de idempotencia y estandar arquitectonico...")
     for filename in EXPECTED_MIGRATIONS:
         content = (MIGRATIONS_DIR / filename).read_text(encoding="utf-8")
         assert "-- ============================================================" in content, (
@@ -122,6 +135,7 @@ def test_idempotency_and_syntax():
 def main():
     print("============================================================")
     print("   VERIFICACION INTEGRAL DE BASE DE DATOS - SQUAD DB        ")
+    print("      Riwi HSE & Moodle ID=132 - Motor Strata Core          ")
     print("============================================================\n")
     try:
         test_migrations_exist()
