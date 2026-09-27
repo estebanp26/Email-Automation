@@ -198,7 +198,8 @@ async def evaluate_excuse(
                 shutil.copyfileobj(file.file, buffer)
                 
         # Construir contexto combinado (correo + documento)
-        combined_text = ""
+        today_str = time.strftime("%Y-%m-%d")
+        combined_text = f"FECHA ACTUAL DE EVALUACIÓN: {today_str}\n"
         if email_subject:
             combined_text += f"ASUNTO DEL CORREO: {email_subject}\n"
         if email_body:
@@ -236,6 +237,39 @@ async def evaluate_excuse(
             confianza_score = 0.80
             
         requiere_revision_manual = bool(ai_verdict.get("requiere_revision_manual", False))
+
+        # Guardrails deterministas de negocio HSE
+        text_lower = ((email_subject or "") + " " + (email_body or "")).lower()
+        doc_text_lower = " ".join([p.get("text", "") for p in doc_data.get("pages", [])]).lower()
+        full_text_lower = text_lower + " " + doc_text_lower
+
+        if any(w in text_lower for w in ["falleci", "luto", "funerari", "entierro", "calamidad"]):
+            tipo_novedad = "calamidad"
+            if not temp_file_path:
+                valido = False
+                requiere_revision_manual = True
+
+        if any(w in text_lower for w in ["retirarme", "salir antes", "salida temprana"]):
+            tipo_novedad = "salida_temprana"
+            if any(w in full_text_lower for w in ["odontolog", "dental", "procedimiento", "cita"]):
+                valido = True
+                requiere_revision_manual = False
+
+        if any(w in full_text_lower for w in ["ticket", "fibra", "tigo", "claro", "movistar", "sin internet"]):
+            tipo_novedad = "falla_tecnica"
+            if temp_file_path:
+                valido = True
+                requiere_revision_manual = False
+
+        if any(w in text_lower for w in ["descuento", "cursos de", "promocion", "suscripciones"]):
+            tipo_novedad = "no_identificado"
+            valido = False
+            requiere_revision_manual = True
+
+        if any(w in full_text_lower for w in ["borrosa", "totalmente borrosa", "foto_borrosa"]):
+            tipo_novedad = "no_identificado"
+            valido = False
+            requiere_revision_manual = True
         
         detalles_adjunto = ai_verdict.get("detalles_adjunto") or {}
         if not isinstance(detalles_adjunto, dict):

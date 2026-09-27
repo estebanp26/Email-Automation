@@ -298,7 +298,11 @@ REGLAS:
         model: str = DEFAULT_MODEL
     ) -> Tuple[Dict[str, Any], List[int], Optional[str]]:
         """Evaluates an attendance excuse using calibrated prompt and dynamic HSE rules."""
-        keywords = ["incapacidad", "paciente", "medico", "diagnostico", "fecha", "sello", "eps", "firma", "calamidad", "tardanza"]
+        keywords = [
+            "incapacidad", "paciente", "medico", "diagnostico", "fecha", "sello", "eps", 
+            "firma", "calamidad", "tardanza", "salida", "permiso", "odontolog", "dental", 
+            "ticket", "soporte", "falla", "internet", "cita", "constancia", "reposo"
+        ]
         context_text, pages_used = self.build_pruned_context(document_data, keywords, max_chars=3500)
         
         rules_str = json.dumps(rules, indent=2, ensure_ascii=False)
