@@ -1,0 +1,68 @@
+# ============================================================
+# Email-Automation — PostgreSQL 16 auto-hospedado con Docker
+# ------------------------------------------------------------
+# Descripción:
+#   Servicio de base de datos PostgreSQL 16 (imagen Alpine,
+#   ligera y apta para producción) que reemplaza a Supabase
+#   gestionado. Los scripts SQL de ./database/migrations se
+#   ejecutan automáticamente al crear el contenedor por primera
+#   vez gracias a /docker-entrypoint-initdb.d.
+# Uso:
+#   docker compose up -d        # Levantar la base de datos
+#   docker compose down         # Detener (conserva los datos)
+#   docker compose down -v      # Detener y BORRAR los datos
+# ============================================================
+
+services:
+  # ----------------------------------------------------------
+  # Servicio principal: PostgreSQL 16
+  # ----------------------------------------------------------
+  postgres:
+    image: postgres:16-alpine
+    container_name: hse-postgres
+    restart: unless-stopped
+    # Variables de entorno: se cargan desde el archivo .env raíz.
+    # Valores por defecto incluidos para desarrollo local.
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-hse_admin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-hse_segura_123}
+      POSTGRES_DB: ${POSTGRES_DB:-hse_email_automation}
+      # Zona horaria del servidor (recomendado: America/Bogota)
+      TZ: ${TZ:-America/Bogota}
+      PGTZ: ${TZ:-America/Bogota}
+    ports:
+      # Puerto expuesto al host para n8n, Next.js y pgAdmin/psql
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      # Volumen persistente: los datos sobreviven a reinicios
+      - postgres_data:/var/lib/postgresql/data
+      # Montaje de migraciones: se ejecutan en orden alfabético
+      # SOLO cuando el volumen está vacío (primer arranque)
+      - ./database/migrations:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      # Verificación de salud para orquestar dependencias (n8n, etc.)
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-hse_admin} -d ${POSTGRES_DB:-hse_email_automation}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    networks:
+      - hse-network
+    # Límites de recursos (ajustar según el servidor productivo)
+    # deploy:
+    #   resources:
+    #     limits:
+    #       cpus: "1.0"
+    #       memory: 1G
+
+networks:
+  # Red dedicada para que n8n y el frontend se comuniquen con Postgres
+  hse-network:
+    name: hse-network
+    driver: bridge
+
+volumes:
+  # Volumen nombrado para persistencia de datos en producción
+  postgres_data:
+    name: hse-postgres-data
+    driver: local
