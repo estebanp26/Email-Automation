@@ -67,24 +67,15 @@ export default function Sidebar() {
           <br />
           HSE
         </p>
-        <div className="mt-3 space-y-1.5 text-[11.5px] font-medium">
-          <p className="flex items-center gap-1.5">
-            <span className="inline-block size-2 rounded-full bg-[#5b36f5]" />
-            <span className="text-slate-600">Renews</span>
-            <span className="font-bold text-[#5b36f5]">#5b36f5</span>
-          </p>
-          <p className="flex items-center gap-1.5">
-            <span className="inline-block size-2 rounded-full bg-[#151833]" />
-            <span className="text-slate-600">Context Sept. &apos;22</span>
-            <span className="font-bold text-[#151833]">#151833</span>
-          </p>
-        </div>
+        <p className="mt-2 text-[11.5px] font-medium text-slate-600">
+          Matrícula activa de Riwi con evidencias verificables.
+        </p>
         <button
           type="button"
           className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-[#1E2235] py-2.5 text-[12.5px] font-semibold text-white transition-all duration-200 hover:bg-[#151833] hover:shadow-lg active:scale-[0.98]"
         >
           <LogOut className="size-4" />
-          Sign Out
+          Cerrar sesión
         </button>
       </div>
     </aside>

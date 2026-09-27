@@ -1,78 +1,176 @@
-import { ChevronRight } from 'lucide-react'
+/**
+ * Bandeja de justificaciones recientes con datos reales de la API.
+ * Proyecto: Email-Automation con Strata Core.
+ *
+ * Descripción:
+ *   Muestra los registros de vw_recent_justifications con estados de
+ *   carga, error y vacío. Al seleccionar un registro avisa al padre
+ *   para abrir la vista dividida con sus evidencias (spatial_boxes).
+ */
+import { ChevronRight, Inbox } from 'lucide-react'
+import {
+  formatearHora,
+  obtenerIniciales,
+} from '../lib/cliente_api'
 
-const RESUMEN = [
-  { etiqueta: 'Incapacidad Médica', valor: 24, punto: 'bg-blue-500' },
-  { etiqueta: 'Equipo', valor: 16, punto: 'bg-emerald-500' },
-  { etiqueta: 'Constancia Laboral', valor: 5, punto: 'bg-orange-400' },
-]
+const COLOR_ESTADO = {
+  APROBADO_AUTO: 'bg-emerald-500',
+  APROBADO_MANUAL: 'bg-emerald-500',
+  RECHAZADO_AUTO: 'bg-red-400',
+  RECHAZADO_MANUAL: 'bg-red-400',
+  REVISION_MANUAL: 'bg-amber-400',
+}
 
-export default function RecentMessages() {
+function colorPorEstado(estado) {
+  return COLOR_ESTADO[estado] || 'bg-slate-300'
+}
+
+export default function RecentMessages({
+  registros = [],
+  cargando = false,
+  error = null,
+  seleccionadoId = null,
+  alSeleccionar,
+  alReintentar,
+}) {
+  const resumenTipos = registros.reduce((acumulado, registro) => {
+    const clave = registro.tipo_novedad || 'Sin clasificar'
+    acumulado[clave] = (acumulado[clave] || 0) + 1
+    return acumulado
+  }, {})
+  const entradasResumen = Object.entries(resumenTipos).slice(0, 5)
+
   return (
     <section
       className="flex flex-col rounded-2xl bg-white p-6 shadow-[0_8px_30px_-12px_rgba(30,34,53,0.15)] ring-1 ring-slate-100"
-      aria-label="Gestión de mensajes recientes"
+      aria-label="Justificaciones recientes reales"
     >
       <div className="flex items-center justify-between">
         <h2 className="text-[15.5px] font-bold tracking-tight text-slate-900">
-          Gestión de Mensajes Recientes
+          Justificaciones Recientes
         </h2>
-        <button
-          type="button"
-          title="Ver todas las justificaciones"
-          className="flex items-center gap-1 text-[12px] font-bold text-[#5b36f5] transition-colors hover:text-[#4728c9]"
-        >
-          Ver todo
-          <ChevronRight className="size-3.5" />
-        </button>
+        <span className="rounded-lg bg-slate-100 px-2.5 py-1 text-[12px] font-bold tabular-nums text-slate-700">
+          {cargando ? '…' : `${registros.length} casos`}
+        </span>
       </div>
 
-      {/* Mensaje destacado */}
-      <article className="mt-4 flex gap-3 rounded-2xl bg-[#F4F6FB] p-4 ring-1 ring-slate-100 transition-all duration-200 hover:bg-slate-100">
-        <span
-          className="grid size-10 shrink-0 place-items-center rounded-full bg-[#5b36f5] text-[12px] font-bold text-white"
-          aria-hidden="true"
-        >
-          JP
-        </span>
-        <div className="min-w-0">
-          <div className="flex items-center justify-between gap-2">
-            <p className="truncate text-[13px] font-bold text-slate-900">
-              Juan Perez
-            </p>
-            <span className="shrink-0 text-[11px] font-medium text-slate-400">
-              hace 10 min
-            </span>
-          </div>
-          <p className="mt-0.5 truncate text-[12px] font-semibold text-slate-700">
-            Sub: Problemas de iluminación en Calle 10
+      {/* Estado de carga */}
+      {cargando && (
+        <div className="mt-4 space-y-3" aria-label="Cargando justificaciones">
+          {[0, 1, 2].map((clave) => (
+            <div key={clave} className="flex animate-pulse gap-3 rounded-2xl bg-[#F4F6FB] p-4 ring-1 ring-slate-100">
+              <span className="size-10 shrink-0 rounded-full bg-slate-200" />
+              <div className="flex-1 space-y-2">
+                <div className="h-3 w-2/3 rounded bg-slate-200" />
+                <div className="h-3 w-full rounded bg-slate-200" />
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Estado de error */}
+      {!cargando && error && (
+        <div className="mt-4 rounded-2xl bg-red-50 p-4 text-center ring-1 ring-red-100" role="alert">
+          <p className="text-[13px] font-bold text-red-700">
+            No se pudieron cargar las justificaciones
           </p>
-          <p className="mt-0.5 line-clamp-2 text-[12px] leading-relaxed text-slate-500">
-            Hola, solicito la revisión de las luminarias del sector porque
-            permanecen apagadas…
+          <p className="mt-1 text-[12px] text-red-500">{error}</p>
+          <button
+            type="button"
+            onClick={alReintentar}
+            className="mt-3 rounded-full bg-red-600 px-4 py-2 text-[12px] font-bold text-white transition-colors hover:bg-red-700"
+          >
+            Reintentar
+          </button>
+        </div>
+      )}
+
+      {/* Estado vacío */}
+      {!cargando && !error && registros.length === 0 && (
+        <div className="mt-4 flex flex-col items-center rounded-2xl bg-[#F4F6FB] p-8 text-center ring-1 ring-slate-100">
+          <Inbox className="size-8 text-slate-300" />
+          <p className="mt-2 text-[13px] font-bold text-slate-700">
+            No hay justificaciones recientes
+          </p>
+          <p className="mt-1 text-[12px] text-slate-500">
+            Cuando ingresen correos al sistema aparecerán en esta bandeja.
           </p>
         </div>
-      </article>
+      )}
 
-      {/* Contadores por tipo */}
-      <ul className="mt-4 space-y-1">
-        {RESUMEN.map(({ etiqueta, valor, punto }) => (
-          <li key={etiqueta}>
-            <button
-              type="button"
-              title={`Ver ${etiqueta}`}
-              className="group flex w-full items-center justify-between rounded-xl px-3 py-2.5 transition-colors duration-200 hover:bg-slate-50"
+      {/* Lista real */}
+      {!cargando && !error && registros.length > 0 && (
+        <ul className="slim-scroll mt-4 max-h-[320px] space-y-2 overflow-y-auto pr-1">
+          {registros.map((registro) => {
+            const seleccionado = registro.id === seleccionadoId
+            return (
+              <li key={registro.id}>
+                <button
+                  type="button"
+                  onClick={() => alSeleccionar?.(registro)}
+                  title={`Ver ${registro.sender_name || 'caso'} — ${registro.email_subject || ''}`}
+                  className={[
+                    'flex w-full gap-3 rounded-2xl p-3 text-left ring-1 transition-all duration-200',
+                    seleccionado
+                      ? 'bg-[#5b36f5]/5 ring-[#5b36f5]/30'
+                      : 'bg-[#F4F6FB] ring-slate-100 hover:bg-slate-100',
+                  ].join(' ')}
+                >
+                  <span
+                    className="grid size-10 shrink-0 place-items-center rounded-full bg-[#5b36f5] text-[12px] font-bold text-white"
+                    aria-hidden="true"
+                  >
+                    {obtenerIniciales(registro.sender_name)}
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="flex items-center justify-between gap-2">
+                      <span className="truncate text-[13px] font-bold text-slate-900">
+                        {registro.sender_name || 'Sin remitente'}
+                      </span>
+                      <span className="shrink-0 text-[11px] font-medium text-slate-400">
+                        {formatearHora(registro.created_at)}
+                      </span>
+                    </span>
+                    <span className="mt-0.5 block truncate text-[12px] font-semibold text-slate-700">
+                      {registro.email_subject || 'Sin asunto'}
+                    </span>
+                    <span className="mt-1 flex items-center gap-2 text-[11px] font-medium text-slate-500">
+                      <span className={`inline-block size-2 rounded-full ${colorPorEstado(registro.status)}`} />
+                      {registro.status || 'Sin estado'}
+                      <span aria-hidden="true">·</span>
+                      {registro.tipo_novedad || 'Sin clasificar'}
+                      <span aria-hidden="true">·</span>
+                      {registro.total_adjuntos ?? 0} adjuntos
+                    </span>
+                  </span>
+                  <ChevronRight className="size-4 shrink-0 self-center text-slate-300" />
+                </button>
+              </li>
+            )
+          })}
+        </ul>
+      )}
+
+      {/* Resumen por tipo real */}
+      {!cargando && !error && entradasResumen.length > 0 && (
+        <ul className="mt-4 space-y-1 border-t border-slate-100 pt-3" aria-label="Resumen por tipo de novedad">
+          {entradasResumen.map(([etiqueta, valor]) => (
+            <li
+              key={etiqueta}
+              className="flex w-full items-center justify-between rounded-xl px-3 py-2 text-[13px] font-medium text-slate-600"
             >
-              <span className="flex items-center gap-2.5 text-[13px] font-medium text-slate-600 group-hover:text-slate-900">
-                <span className={`inline-block size-2.5 rounded-full ${punto}`} />
+              <span className="flex items-center gap-2.5">
+                <span className="inline-block size-2.5 rounded-full bg-[#5b36f5]" />
                 {etiqueta}
               </span>
-              <span className="rounded-lg bg-slate-100 px-2.5 py-1 text-[12.5px] font-bold tabular-nums text-slate-800 transition-colors group-hover:bg-[#1E2235] group-hover:text-white">
+              <span className="rounded-lg bg-slate-100 px-2.5 py-1 text-[12.5px] font-bold tabular-nums text-slate-800">
                 {valor}
               </span>
-            </button>
-          </li>
-        ))}
-      </ul>
+            </li>
+          ))}
+        </ul>
+      )}
     </section>
   )
 }
