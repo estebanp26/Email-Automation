@@ -23,6 +23,7 @@ EXPECTED_MIGRATIONS = [
     "002_seed_data.sql",
     "003_storage_and_indexes.sql",
     "004_riwi_coders_directory.sql",
+    "005_real_riwi_coders.sql",
 ]
 
 EXPECTED_TABLES = [
@@ -48,7 +49,7 @@ EXPECTED_STATUSES = [
 
 
 def test_migrations_exist():
-    print("[1/5] Verificando presencia de archivos de migracion...")
+    print("[1/6] Verificando presencia de archivos de migracion...")
     for filename in EXPECTED_MIGRATIONS:
         path = MIGRATIONS_DIR / filename
         assert path.exists(), f"[ERROR] Falta el archivo de migracion requerido: {filename}"
@@ -57,7 +58,7 @@ def test_migrations_exist():
 
 
 def test_schema_definitions():
-    print("\n[2/5] Validando definicion de tablas, vistas y directorio Riwi...")
+    print("\n[2/6] Validando definicion de tablas, vistas y directorio Riwi...")
     content_001 = (MIGRATIONS_DIR / "001_initial_schema.sql").read_text(encoding="utf-8")
     content_003 = (MIGRATIONS_DIR / "003_storage_and_indexes.sql").read_text(encoding="utf-8")
     content_004 = (MIGRATIONS_DIR / "004_riwi_coders_directory.sql").read_text(encoding="utf-8")
@@ -88,7 +89,7 @@ def test_schema_definitions():
 
 
 def test_performance_indexes():
-    print("\n[3/5] Validando indices de alto rendimiento (< 50ms)...")
+    print("\n[3/6] Validando indices de alto rendimiento (< 50ms)...")
     content_003 = (MIGRATIONS_DIR / "003_storage_and_indexes.sql").read_text(encoding="utf-8")
     content_004 = (MIGRATIONS_DIR / "004_riwi_coders_directory.sql").read_text(encoding="utf-8")
 
@@ -100,13 +101,15 @@ def test_performance_indexes():
 
 
 def test_seed_json_validity():
-    print("\n[4/5] Validando integridad de JSONs en datos semilla y plantillas...")
+    print("\n[4/6] Validando integridad de JSONs en datos semilla y plantillas...")
     content_002 = (MIGRATIONS_DIR / "002_seed_data.sql").read_text(encoding="utf-8")
     content_004 = (MIGRATIONS_DIR / "004_riwi_coders_directory.sql").read_text(encoding="utf-8")
+    content_005 = (MIGRATIONS_DIR / "005_real_riwi_coders.sql").read_text(encoding="utf-8")
 
     # Extraer bloques JSON dentro de '{"..."}'::jsonb
-    json_blocks = re.findall(r"'(\{.*?\})'::jsonb", content_002, re.DOTALL)
-    assert len(json_blocks) > 0, "[ERROR] No se encontraron bloques JSON en 002_seed_data.sql"
+    all_sql = content_002 + "\n" + content_005
+    json_blocks = re.findall(r"'(\{.*?\})'::jsonb", all_sql, re.DOTALL)
+    assert len(json_blocks) > 0, "[ERROR] No se encontraron bloques JSON"
 
     for idx, block in enumerate(json_blocks, 1):
         try:
@@ -116,11 +119,26 @@ def test_seed_json_validity():
             raise AssertionError(f"[ERROR] JSON invalido en bloque semilla #{idx}: {err}\nContenido:\n{block}")
 
     assert "UNIDENTIFIED_CODER" in content_004, "[ERROR] Falta la plantilla de contingencia UNIDENTIFIED_CODER"
-    print(f"  [OK] Se validaron {len(json_blocks)} bloques JSON y la plantilla de contingencia UNIDENTIFIED_CODER.")
+    print(f"  [OK] Se validaron {len(json_blocks)} bloques JSON y la plantilla UNIDENTIFIED_CODER.")
+
+
+def test_real_coders_moodle():
+    print("\n[5/6] Validando los 297 coders reales de Riwi (005_real_riwi_coders.sql)...")
+    content_005 = (MIGRATIONS_DIR / "005_real_riwi_coders.sql").read_text(encoding="utf-8")
+    
+    # Contar tuplas insertadas ('132_...')
+    moodle_entries = re.findall(r"\('132_\d{3}'", content_005)
+    assert len(moodle_entries) == 297, f"[ERROR] Se esperaban 297 coders reales, encontrados: {len(moodle_entries)}"
+    
+    # Validar presencia de rutas clave
+    for route in ["Automatización con IA", "TypeScript Fullstack", "Node.js Backend", "Java Spring Boot", ".NET / C# Backend"]:
+        assert route in content_005, f"[ERROR] Falta la ruta oficial: {route}"
+        
+    print(f"  [OK] Los 297 coders reales de Moodle ID=132 y todas sus rutas tecnicas fueron validados con exito.")
 
 
 def test_idempotency_and_syntax():
-    print("\n[5/5] Validando reglas de idempotencia y estandar arquitectonico...")
+    print("\n[6/6] Validando reglas de idempotencia y estandar arquitectonico...")
     for filename in EXPECTED_MIGRATIONS:
         content = (MIGRATIONS_DIR / filename).read_text(encoding="utf-8")
         assert "-- ============================================================" in content, (
@@ -135,15 +153,16 @@ def test_idempotency_and_syntax():
 def main():
     print("============================================================")
     print("   VERIFICACION INTEGRAL DE BASE DE DATOS - SQUAD DB        ")
-    print("      Riwi HSE & Moodle ID=132 - Motor Strata Core          ")
+    print("      Riwi HSE & Moodle ID=132 - 297 Coders Reales          ")
     print("============================================================\n")
     try:
         test_migrations_exist()
         test_schema_definitions()
         test_performance_indexes()
         test_seed_json_validity()
+        test_real_coders_moodle()
         test_idempotency_and_syntax()
-        print("\n[EXITO] TODAS LAS COMPROBACIONES DE BASE DE DATOS PASARON EXITOSAMENTE (5/5).")
+        print("\n[EXITO] TODAS LAS COMPROBACIONES DE BASE DE DATOS PASARON EXITOSAMENTE (6/6).")
         return 0
     except AssertionError as e:
         print(f"\n{e}")

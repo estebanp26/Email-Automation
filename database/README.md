@@ -100,7 +100,8 @@ Las migraciones se ubican en `database/migrations/` y se ejecutan automáticamen
 | **`001_initial_schema.sql`** | Creación de extensión `pgcrypto`, ENUM `justification_status`, tablas principales (`hse_system_config`, `email_templates`, `justifications`) e índices base. | Eliam (`DB-01`) |
 | **`002_seed_data.sql`** | Datos semilla de reglas dinámicas, instituciones médicas reconocidas (EPS), plantillas HTML y 5 casos reales precargados de prueba. | Eliam (`DB-03`) |
 | **`003_storage_and_indexes.sql`** | Tabla `justification_attachments`, índices GIN sobre JSONB, índices compuestos para el Split-View, vistas SQL (`vw_dashboard_kpis`, `vw_recent_justifications`) y triggers. | Sergio (`DB-02` / `DB-04`) |
-| **`004_riwi_coders_directory.sql`** | Tabla `coders` para los ~310 coders de Riwi Moodle (ID 132), campos `cc_coder`, función `fn_resolve_coder_identity` y plantilla `UNIDENTIFIED_CODER`. | Eliam & Sergio |
+| **`004_riwi_coders_directory.sql`** | Estructura base de tabla `coders`, campos `cc_coder` en `justifications`, función `fn_resolve_coder_identity` y plantilla `UNIDENTIFIED_CODER`. | Eliam & Sergio |
+| **`005_real_riwi_coders.sql`** | Inserción masiva de los **297 coders reales** extraídos de Moodle ID=132 con sus rutas oficiales (IA, TypeScript, NodeJS, Java, C#, Analítica) y correos `@riwi.io`. | Importador Automatizado |
 
 ---
 
