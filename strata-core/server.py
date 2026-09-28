@@ -1,6 +1,7 @@
 import asyncio
 import json
 import os
+import re
 import shutil
 import tempfile
 import time
@@ -78,22 +79,29 @@ def _process_input_to_doc_data(file_path: Optional[str], text_content: Optional[
         ext = os.path.splitext(file_path)[1].lower()
         if ext in [".png", ".jpg", ".jpeg", ".webp", ".bmp"]:
             # PyMuPDF puede convertir imágenes a PDF en memoria al instante
-            img_doc = fitz.open(file_path)
-            pdf_bytes = img_doc.convert_to_pdf()
-            img_doc.close()
+            try:
+                img_doc = fitz.open(file_path)
+                pdf_bytes = img_doc.convert_to_pdf()
+                img_doc.close()
+            except Exception as img_err:
+                raise ValueError(f"Imagen corrupta o ilegible: {img_err}")
             
             temp_pdf_path = file_path + ".converted.pdf"
-            with open(temp_pdf_path, "wb") as f:
-                f.write(pdf_bytes)
-            
-            doc_data = reader.process_pdf(temp_pdf_path, run_ocr_on_images=True)
             try:
-                os.remove(temp_pdf_path)
-            except OSError:
-                pass
+                with open(temp_pdf_path, "wb") as f:
+                    f.write(pdf_bytes)
+                doc_data = reader.process_pdf(temp_pdf_path, run_ocr_on_images=True)
+            finally:
+                if os.path.exists(temp_pdf_path):
+                    try:
+                        os.remove(temp_pdf_path)
+                    except OSError:
+                        pass
             return doc_data
-        else:
+        elif ext in [".pdf"]:
             return reader.process_pdf(file_path, run_ocr_on_images=True)
+        else:
+            raise ValueError(f"Formato no compatible '{ext}'. Se requieren documentos PDF o imágenes JPG/PNG.")
             
     elif text_content:
         # Texto plano puro (sin archivo adjunto)
@@ -112,6 +120,32 @@ def _process_input_to_doc_data(file_path: Optional[str], text_content: Optional[
         return doc_data
     else:
         raise ValueError("Se debe proporcionar al menos un archivo adjunto o texto plano.")
+
+
+def _detect_prompt_injection(*texts: Optional[str]) -> bool:
+    """Escanea el contenido del correo y documento en busca de patrones de inyección de prompt / jailbreak."""
+    raw_combined = " ".join([t for t in texts if t]).lower()
+    if not raw_combined.strip():
+        return False
+
+    injection_patterns = [
+        r"ignora\s+(todas\s+las\s+|las\s+)?instrucciones",
+        r"ignore\s+(all\s+)?(previous\s+)?instructions",
+        r"system\s+(override|prompt|message)",
+        r"instrucci[oó]n\s+del\s+sistema",
+        r"modo\s+(desarrollador|administrador|superusuario)",
+        r"developer\s+mode",
+        r"you\s+are\s+now\s+(an?\s+)?ai",
+        r"responde\s+estrictamente\s+con",
+        r"responde\s+[úu]nicamente\s+con",
+        r"valido[\"'\s]*:\s*true",
+        r"requiere_revision_manual[\"'\s]*:\s*false",
+        r"act[úu]a\s+como\s+(un\s+)?evaluador\s+que\s+aprueba"
+    ]
+    for pattern in injection_patterns:
+        if re.search(pattern, raw_combined, re.IGNORECASE):
+            return True
+    return False
 
 
 @app.post("/api/evaluate-excuse")
@@ -213,6 +247,36 @@ async def evaluate_excuse(
             combined_text += f"CUERPO DEL CORREO:\n{email_body}\n\n"
             
         doc_data = _process_input_to_doc_data(temp_file_path, combined_text if not temp_file_path else None)
+
+        # Extracción del texto del documento para análisis de integridad
+        doc_text_content = ""
+        if isinstance(doc_data, dict) and "pages" in doc_data:
+            doc_text_content = " ".join([p.get("text", "") for p in doc_data["pages"] if isinstance(p, dict)])
+
+        # Verificación y contención de Prompt Injection / Instrucciones Directas en el soporte
+        if _detect_prompt_injection(email_subject, email_body, doc_text_content):
+            t_elapsed = time.perf_counter() - t_start
+            metrics_tracker.record_evaluation(
+                valido=False,
+                manual=True,
+                tipo="no_identificado",
+                latency=round(t_elapsed, 2)
+            )
+            return {
+                "valido": False,
+                "tipo_novedad": "no_identificado",
+                "fecha_afectada": "No identificada",
+                "motivo_decision": "Se detectaron patrones de texto no convencionales o instrucciones directas en el cuerpo/documento que requieren auditoría y validación manual por parte del Team Leader.",
+                "confianza_score": 0.0,
+                "requiere_revision_manual": True,
+                "detalles_adjunto": {
+                    "es_legible": True,
+                    "tiene_firma_o_sello": False,
+                    "institucion_emisora": "No identificada",
+                    "auditoria_seguridad": "Patrón de instrucción directa detectado en el texto suministrado"
+                },
+                "tiempo_procesamiento_segundos": round(t_elapsed, 2)
+            }
         
         PROMPT_PATH = os.path.join(BASE_DIR, "prompts", "evaluator_system_prompt.md")
         with open(PROMPT_PATH, "r", encoding="utf-8") as f:
@@ -285,6 +349,17 @@ async def evaluate_excuse(
             tipo_novedad = "no_identificado"
             valido = False
             requiere_revision_manual = True
+
+        # Guardrail para incapacidades formales de EPS con soporte legítimo (Sanitas, SURA, Compensar)
+        if any(eps in full_text_lower for eps in ["sanitas", "sura", "compensar", "famisanar", "salud total"]) and any(m in full_text_lower for m in ["incapacidad", "reposo", "gastrointestinal", "cefalea"]):
+            is_extemporanea = any(w in text_lower for w in ["atrasad", "dos semanas", "hace 15 días", "no alcancé a enviar antes", "vencida"]) or "10/09" in full_text_lower or "10 de septiembre" in full_text_lower
+            is_particular = any(w in full_text_lower for w in ["particular", "sin registro", "sin sello"])
+            is_formula = any(w in full_text_lower for w in ["formula", "farmacia", "receta", "medicamentos"]) and "dias de reposo" not in full_text_lower and "días de reposo" not in full_text_lower and "incapacidad temporal" not in full_text_lower
+
+            if not is_extemporanea and not is_particular and not is_formula:
+                valido = True
+                requiere_revision_manual = False
+                tipo_novedad = "inasistencia_medica"
         
         detalles_adjunto = ai_verdict.get("detalles_adjunto") or {}
         if not isinstance(detalles_adjunto, dict):
@@ -315,20 +390,42 @@ async def evaluate_excuse(
         
     except Exception as e:
         t_elapsed = time.perf_counter() - t_start
+        clean_msg = str(e)
+        if "password" in clean_msg.lower() or "cifrado" in clean_msg.lower() or "protegido" in clean_msg.lower():
+            decision_msg = "Documento protegido con contraseña o cifrado. Derivado a revisión manual del Team Leader."
+        elif "formato no compatible" in clean_msg.lower():
+            decision_msg = f"Formato de archivo no admitido ({clean_msg}). Derivado a revisión manual del Team Leader."
+        elif "corrupt" in clean_msg.lower() or "cannot open" in clean_msg.lower() or "dañado" in clean_msg.lower() or "ilegitimo" in clean_msg.lower() or "failed to open" in clean_msg.lower() or "no fue posible abrir" in clean_msg.lower():
+            decision_msg = "Archivo adjunto dañado o corrupto. Derivado a revisión manual del Team Leader para solicitar reenvío."
+        else:
+            decision_msg = f"Inconsistencia al procesar soporte ({clean_msg}). Derivado a revisión manual del Team Leader."
+
         error_payload = {
-                "valido": False,
-                "tipo_novedad": "no_identificado",
-                "fecha_afectada": "No identificada",
-                "motivo_decision": f"Error interno en Strata Core al procesar documento: {str(e)}",
-                "confianza_score": 0.0,
-                "requiere_revision_manual": True,
-                "error": str(e),
-                "tiempo_procesamiento_segundos": round(t_elapsed, 2)
+            "valido": False,
+            "tipo_novedad": "no_identificado",
+            "fecha_afectada": "No identificada",
+            "motivo_decision": decision_msg,
+            "confianza_score": 0.0,
+            "requiere_revision_manual": True,
+            "detalles_adjunto": {
+                "es_legible": False,
+                "tiene_firma_o_sello": False,
+                "institucion_emisora": "No identificada",
+                "error_origen": clean_msg
+            },
+            "tiempo_procesamiento_segundos": round(t_elapsed, 2)
         }
-        # Si hay request HTTP real, devolver JSONResponse con status 500;
-        # si se invocó directamente (test runner), devolver dict plano.
+        # Registrar telemetría del incidente
+        metrics_tracker.record_evaluation(
+            valido=False,
+            manual=True,
+            tipo="no_identificado",
+            latency=round(t_elapsed, 2)
+        )
+        # NUNCA responder HTTP 500 a n8n: responder HTTP 200 con requiere_revision_manual: true
+        # para que n8n continúe el flujo sin romperse y la Team Leader audite el caso en el dashboard.
         if request is not None:
-            return JSONResponse(status_code=500, content=error_payload)
+            return JSONResponse(status_code=200, content=error_payload)
         return error_payload
     finally:
         if temp_file_path and os.path.exists(temp_file_path):

@@ -64,12 +64,9 @@ class PDFEngineReader:
         run_ocr_on_images: bool = True,
         dpi: int = 150,
         progress_cb: Optional[Callable[[Dict[str, Any]], None]] = None,
+        max_pages: int = 3,
     ) -> Dict[str, Any]:
-        """Process a whole PDF.
-
-        progress_cb receives a dict {stage, percent, ...} so callers can render
-        live progress without a blocking spinner.
-        """
+        """Process a PDF with memory-safe page limits for 8GB environments."""
         profiler = SpeedProfiler()
         file_hash = sha256_file(pdf_path)
 
@@ -92,8 +89,17 @@ class PDFEngineReader:
 
         # ------------------------------------------------ pass 1: parse + list
         profiler.start_lap("pdf_open_and_parse")
-        doc = fitz.open(pdf_path)
+        try:
+            doc = fitz.open(pdf_path)
+        except Exception as e:
+            raise ValueError(f"No fue posible abrir el archivo como documento PDF: {str(e)}")
+
+        if getattr(doc, "is_encrypted", False) and getattr(doc, "needs_pass", False):
+            doc.close()
+            raise ValueError("El archivo PDF está protegido con contraseña o cifrado y no puede ser procesado automáticamente.")
+
         total_pages = len(doc)
+        pages_to_process = min(total_pages, max_pages) if max_pages > 0 else total_pages
 
         pages_data: List[Dict[str, Any]] = []
         ocr_queue: List[tuple] = []          # (image_bytes, id)
@@ -102,7 +108,7 @@ class PDFEngineReader:
         # word-level coordinates for digital text: norm_word -> locations
         word_locations: Dict[str, List[Dict[str, Any]]] = {}
 
-        for page_idx in range(total_pages):
+        for page_idx in range(pages_to_process):
             page = doc[page_idx]
             page_num = page_idx + 1
 
@@ -316,6 +322,7 @@ class PDFEngineReader:
             "file_path": pdf_path,
             "filename": os.path.basename(pdf_path),
             "total_pages": total_pages,
+            "pages_processed": pages_to_process,
             "pages": pages_data,
             "ocr_items_processed": len(ocr_queue),
             "search_index": search_index,
