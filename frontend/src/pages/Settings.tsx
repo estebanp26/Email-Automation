@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { 
   Bell, 
@@ -12,8 +12,24 @@ import {
   Phone, 
   Mail, 
   Edit3, 
-  Check
+  Check,
+  Zap,
+  RefreshCw,
+  CheckCircle2,
+  AlertTriangle,
+  Play,
+  Save,
+  Server
 } from 'lucide-react';
+import { 
+  getN8nConfig, 
+  saveN8nConfig, 
+  testN8nConnection, 
+  sendIncomingEmailSimulation,
+  getDispatchWebhookUrl,
+  getIncomingWebhookUrl,
+  type N8nConfig
+} from '../services/n8n';
 
 export default function Settings() {
   // Local state for interactive elements
@@ -31,6 +47,61 @@ export default function Settings() {
   
   const [notificationMethod, setNotificationMethod] = useState<'email' | 'system'>('email');
 
+  // n8n Integration State
+  const [n8nSettings, setN8nSettings] = useState<N8nConfig>(getN8nConfig());
+  const [isTestingN8n, setIsTestingN8n] = useState(false);
+  const [testResult, setTestResult] = useState<{ success: boolean; message: string; url?: string } | null>(null);
+  const [isSimulating, setIsSimulating] = useState(false);
+  const [simulateResult, setSimulateResult] = useState<{ success: boolean; message: string } | null>(null);
+  const [saveSuccess, setSaveSuccess] = useState(false);
+
+  useEffect(() => {
+    setN8nSettings(getN8nConfig());
+  }, []);
+
+  const handleSaveN8n = () => {
+    saveN8nConfig(n8nSettings);
+    setSaveSuccess(true);
+    setTimeout(() => setSaveSuccess(false), 3000);
+  };
+
+  const handleTestConnection = async () => {
+    setIsTestingN8n(true);
+    setTestResult(null);
+    saveN8nConfig(n8nSettings);
+    const res = await testN8nConnection();
+    setTestResult(res);
+    setIsTestingN8n(false);
+  };
+
+  const handleSimulateEmail = async () => {
+    setIsSimulating(true);
+    setSimulateResult(null);
+    saveN8nConfig(n8nSettings);
+
+    const res = await sendIncomingEmailSimulation({
+      source_provider: 'OUTLOOK',
+      sender_name: 'Santiago Morales',
+      sender_email: 'santiago.morales@riwi.io',
+      email_subject: 'Justificación médica - Incapacidad 2 días',
+      email_body: 'Buenos días equipo HSE, adjunto constancia médica por cuadro viral desde hoy 28 de septiembre.',
+      attachments: [{ filename: 'incapacidad_santiago.pdf', mime_type: 'application/pdf' }]
+    });
+
+    if (res.success) {
+      setSimulateResult({
+        success: true,
+        message: '¡Correo simulado recibido correctamente por el Webhook de n8n!'
+      });
+    } else {
+      setSimulateResult({
+        success: false,
+        message: res.error || 'No se pudo enviar el correo simulado al webhook.'
+      });
+    }
+    setIsSimulating(false);
+  };
+
   return (
     <div className="flex flex-col gap-8 pb-10">
       
@@ -38,7 +109,7 @@ export default function Settings() {
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <h1 className="text-[28px] font-bold text-[#151A2D]">Configuración</h1>
-          <p className="text-[#7B8195] mt-1 text-sm">Administra tu cuenta, preferencias y seguridad.</p>
+          <p className="text-[#7B8195] mt-1 text-sm">Administra tu cuenta, integraciones de n8n y seguridad.</p>
         </div>
         <div className="flex items-center gap-5">
           <span className="text-sm font-medium text-[#7B8195] hidden sm:block">Perfil de acciones <span className="ml-1 text-[10px]">▼</span></span>
@@ -51,6 +122,163 @@ export default function Settings() {
           </div>
         </div>
       </div>
+
+      {/* ================================================================ */}
+      {/* CARD DESTACADA: CONEXIÓN N8N WORKFLOW                            */}
+      {/* ================================================================ */}
+      <motion.div 
+        initial={{ opacity: 0, y: 15 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="bg-white rounded-[24px] border-2 border-[#5B3DF5]/30 shadow-[0_4px_25px_rgba(91,61,245,0.06)] p-6 md:p-8"
+      >
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-[#E8EAF2] pb-6 mb-6">
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-[#5B3DF5] to-[#7357FF] text-white flex items-center justify-center shadow-md shadow-[#5B3DF5]/25">
+              <Zap size={24} />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h2 className="text-[20px] font-bold text-[#151A2D]">Conexión con n8n Workflow</h2>
+                <span className="text-[11px] font-bold uppercase tracking-wider bg-[#5B3DF5]/10 text-[#5B3DF5] px-2.5 py-0.5 rounded-full">
+                  Workflow HSE
+                </span>
+              </div>
+              <p className="text-[13px] text-[#7B8195]">
+                Configura los endpoints de los webhooks para resolución manual y recepción de correos.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <button
+              onClick={handleSaveN8n}
+              className="bg-[#5B3DF5] hover:bg-[#4828E0] text-white font-bold text-xs px-4 py-2.5 rounded-xl flex items-center gap-1.5 transition-all shadow-md shadow-[#5B3DF5]/20 cursor-pointer"
+            >
+              {saveSuccess ? <Check size={16} /> : <Save size={16} />}
+              {saveSuccess ? '¡Guardado!' : 'Guardar Configuración'}
+            </button>
+          </div>
+        </div>
+
+        {/* Inputs de configuración */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+          {/* URL Base */}
+          <div className="lg:col-span-2 space-y-1.5">
+            <label className="text-xs font-bold uppercase tracking-wider text-[#7B8195] flex items-center gap-1.5">
+              <Server size={14} /> URL Base de n8n
+            </label>
+            <input 
+              type="text"
+              value={n8nSettings.baseUrl}
+              onChange={e => setN8nSettings({...n8nSettings, baseUrl: e.target.value})}
+              placeholder="http://localhost:5678 o https://tu-instancia.app.n8n.cloud"
+              className="w-full bg-[#F8F9FD] border border-[#E8EAF2] rounded-xl px-4 py-2.5 text-sm font-mono text-[#151A2D] focus:outline-none focus:border-[#5B3DF5]"
+            />
+            <p className="text-[11px] text-[#7B8195]">
+              Normalmente <code>http://localhost:5678</code> cuando se ejecuta local o en Docker.
+            </p>
+          </div>
+
+          {/* Selector de Modo Test / Prod */}
+          <div className="space-y-1.5">
+            <label className="text-xs font-bold uppercase tracking-wider text-[#7B8195]">
+              Modo de Ejecución del Webhook
+            </label>
+            <div className="flex rounded-xl bg-[#F8F9FD] p-1 border border-[#E8EAF2]">
+              <button
+                type="button"
+                onClick={() => setN8nSettings({...n8nSettings, useTestWebhook: true})}
+                className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                  n8nSettings.useTestWebhook ? 'bg-white text-[#5B3DF5] shadow-xs' : 'text-[#7B8195] hover:text-[#151A2D]'
+                }`}
+              >
+                Prueba (/webhook-test/)
+              </button>
+              <button
+                type="button"
+                onClick={() => setN8nSettings({...n8nSettings, useTestWebhook: false})}
+                className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                  !n8nSettings.useTestWebhook ? 'bg-white text-[#5B3DF5] shadow-xs' : 'text-[#7B8195] hover:text-[#151A2D]'
+                }`}
+              >
+                Producción (/webhook/)
+              </button>
+            </div>
+            <p className="text-[11px] text-[#7B8195]">
+              {n8nSettings.useTestWebhook 
+                ? 'Activo: Usa para probar paso a paso dando clic en "Listen for test event" en n8n.' 
+                : 'Activo: Para workflows activos en ejecución permanente.'}
+            </p>
+          </div>
+        </div>
+
+        {/* URLs Calculadas */}
+        <div className="bg-[#F8F9FD] border border-[#E8EAF2] rounded-2xl p-4 mb-6 space-y-3">
+          <p className="text-xs font-bold uppercase tracking-wider text-[#7B8195]">Rutas de Webhook enlazadas</p>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+            <div className="bg-white p-3 rounded-xl border border-[#E8EAF2]">
+              <span className="font-bold text-[#111827] block mb-1">1. Despacho Manual HSE:</span>
+              <code className="text-[#5B3DF5] font-mono text-[11px] break-all">
+                {getDispatchWebhookUrl()}
+              </code>
+            </div>
+
+            <div className="bg-white p-3 rounded-xl border border-[#E8EAF2]">
+              <span className="font-bold text-[#111827] block mb-1">2. Ingesta de Correo:</span>
+              <code className="text-[#20B486] font-mono text-[11px] break-all">
+                {getIncomingWebhookUrl()}
+              </code>
+            </div>
+          </div>
+        </div>
+
+        {/* Botones de Prueba y Simulación */}
+        <div className="flex flex-wrap items-center gap-3">
+          <button
+            onClick={handleTestConnection}
+            disabled={isTestingN8n}
+            className="bg-white border border-[#E8EAF2] hover:bg-[#F8F9FD] text-[#151A2D] font-bold text-xs px-4 py-2.5 rounded-xl flex items-center gap-2 transition-all cursor-pointer disabled:opacity-50"
+          >
+            {isTestingN8n ? <RefreshCw size={14} className="animate-spin text-[#5B3DF5]" /> : <Zap size={14} className="text-[#5B3DF5]" />}
+            Probar Conectividad con n8n
+          </button>
+
+          <button
+            onClick={handleSimulateEmail}
+            disabled={isSimulating}
+            className="bg-white border border-[#E8EAF2] hover:bg-[#F8F9FD] text-[#151A2D] font-bold text-xs px-4 py-2.5 rounded-xl flex items-center gap-2 transition-all cursor-pointer disabled:opacity-50"
+          >
+            {isSimulating ? <RefreshCw size={14} className="animate-spin text-[#20B486]" /> : <Play size={14} className="text-[#20B486]" />}
+            Simular Envío de Correo Entrante
+          </button>
+        </div>
+
+        {/* Mensaje de Resultado de Conexión */}
+        {testResult && (
+          <div className={`mt-4 p-4 rounded-xl text-xs border flex items-start gap-2.5 ${
+            testResult.success ? 'bg-[#20B486]/10 border-[#20B486]/30 text-[#136c50]' : 'bg-[#FF5C67]/10 border-[#FF5C67]/30 text-[#9c242c]'
+          }`}>
+            {testResult.success ? <CheckCircle2 size={16} className="shrink-0 mt-0.5" /> : <AlertTriangle size={16} className="shrink-0 mt-0.5" />}
+            <div>
+              <p className="font-bold">{testResult.message}</p>
+              {testResult.url && <p className="font-mono mt-1 opacity-80">{testResult.url}</p>}
+            </div>
+          </div>
+        )}
+
+        {/* Mensaje de Resultado de Simulación */}
+        {simulateResult && (
+          <div className={`mt-4 p-4 rounded-xl text-xs border flex items-start gap-2.5 ${
+            simulateResult.success ? 'bg-[#20B486]/10 border-[#20B486]/30 text-[#136c50]' : 'bg-[#FF5C67]/10 border-[#FF5C67]/30 text-[#9c242c]'
+          }`}>
+            {simulateResult.success ? <CheckCircle2 size={16} className="shrink-0 mt-0.5" /> : <AlertTriangle size={16} className="shrink-0 mt-0.5" />}
+            <div>
+              <p className="font-bold">{simulateResult.message}</p>
+            </div>
+          </div>
+        )}
+      </motion.div>
 
       {/* MAIN GRID LAYOUT */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -74,7 +302,7 @@ export default function Settings() {
                   <p className="text-[13px] text-[#7B8195]">Información personal y de contacto.</p>
                 </div>
               </div>
-              <button className="text-[#5B3DF5] hover:text-[#7357FF] text-[13px] font-bold flex items-center gap-1.5 bg-[#F0EDFF] hover:bg-[#E5E0FF] px-3 py-1.5 rounded-lg transition-colors">
+              <button className="text-[#5B3DF5] hover:text-[#7357FF] text-[13px] font-bold flex items-center gap-1.5 bg-[#F0EDFF] hover:bg-[#E5E0FF] px-3 py-1.5 rounded-lg transition-colors cursor-pointer">
                 <Edit3 size={14} /> Editar
               </button>
             </div>
@@ -142,10 +370,10 @@ export default function Settings() {
               </div>
 
               <div>
-                <p className="text-[13px] font-bold text-[#151A2D] mb-3">Idioma</p>
+                <p className="text-[13px] font-bold text-[#151A2D] mb-2">Idioma</p>
                 <div className="relative">
                   <select 
-                    value={language}
+                    value={language} 
                     onChange={(e) => setLanguage(e.target.value)}
                     className="w-full appearance-none bg-white border border-[#E8EAF2] rounded-[12px] px-4 py-2.5 text-[14px] text-[#151A2D] font-medium focus:outline-none focus:border-[#5B3DF5] focus:ring-2 focus:ring-[#5B3DF5]/10 cursor-pointer"
                   >
@@ -185,7 +413,7 @@ export default function Settings() {
               <div className="border border-[#E8EAF2] rounded-[16px] p-5">
                 <h3 className="text-[14px] font-bold text-[#151A2D] mb-1">Contraseña</h3>
                 <p className="text-[12px] text-[#7B8195] mb-4">Cambia tu contraseña regularmente.</p>
-                <button className="w-full bg-[#F6F7FB] hover:bg-[#E8EAF2] text-[#151A2D] font-bold text-[13px] py-2.5 rounded-[10px] transition-colors">
+                <button className="w-full bg-[#F6F7FB] hover:bg-[#E8EAF2] text-[#151A2D] font-bold text-[13px] py-2.5 rounded-[10px] transition-colors cursor-pointer">
                   Cambiar contraseña
                 </button>
               </div>
@@ -201,7 +429,7 @@ export default function Settings() {
                 </div>
                 <button 
                   onClick={() => setTwoFactorEnabled(!twoFactorEnabled)}
-                  className={`w-11 h-6 rounded-full relative transition-colors ${twoFactorEnabled ? 'bg-[#5B3DF5]' : 'bg-[#E8EAF2]'}`}
+                  className={`w-11 h-6 rounded-full relative transition-colors cursor-pointer ${twoFactorEnabled ? 'bg-[#5B3DF5]' : 'bg-[#E8EAF2]'}`}
                 >
                   <div className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-white transition-transform ${twoFactorEnabled ? 'translate-x-5' : 'translate-x-0'}`} />
                 </button>
@@ -305,7 +533,7 @@ export default function Settings() {
               <p className="text-[14px] text-[#7B8195]">Datos generales del sistema HSE.</p>
             </div>
           </div>
-          <button className="text-[#5B3DF5] hover:text-[#7357FF] text-[13px] font-bold flex items-center gap-1.5 bg-[#F0EDFF] hover:bg-[#E5E0FF] px-4 py-2 rounded-[10px] transition-colors">
+          <button className="text-[#5B3DF5] hover:text-[#7357FF] text-[13px] font-bold flex items-center gap-1.5 bg-[#F0EDFF] hover:bg-[#E5E0FF] px-4 py-2 rounded-[10px] transition-colors cursor-pointer">
             <Edit3 size={14} /> Editar
           </button>
         </div>
@@ -326,7 +554,7 @@ export default function Settings() {
 // Reusable Components
 function Field({ label, value, icon }: { label: string, value: string, icon?: React.ReactNode }) {
   return (
-    <div className="bg-white border border-[#E8EAF2] rounded-[12px] p-3 shadow-sm hover:border-[#5B3DF5]/30 transition-colors">
+    <div className="bg-white border border-[#E8EAF2] rounded-[12px] p-3 shadow-xs hover:border-[#5B3DF5]/30 transition-colors">
       <p className="text-[11px] font-bold text-[#7B8195] uppercase tracking-wider mb-1">{label}</p>
       <div className="flex items-center gap-1.5 text-[14px] font-semibold text-[#151A2D] truncate">
         {icon && <span className="text-[#5B3DF5]">{icon}</span>}
