@@ -9,11 +9,19 @@ y ejecuta la simulación de lógica de los 6 escenarios operativos clave.
 import json
 import re
 import sys
+import os
 from datetime import datetime
 from pathlib import Path
+
+if hasattr(sys.stdout, "reconfigure"):
+    try:
+        sys.stdout.reconfigure(encoding="utf-8")
+    except Exception:
+        pass
+
 BASE_DIR = Path(__file__).resolve().parent
-WORKFLOW_PATH = BASE_DIR / "n8n_workflow_email_hse.json"
-DDL_PATH = BASE_DIR / "init_database.sql"
+WORKFLOW_PATH = Path(os.environ.get("N8N_WORKFLOW_PATH", str(BASE_DIR / "n8n_workflow_email_hse.json")))
+DDL_PATH = Path(os.environ.get("DATABASE_DDL_PATH", str(BASE_DIR / "init_database.sql")))
 
 class Colors:
     HEADER = '\033[95m'
