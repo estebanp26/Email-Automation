@@ -263,6 +263,7 @@ async def evaluate_excuse(
                 latency=round(t_elapsed, 2)
             )
             return {
+                "categoria_sugerida": "REVISION_MANUAL",
                 "valido": False,
                 "tipo_novedad": "no_identificado",
                 "fecha_afectada": "No identificada",
@@ -293,14 +294,28 @@ async def evaluate_excuse(
         
         # Validación y saneamiento del veredicto con Failover ante fallos de Ollama
         if error_msg or not ai_verdict:
+            categoria_sugerida = "REVISION_MANUAL"
             valido = False
             requiere_revision_manual = True
             confianza_score = 0.0
             tipo_novedad = "no_identificado"
             fecha_afectada = "No identificada"
-            motivo_decision = f"Motor de IA temporalmente no disponible (Ollama Offline o Timeout). Derivado automáticamente a revisión manual del Team Leader. Detalle: {error_msg or 'Respuesta vacía del modelo'}"
+            motivo_decision = f"Motor de IA temporalmente no disponible (Ollama Offline o Timeout). Derivado automáticamente a revisión manual de la Team Leader de HSE. Detalle: {error_msg or 'Respuesta vacía del modelo'}"
         else:
-            valido = bool(ai_verdict.get("valido", False))
+            cat = str(ai_verdict.get("categoria_sugerida", "")).upper()
+            if cat in ["POSIBLEMENTE_VALIDO", "POSIBLEMENTE_INVALIDO", "REVISION_MANUAL"]:
+                categoria_sugerida = cat
+            else:
+                if bool(ai_verdict.get("requiere_revision_manual", False)):
+                    categoria_sugerida = "REVISION_MANUAL"
+                elif bool(ai_verdict.get("valido", False)):
+                    categoria_sugerida = "POSIBLEMENTE_VALIDO"
+                else:
+                    categoria_sugerida = "POSIBLEMENTE_INVALIDO"
+
+            valido = (categoria_sugerida == "POSIBLEMENTE_VALIDO")
+            requiere_revision_manual = (categoria_sugerida == "REVISION_MANUAL")
+
             tipo_novedad = ai_verdict.get("tipo_novedad") or "no_identificado"
             valid_types = ["inasistencia_medica", "calamidad", "tramite_oficial", "falla_tecnica", "tardanza", "salida_temprana", "no_identificado"]
             if tipo_novedad not in valid_types:
@@ -314,8 +329,6 @@ async def evaluate_excuse(
                 confianza_score = max(0.0, min(1.0, confianza_score))
             except (ValueError, TypeError):
                 confianza_score = 0.80
-                
-            requiere_revision_manual = bool(ai_verdict.get("requiere_revision_manual", False))
 
         # Guardrails deterministas de negocio HSE
         text_lower = ((email_subject or "") + " " + (email_body or "")).lower()
@@ -325,28 +338,33 @@ async def evaluate_excuse(
         if any(w in text_lower for w in ["falleci", "luto", "funerari", "entierro", "calamidad"]):
             tipo_novedad = "calamidad"
             if not temp_file_path:
+                categoria_sugerida = "REVISION_MANUAL"
                 valido = False
                 requiere_revision_manual = True
 
         if any(w in text_lower for w in ["retirarme", "salir antes", "salida temprana"]):
             tipo_novedad = "salida_temprana"
             if any(w in full_text_lower for w in ["odontolog", "dental", "procedimiento", "cita"]):
+                categoria_sugerida = "POSIBLEMENTE_VALIDO"
                 valido = True
                 requiere_revision_manual = False
 
         if any(w in full_text_lower for w in ["ticket", "fibra", "tigo", "claro", "movistar", "sin internet"]):
             tipo_novedad = "falla_tecnica"
             if temp_file_path:
+                categoria_sugerida = "POSIBLEMENTE_VALIDO"
                 valido = True
                 requiere_revision_manual = False
 
         if any(w in text_lower for w in ["descuento", "cursos de", "promocion", "suscripciones"]):
             tipo_novedad = "no_identificado"
+            categoria_sugerida = "REVISION_MANUAL"
             valido = False
             requiere_revision_manual = True
 
         if any(w in full_text_lower for w in ["borrosa", "totalmente borrosa", "foto_borrosa"]):
             tipo_novedad = "no_identificado"
+            categoria_sugerida = "REVISION_MANUAL"
             valido = False
             requiere_revision_manual = True
 
@@ -356,7 +374,12 @@ async def evaluate_excuse(
             is_particular = any(w in full_text_lower for w in ["particular", "sin registro", "sin sello"])
             is_formula = any(w in full_text_lower for w in ["formula", "farmacia", "receta", "medicamentos"]) and "dias de reposo" not in full_text_lower and "días de reposo" not in full_text_lower and "incapacidad temporal" not in full_text_lower
 
-            if not is_extemporanea and not is_particular and not is_formula:
+            if is_extemporanea or is_particular or is_formula:
+                categoria_sugerida = "POSIBLEMENTE_INVALIDO"
+                valido = False
+                requiere_revision_manual = False
+            else:
+                categoria_sugerida = "POSIBLEMENTE_VALIDO"
                 valido = True
                 requiere_revision_manual = False
                 tipo_novedad = "inasistencia_medica"
@@ -378,6 +401,7 @@ async def evaluate_excuse(
         )
         
         return {
+            "categoria_sugerida": categoria_sugerida,
             "valido": valido,
             "tipo_novedad": tipo_novedad,
             "fecha_afectada": fecha_afectada,
@@ -401,6 +425,7 @@ async def evaluate_excuse(
             decision_msg = f"Inconsistencia al procesar soporte ({clean_msg}). Derivado a revisión manual del Team Leader."
 
         error_payload = {
+            "categoria_sugerida": "REVISION_MANUAL",
             "valido": False,
             "tipo_novedad": "no_identificado",
             "fecha_afectada": "No identificada",

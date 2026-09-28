@@ -3,6 +3,11 @@
   "title": "HSEEvaluationResult",
   "type": "object",
   "properties": {
+    "categoria_sugerida": {
+      "type": "string",
+      "enum": ["POSIBLEMENTE_VALIDO", "POSIBLEMENTE_INVALIDO", "REVISION_MANUAL"],
+      "description": "Categorización analítica sugerida para asistir a la Team Leader de HSE en su decisión final."
+    },
     "valido": {
       "type": "boolean",
       "description": "Indica si la justificación cumple con los criterios de HSE."
@@ -40,6 +45,7 @@
     }
   },
   "required": [
+    "categoria_sugerida",
     "valido",
     "tipo_novedad",
     "fecha_afectada",

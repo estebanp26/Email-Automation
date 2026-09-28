@@ -77,7 +77,7 @@ def main():
     log(f"Usuario HSE 'Paola Andrea Martínez' registrada (ID: {str(real_hse_id)[:8]}...)")
     conn.commit()
 
-    print("\n[3/5] Probando consultas de nodos n8n...")
+    print("\n[3/5] Probando consultas de nodos n8n con Asistencia Analítica HSE...")
 
     # Simular Nodo 03: Buscar Coder en DB
     cur.execute("""
@@ -90,19 +90,19 @@ def main():
     assert found_coder is not None, "El nodo 03 de n8n debe encontrar al coder"
     log("Nodo 03 (Buscar Coder en DB) resolvió correctamente al coder")
 
-    # Simular Nodo 11A: Insertar Justificación APPROVED
+    # Simular Nodo 11A: Insertar Justificación POSIBLEMENTE_VALIDO
     msg_id_1 = f"msg_{uuid.uuid4().hex[:8]}"
     cur.execute("""
         INSERT INTO justifications (
             coder_id, sender_email, sender_name, email_subject, email_body, email_url,
             message_id, conversation_id, received_at, intent, excuse_type, start_date, end_date,
-            ai_confidence, ai_reason, ai_response, coder_identification_status, validation_status,
+            ai_recommendation, ai_confidence, ai_reason, ai_response, coder_identification_status, validation_status,
             resolution_mode, has_human_intervention, validation_notes, attachments
         ) VALUES (
             %s, %s, %s, %s, %s, %s,
             %s, %s, NOW(), 'EXCUSA', 'inasistencia_medica', '2026-09-25', '2026-09-26',
-            0.96, 'Incapacidad médica EPS Sanitas válida con sello', '{"valido": true}'::jsonb,
-            'IDENTIFIED', 'APPROVED', 'AUTOMATIC_AI', FALSE, 'Aprobada automáticamente por IA',
+            'POSIBLEMENTE_VALIDO', 0.96, 'Incapacidad médica EPS Sanitas válida con sello', '{"categoria_sugerida": "POSIBLEMENTE_VALIDO"}'::jsonb,
+            'IDENTIFIED', 'POSIBLEMENTE_VALIDO', 'AUTOMATIC_AI', FALSE, 'Categorizada como posiblemente válida por IA',
             '[{"filename": "incapacidad.pdf", "mime_type": "application/pdf"}]'::jsonb
         ) RETURNING id;
     """, (
@@ -112,21 +112,45 @@ def main():
         msg_id_1, 'conv_123'
     ))
     approved_id = cur.fetchone()["id"]
-    log(f"Nodo 11A (Insertar APPROVED) insertó justificación {str(approved_id)[:8]}...")
+    log(f"Nodo 11A (Insertar POSIBLEMENTE_VALIDO) insertó justificación {str(approved_id)[:8]}...")
 
-    # Simular Nodo 11C: Insertar Justificación MANUAL_INTERACTION
+    # Simular Nodo 11B: Insertar Justificación POSIBLEMENTE_INVALIDO
+    msg_id_invalid = f"msg_{uuid.uuid4().hex[:8]}"
+    cur.execute("""
+        INSERT INTO justifications (
+            coder_id, sender_email, sender_name, email_subject, email_body, email_url,
+            message_id, conversation_id, received_at, intent, excuse_type, start_date, end_date,
+            ai_recommendation, ai_confidence, ai_reason, ai_response, coder_identification_status, validation_status,
+            resolution_mode, has_human_intervention, validation_notes, attachments
+        ) VALUES (
+            %s, %s, %s, %s, %s, %s,
+            %s, %s, NOW(), 'EXCUSA', 'inasistencia_medica', '2026-09-10', '2026-09-11',
+            'POSIBLEMENTE_INVALIDO', 0.95, 'Incapacidad extemporánea radicada fuera del plazo de 48h', '{"categoria_sugerida": "POSIBLEMENTE_INVALIDO"}'::jsonb,
+            'IDENTIFIED', 'POSIBLEMENTE_INVALIDO', 'AUTOMATIC_AI', FALSE, 'Categorizada como posiblemente inválida por IA',
+            '[{"filename": "vencida.pdf", "mime_type": "application/pdf"}]'::jsonb
+        ) RETURNING id;
+    """, (
+        real_coder_id, 'santiago.morales@riwi.io', 'Santiago Morales',
+        'Incapacidad médica atrasada', 'Envío incapacidad de hace 2 semanas.',
+        'https://outlook.office.com/mail/deeplink/read/' + msg_id_invalid,
+        msg_id_invalid, 'conv_inv'
+    ))
+    invalid_id = cur.fetchone()["id"]
+    log(f"Nodo 11B (Insertar POSIBLEMENTE_INVALIDO) insertó justificación {str(invalid_id)[:8]}...")
+
+    # Simular Nodo 11C: Insertar Justificación REVISION_MANUAL
     msg_id_2 = f"msg_{uuid.uuid4().hex[:8]}"
     cur.execute("""
         INSERT INTO justifications (
             coder_id, sender_email, sender_name, email_subject, email_body, email_url,
             message_id, conversation_id, received_at, intent, excuse_type, start_date, end_date,
-            ai_confidence, ai_reason, ai_response, coder_identification_status, validation_status,
+            ai_recommendation, ai_confidence, ai_reason, ai_response, coder_identification_status, validation_status,
             resolution_mode, has_human_intervention, validation_notes, attachments
         ) VALUES (
             %s, %s, %s, %s, %s, %s,
             %s, %s, NOW(), 'EXCUSA', 'calamidad_domestica', '2026-09-28', '2026-09-28',
-            0.80, 'Calamidad familiar reportada sin certificado adjunto', '{"valido": false, "manual": true}'::jsonb,
-            'IDENTIFIED', 'MANUAL_INTERACTION', 'AUTOMATIC_AI', FALSE, 'Derivado a revisión manual por falta de soporte',
+            'REVISION_MANUAL', 0.80, 'Calamidad familiar reportada sin certificado adjunto', '{"categoria_sugerida": "REVISION_MANUAL"}'::jsonb,
+            'IDENTIFIED', 'REVISION_MANUAL', 'AUTOMATIC_AI', FALSE, 'Derivado a revisión manual por falta de soporte',
             '[]'::jsonb
         ) RETURNING id;
     """, (
@@ -136,9 +160,9 @@ def main():
         msg_id_2, 'conv_456'
     ))
     manual_id = cur.fetchone()["id"]
-    log(f"Nodo 11C (Insertar MANUAL_INTERACTION) insertó justificación {str(manual_id)[:8]}...")
+    log(f"Nodo 11C (Insertar REVISION_MANUAL) insertó justificación {str(manual_id)[:8]}...")
 
-    # Simular Escenario 6: Resolución Manual de Paola desde el Frontend
+    # Simular Escenario 6: Decisión y Resolución Manual de Paola desde el Frontend
     cur.execute("""
         UPDATE justifications
         SET validation_status = 'APPROVED',
@@ -156,7 +180,7 @@ def main():
     updated_row = cur.fetchone()
     assert updated_row["resolution_mode"] == "MANUAL_HSE"
     assert updated_row["has_human_intervention"] is True
-    log("Escenario 6: Resolución manual por Team Leader Paola ejecutada exitosamente")
+    log("Escenario 6: Decisión final de aprobación por Team Leader Paola ejecutada exitosamente")
 
     conn.commit()
 
@@ -170,6 +194,15 @@ def main():
         conn.rollback()
         log("Constraint 'chk_resolution_mode' interceptó y bloqueó valor inválido")
 
+    # Probar que rechaza un ai_recommendation inválido
+    try:
+        cur.execute("UPDATE justifications SET ai_recommendation = 'INVALID_CATEGORY' WHERE id = %s;", (manual_id,))
+        conn.commit()
+        assert False, "Debió fallar por constraint chk_ai_recommendation"
+    except psycopg2.Error:
+        conn.rollback()
+        log("Constraint 'chk_ai_recommendation' interceptó y bloqueó categoría no autorizada")
+
     # Probar que rechaza fechas inconsistentes (end_date < start_date)
     try:
         cur.execute("UPDATE justifications SET start_date = '2026-09-30', end_date = '2026-09-20' WHERE id = %s;", (manual_id,))
@@ -181,7 +214,7 @@ def main():
 
     print("\n[5/5] Consultando vista analítica v_justifications_dashboard...")
     cur.execute("""
-        SELECT id, validation_status, resolution_mode, has_human_intervention,
+        SELECT id, ai_recommendation, validation_status, resolution_mode, has_human_intervention,
                coder_display_name, coder_cedula, coder_route, email_subject,
                total_days, hse_reviewer_name, hse_reviewer_email, has_attachments
         FROM v_justifications_dashboard
@@ -191,7 +224,7 @@ def main():
     rows = cur.fetchall()
     log(f"Vista v_justifications_dashboard retornó {len(rows)} filas con éxito")
     for r in rows:
-        print(f"    • [{r['validation_status']}] {r['coder_display_name']} ({r['coder_route']}) | Modo: {r['resolution_mode']} | Intervención humana: {r['has_human_intervention']} | Revisó: {r['hse_reviewer_name'] or 'N/A'}")
+        print(f"    • [{r['ai_recommendation']} -> {r['validation_status']}] {r['coder_display_name']} ({r['coder_route']}) | Modo: {r['resolution_mode']} | Intervención humana: {r['has_human_intervention']} | Revisó: {r['hse_reviewer_name'] or 'N/A'}")
 
     conn.close()
     print("\n" + "=" * 70)

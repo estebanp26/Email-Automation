@@ -82,9 +82,12 @@ CREATE TABLE justifications (
     ai_response JSONB,
     ai_model VARCHAR(100) DEFAULT 'qwen2.5:1.5b',
     
+    -- Asistencia Analítica Preliminar (Strata Core AI)
+    ai_recommendation VARCHAR(30) NOT NULL DEFAULT 'REVISION_MANUAL',
+    
     -- Estados del Ciclo de Vida y Diferenciador de Resolución
     coder_identification_status VARCHAR(30) NOT NULL DEFAULT 'IDENTIFIED',
-    validation_status VARCHAR(30) NOT NULL DEFAULT 'MANUAL_INTERACTION',
+    validation_status VARCHAR(30) NOT NULL DEFAULT 'REVISION_MANUAL',
     validation_notes TEXT,
     
     -- FACTOR DIFERENCIADOR DE INTERVENCIÓN HUMANA
@@ -105,8 +108,11 @@ CREATE TABLE justifications (
     CONSTRAINT chk_coder_ident_status CHECK (
         coder_identification_status IN ('IDENTIFIED', 'CODER_NOT_FOUND')
     ),
+    CONSTRAINT chk_ai_recommendation CHECK (
+        ai_recommendation IN ('POSIBLEMENTE_VALIDO', 'POSIBLEMENTE_INVALIDO', 'REVISION_MANUAL')
+    ),
     CONSTRAINT chk_validation_status CHECK (
-        validation_status IN ('APPROVED', 'DISAPPROVED', 'MANUAL_INTERACTION')
+        validation_status IN ('POSIBLEMENTE_VALIDO', 'POSIBLEMENTE_INVALIDO', 'REVISION_MANUAL', 'APPROVED', 'DISAPPROVED', 'MANUAL_INTERACTION', 'PENDIENTE_DECISION_TL')
     ),
     CONSTRAINT chk_resolution_mode CHECK (
         resolution_mode IN ('AUTOMATIC_AI', 'MANUAL_HSE')
@@ -133,6 +139,7 @@ CREATE INDEX idx_coders_cedula ON coders(cedula);
 CREATE INDEX idx_coders_active ON coders(is_active);
 
 CREATE INDEX idx_justifications_status_created ON justifications(validation_status, created_at DESC);
+CREATE INDEX idx_justifications_ai_rec ON justifications(ai_recommendation);
 CREATE INDEX idx_justifications_resolution_mode ON justifications(resolution_mode);
 CREATE INDEX idx_justifications_human_interv ON justifications(has_human_intervention);
 CREATE INDEX idx_justifications_coder_id ON justifications(coder_id);
@@ -171,6 +178,7 @@ EXECUTE FUNCTION update_updated_at_column();
 CREATE OR REPLACE VIEW v_justifications_dashboard AS
 SELECT 
     j.id,
+    j.ai_recommendation,
     j.validation_status,
     j.resolution_mode,
     j.has_human_intervention,

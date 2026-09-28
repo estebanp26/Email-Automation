@@ -32,7 +32,8 @@ Thumbs.db
 .idea/
 
 # Python
-.venv/
+.venv
+**/.venv
 __pycache__/
 *.py[cod]
 *$py.class

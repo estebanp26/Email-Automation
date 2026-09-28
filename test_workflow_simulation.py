@@ -40,6 +40,7 @@ def test_database_schema_integrity():
     log_test("Presencia de password_hash en hse_users", "password_hash" in ddl, "Soporta autenticación directa email/password")
     log_test("Presencia de resolution_mode en justifications", "resolution_mode" in ddl, "Diferenciador AUTOMATIC_AI vs MANUAL_HSE")
     log_test("Presencia de has_human_intervention en justifications", "has_human_intervention" in ddl, "Flag booleano de auditoría humana")
+    log_test("Presencia de ai_recommendation en justifications", "ai_recommendation" in ddl, "Soporta categorización asistida POSIBLEMENTE_VALIDO / INVALIDO / REVISION_MANUAL")
     log_test("Constraint chk_resolution_mode", "chk_resolution_mode" in ddl, "Restringe valores a ('AUTOMATIC_AI', 'MANUAL_HSE')")
     log_test("Vista v_justifications_dashboard con trazabilidad humana", "has_human_intervention" in ddl and "hse_reviewer_email" in ddl)
 
@@ -165,13 +166,22 @@ def simulate_09_guardrails(data, http_result):
     has_error = http_result.get("error") is not None or "tipo_novedad" not in http_result
     
     if has_error:
+        ai_categoria = "REVISION_MANUAL"
         ai_valido = False
         ai_tipo = "no_identificado"
         ai_confidence = 0.0
         ai_manual = True
-        ai_motivo = "Fallo técnico o timeout con Strata Core / Ollama."
+        ai_motivo = "Fallo técnico o timeout con Strata Core / Ollama. Derivado a revisión manual de la Team Leader de HSE."
         ai_full = {"error": True}
     else:
+        ai_categoria = http_result.get("categoria_sugerida")
+        if not ai_categoria:
+            if bool(http_result.get("requiere_revision_manual")):
+                ai_categoria = "REVISION_MANUAL"
+            elif bool(http_result.get("valido")):
+                ai_categoria = "POSIBLEMENTE_VALIDO"
+            else:
+                ai_categoria = "POSIBLEMENTE_INVALIDO"
         ai_valido = bool(http_result.get("valido"))
         ai_tipo = http_result.get("tipo_novedad") or "no_identificado"
         ai_motivo = http_result.get("motivo_decision") or "Evaluado por Qwen 2.5"
@@ -185,27 +195,29 @@ def simulate_09_guardrails(data, http_result):
     if re.search(r"falleci|luto|funerar|entierro|calamidad", full_text):
         ai_tipo = "calamidad"
         if not data["has_attachments"]:
+            ai_categoria = "REVISION_MANUAL"
             ai_valido = False
             ai_manual = True
-            ai_motivo = "Reporte de calamidad sin soporte adjunto. Requiere validación manual de HSE."
+            ai_motivo = "Reporte de calamidad sin soporte adjunto. Requiere validación manual de la Team Leader de HSE."
     
     # Guardrail Spam
     if re.search(r"descuento|cursos de|promocion|suscripcion", full_text):
         ai_tipo = "no_identificado"
+        ai_categoria = "REVISION_MANUAL"
         ai_valido = False
         ai_manual = True
         ai_motivo = "Contenido sospechoso de spam."
     
-    # Determinación de validation_status
+    # Determinación de categoria y validation_status preliminar
     if ai_manual or ai_confidence < 0.80:
-        validation_status = "MANUAL_INTERACTION"
-    elif ai_valido:
-        validation_status = "APPROVED"
+        validation_status = "REVISION_MANUAL"
+        ai_categoria = "REVISION_MANUAL"
     else:
-        validation_status = "DISAPPROVED"
+        validation_status = ai_categoria
     
     data["intent"] = ai_tipo.upper()
     data["excuse_type"] = ai_tipo
+    data["ai_recommendation"] = ai_categoria
     data["ai_confidence"] = ai_confidence
     data["ai_reason"] = ai_motivo
     data["ai_response"] = ai_full
@@ -239,14 +251,14 @@ def run_scenarios():
     mock_hse_users = [
         {
             "id": "hse-001-uuid",
-            "email": "laura.gomez@riwi.io",
-            "full_name": "Laura Gómez",
+            "email": "paola.hse@riwi.io",
+            "full_name": "Paola (Team Leader HSE)",
             "password_hash": "$2b$12$e8Y3yqGczf5RShBrwBp...",
-            "role": "HSE"
+            "role": "TEAM_LEADER"
         }
     ]
 
-    # ESCENARIO 1: Incapacidad médica válida de Coder registrado
+    # ESCENARIO 1: Incapacidad médica formal (Soporte EPS Sanitas)
     print(f"\n{Colors.BOLD}Escenario 1: Coder Identificado + Incapacidad Médica Válida (EPS Sanitas){Colors.ENDC}")
     e1_input = {
         "sender_email": "santiago.morales@riwi.io",
@@ -261,17 +273,19 @@ def run_scenarios():
     log_test("Identificación del Coder exitosa", d1["coder_found"] is True and d1["coder_id"] == "c001-uuid")
     
     strata_mock_1 = {
+        "categoria_sugerida": "POSIBLEMENTE_VALIDO",
         "valido": True,
         "tipo_novedad": "inasistencia_medica",
         "fecha_afectada": "2026-09-25",
         "confianza_score": 0.96,
         "requiere_revision_manual": False,
-        "motivo_decision": "Certificado de incapacidad médica emitido por EPS Sanitas con sello y registro."
+        "motivo_decision": "Incapacidad formal emitida por EPS Sanitas con soporte legible y radicada a tiempo."
     }
     d1 = simulate_09_guardrails(d1, strata_mock_1)
-    log_test("Estado final APPROVED", d1["validation_status"] == "APPROVED")
+    log_test("Categorización preliminar POSIBLEMENTE_VALIDO", d1["ai_recommendation"] == "POSIBLEMENTE_VALIDO")
+    log_test("Estado operativo POSIBLEMENTE_VALIDO", d1["validation_status"] == "POSIBLEMENTE_VALIDO")
     log_test("Modo automático AUTOMATIC_AI", d1["resolution_mode"] == "AUTOMATIC_AI")
-    log_test("Sin intervención humana (has_human_intervention=False)", d1["has_human_intervention"] is False)
+    log_test("A la espera de decisión final de Paola (has_human_intervention=False)", d1["has_human_intervention"] is False)
 
     # ESCENARIO 2: Coder no encontrado (remitente desconocido)
     print(f"\n{Colors.BOLD}Escenario 2: Coder No Encontrado (Buzón no institucional sin cédula){Colors.ENDC}")
@@ -302,6 +316,7 @@ def run_scenarios():
     d3 = simulate_03_db_search(d3, mock_db)
     
     strata_mock_3 = {
+        "categoria_sugerida": "POSIBLEMENTE_VALIDO",
         "valido": True,
         "tipo_novedad": "calamidad",
         "fecha_afectada": "2026-09-27",
@@ -310,7 +325,8 @@ def run_scenarios():
         "motivo_decision": "Luto reportado"
     }
     d3 = simulate_09_guardrails(d3, strata_mock_3)
-    log_test("Guardrail interceptó y derivó a MANUAL_INTERACTION", d3["validation_status"] == "MANUAL_INTERACTION")
+    log_test("Guardrail interceptó y categorizó en REVISION_MANUAL", d3["validation_status"] == "REVISION_MANUAL")
+    log_test("ai_recommendation fijado en REVISION_MANUAL", d3["ai_recommendation"] == "REVISION_MANUAL")
     log_test("Motivo indica soporte pendiente", "sin soporte adjunto" in d3["ai_reason"])
 
     # ESCENARIO 4: Failover técnico (Caída / Timeout de Ollama)
@@ -328,10 +344,11 @@ def run_scenarios():
     
     strata_mock_4 = {"error": "Connection refused: Ollama 11434 down"}
     d4 = simulate_09_guardrails(d4, strata_mock_4)
-    log_test("Failover redirige a MANUAL_INTERACTION (No rechaza erróneamente)", d4["validation_status"] == "MANUAL_INTERACTION")
+    log_test("Failover redirige a REVISION_MANUAL (No emite veredicto)", d4["validation_status"] == "REVISION_MANUAL")
+    log_test("ai_recommendation asignado a REVISION_MANUAL", d4["ai_recommendation"] == "REVISION_MANUAL")
     log_test("Confianza asignada a 0.0 por fallo técnico", d4["ai_confidence"] == 0.0)
 
-    # ESCENARIO 5: Excusa no justificada (Motivos personales / Fiesta)
+    # ESCENARIO 5: Excusa no justificada (Motivos personales / Dormido)
     print(f"\n{Colors.BOLD}Escenario 5: Coder Identificado + Causa Injustificada (Tardanza injustificada){Colors.ENDC}")
     e5_input = {
         "sender_email": "santiago.morales@riwi.io",
@@ -345,6 +362,7 @@ def run_scenarios():
     d5 = simulate_03_db_search(d5, mock_db)
     
     strata_mock_5 = {
+        "categoria_sugerida": "POSIBLEMENTE_INVALIDO",
         "valido": False,
         "tipo_novedad": "tardanza",
         "fecha_afectada": "2026-09-27",
@@ -353,14 +371,15 @@ def run_scenarios():
         "motivo_decision": "Motivo no contemplado como justificación válida (quedarse dormido)."
     }
     d5 = simulate_09_guardrails(d5, strata_mock_5)
-    log_test("Estado final DISAPPROVED", d5["validation_status"] == "DISAPPROVED")
-    log_test("Motivo claro de no aprobación", "Motivo no contemplado" in d5["ai_reason"])
+    log_test("Categorización preliminar POSIBLEMENTE_INVALIDO", d5["ai_recommendation"] == "POSIBLEMENTE_INVALIDO")
+    log_test("Estado operativo POSIBLEMENTE_INVALIDO para auditoría de TL", d5["validation_status"] == "POSIBLEMENTE_INVALIDO")
+    log_test("Motivo claro de observación técnica", "Motivo no contemplado" in d5["ai_reason"])
 
     # ESCENARIO 6: Resolución Manual por Frontend HSE (Login + Corrección + Despacho)
-    print(f"\n{Colors.BOLD}Escenario 6: Resolución Manual HSE (Login email/password + Corrección de datos + Despacho n8n){Colors.ENDC}")
+    print(f"\n{Colors.BOLD}Escenario 6: Decisión y Resolución Manual por la Team Leader Paola HSE (Login + Aprobación + Despacho n8n){Colors.ENDC}")
     
     # 1. Login del usuario HSE
-    hse_login_email = "laura.gomez@riwi.io"
+    hse_login_email = "paola.hse@riwi.io"
     hse_user = next((u for u in mock_hse_users if u["email"] == hse_login_email), None)
     log_test("Autenticación de usuario HSE en base de datos", hse_user is not None and "password_hash" in hse_user)
     
@@ -410,7 +429,7 @@ def run_scenarios():
     }
     
     log_test("Despacho de notificación n8n preparado", len(n8n_dispatch_payload["recipient_email"]) > 0)
-    log_test("Correo incluye nombre del analista que validó", n8n_dispatch_payload["hse_reviewer_name"] == "Laura Gómez")
+    log_test("Correo incluye nombre de la Team Leader que validó", n8n_dispatch_payload["hse_reviewer_name"] == "Paola (Team Leader HSE)")
 
     print(f"\n{Colors.BOLD}{Colors.OKGREEN}======================================================{Colors.ENDC}")
     print(f"{Colors.BOLD}{Colors.OKGREEN}  ¡TODAS LAS PRUEBAS Y VALIDACIONES PASARON EXITOSAMENTE!  {Colors.ENDC}")
