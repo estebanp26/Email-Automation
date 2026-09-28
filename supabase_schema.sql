@@ -1,22 +1,18 @@
 -- =============================================================================
 -- SISTEMA DE AUTOMATIZACIÓN DE JUSTIFICACIONES RIWI / HSE
--- Script DDL de Base de Datos PostgreSQL
--- Versión: 2.1 (Modelo con Auditoría Humana y Autenticación Directa HSE)
+-- Script DDL de Migración a Supabase (PostgreSQL 15+)
+-- Versión: 2.1 (Con Intervención Humana, RLS, Realtime y 297 Coders Reales)
 -- =============================================================================
 
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+-- 1. Limpieza previa controlada
+DROP VIEW IF EXISTS public.v_justifications_dashboard CASCADE;
+DROP TABLE IF EXISTS public.justifications CASCADE;
+DROP TABLE IF EXISTS public.hse_users CASCADE;
+DROP TABLE IF EXISTS public.coders CASCADE;
 
--- Tablas en orden de dependencia
-DROP VIEW IF EXISTS v_justifications_dashboard CASCADE;
-DROP TABLE IF EXISTS justifications CASCADE;
-DROP TABLE IF EXISTS hse_users CASCADE;
-DROP TABLE IF EXISTS coders CASCADE;
-
--- =============================================================================
--- 1. TABLA coders
--- =============================================================================
-CREATE TABLE coders (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+-- 2. TABLA: coders (Catálogo Maestro de Estudiantes)
+CREATE TABLE public.coders (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     cedula VARCHAR(30) NOT NULL UNIQUE,
     full_name VARCHAR(150) NOT NULL,
     email VARCHAR(255) NOT NULL UNIQUE,
@@ -26,16 +22,14 @@ CREATE TABLE coders (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
-COMMENT ON TABLE coders IS 'Catálogo maestro de estudiantes (coders) activos e inactivos en RIWI';
-COMMENT ON COLUMN coders.cedula IS 'Documento nacional de identificación del coder (único)';
-COMMENT ON COLUMN coders.email IS 'Correo electrónico institucional o principal registrado';
-COMMENT ON COLUMN coders.route IS 'Ruta de formación técnica en la que está asignado';
+COMMENT ON TABLE public.coders IS 'Catálogo maestro de estudiantes (coders) activos e inactivos en RIWI';
+COMMENT ON COLUMN public.coders.cedula IS 'Documento nacional de identificación del coder (único)';
+COMMENT ON COLUMN public.coders.email IS 'Correo electrónico institucional o principal registrado';
+COMMENT ON COLUMN public.coders.route IS 'Ruta de formación técnica en la que está asignado';
 
--- =============================================================================
--- 2. TABLA hse_users (Con autenticación por contraseña en Frontend)
--- =============================================================================
-CREATE TABLE hse_users (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+-- 3. TABLA: hse_users (Con autenticación directa en Frontend)
+CREATE TABLE public.hse_users (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     email VARCHAR(255) NOT NULL UNIQUE,
     password_hash VARCHAR(255) NOT NULL,
     full_name VARCHAR(150) NOT NULL,
@@ -46,19 +40,17 @@ CREATE TABLE hse_users (
     CONSTRAINT chk_hse_role CHECK (role IN ('HSE', 'TEAM_LEADER', 'ADMIN'))
 );
 
-COMMENT ON TABLE hse_users IS 'Usuarios administrativos de HSE y coordinadores con acceso al panel web';
-COMMENT ON COLUMN hse_users.password_hash IS 'Hash seguro de contraseña (bcrypt / argon2) para login directo en frontend';
-COMMENT ON COLUMN hse_users.role IS 'Rol administrativo con permisos en el dashboard web';
+COMMENT ON TABLE public.hse_users IS 'Usuarios administrativos de HSE y coordinadores con acceso al panel web';
+COMMENT ON COLUMN public.hse_users.password_hash IS 'Hash seguro de contraseña (bcrypt / argon2) para login directo en frontend';
+COMMENT ON COLUMN public.hse_users.role IS 'Rol administrativo con permisos en el dashboard web';
 
--- =============================================================================
--- 3. TABLA justifications (Con diferenciador de intervención humana)
--- =============================================================================
-CREATE TABLE justifications (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+-- 4. TABLA: justifications (Con diferenciador de intervención humana)
+CREATE TABLE public.justifications (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     
     -- Relaciones
-    coder_id UUID REFERENCES coders(id) ON DELETE SET NULL,
-    hse_user_id UUID REFERENCES hse_users(id) ON DELETE SET NULL,
+    coder_id UUID REFERENCES public.coders(id) ON DELETE SET NULL,
+    hse_user_id UUID REFERENCES public.hse_users(id) ON DELETE SET NULL,
     
     -- Datos del correo entrante
     sender_email VARCHAR(255) NOT NULL,
@@ -73,8 +65,8 @@ CREATE TABLE justifications (
     -- Clasificación e Intención (Corregible por HSE)
     intent VARCHAR(100) DEFAULT 'EXCUSA',
     excuse_type VARCHAR(100) NOT NULL DEFAULT 'no_identificado',
-    start_date DATE NOT NULL,
-    end_date DATE NOT NULL,
+    start_date DATE NOT NULL DEFAULT CURRENT_DATE,
+    end_date DATE NOT NULL DEFAULT CURRENT_DATE,
     
     -- Inteligencia Artificial (Strata Core / Qwen 2.5)
     ai_confidence NUMERIC(5,4),
@@ -82,12 +74,9 @@ CREATE TABLE justifications (
     ai_response JSONB,
     ai_model VARCHAR(100) DEFAULT 'qwen2.5:1.5b',
     
-    -- Asistencia Analítica Preliminar (Strata Core AI)
-    ai_recommendation VARCHAR(30) NOT NULL DEFAULT 'REVISION_MANUAL',
-    
     -- Estados del Ciclo de Vida y Diferenciador de Resolución
     coder_identification_status VARCHAR(30) NOT NULL DEFAULT 'IDENTIFIED',
-    validation_status VARCHAR(30) NOT NULL DEFAULT 'REVISION_MANUAL',
+    validation_status VARCHAR(30) NOT NULL DEFAULT 'MANUAL_INTERACTION',
     validation_notes TEXT,
     
     -- FACTOR DIFERENCIADOR DE INTERVENCIÓN HUMANA
@@ -108,11 +97,8 @@ CREATE TABLE justifications (
     CONSTRAINT chk_coder_ident_status CHECK (
         coder_identification_status IN ('IDENTIFIED', 'CODER_NOT_FOUND')
     ),
-    CONSTRAINT chk_ai_recommendation CHECK (
-        ai_recommendation IN ('POSIBLEMENTE_VALIDO', 'POSIBLEMENTE_INVALIDO', 'REVISION_MANUAL')
-    ),
     CONSTRAINT chk_validation_status CHECK (
-        validation_status IN ('POSIBLEMENTE_VALIDO', 'POSIBLEMENTE_INVALIDO', 'REVISION_MANUAL', 'APPROVED', 'DISAPPROVED', 'MANUAL_INTERACTION', 'PENDIENTE_DECISION_TL')
+        validation_status IN ('APPROVED', 'DISAPPROVED', 'MANUAL_INTERACTION')
     ),
     CONSTRAINT chk_resolution_mode CHECK (
         resolution_mode IN ('AUTOMATIC_AI', 'MANUAL_HSE')
@@ -123,38 +109,33 @@ CREATE TABLE justifications (
     CONSTRAINT chk_dates_validity CHECK (end_date >= start_date)
 );
 
-COMMENT ON TABLE justifications IS 'Historial centralizado de correos y justificaciones de inasistencia';
-COMMENT ON COLUMN justifications.coder_id IS 'FK al coder. Modificable/vinculable manualmente por HSE';
-COMMENT ON COLUMN justifications.validation_status IS 'Estado del registro: APPROVED, DISAPPROVED o MANUAL_INTERACTION';
-COMMENT ON COLUMN justifications.resolution_mode IS 'Diferenciador de origen de resolución: AUTOMATIC_AI o MANUAL_HSE';
-COMMENT ON COLUMN justifications.has_human_intervention IS 'Indica si un usuario de HSE realizó modificaciones o validaciones';
-COMMENT ON COLUMN justifications.email_url IS 'Enlace directo para visualización del correo en el cliente web';
-COMMENT ON COLUMN justifications.ai_response IS 'JSON completo devuelto por Strata Core para auditoría avanzada';
+COMMENT ON TABLE public.justifications IS 'Historial centralizado de correos y justificaciones de inasistencia';
+COMMENT ON COLUMN public.justifications.coder_id IS 'FK al coder. Modificable/vinculable manualmente por HSE';
+COMMENT ON COLUMN public.justifications.validation_status IS 'Estado del registro: APPROVED, DISAPPROVED o MANUAL_INTERACTION';
+COMMENT ON COLUMN public.justifications.resolution_mode IS 'Diferenciador de origen de resolución: AUTOMATIC_AI o MANUAL_HSE';
+COMMENT ON COLUMN public.justifications.has_human_intervention IS 'Indica si un usuario de HSE realizó modificaciones o validaciones';
+COMMENT ON COLUMN public.justifications.email_url IS 'Enlace directo para visualización del correo en el cliente web';
+COMMENT ON COLUMN public.justifications.ai_response IS 'JSON completo devuelto por Strata Core para auditoría avanzada';
 
--- =============================================================================
--- ÍNDICES DE RENDIMIENTO (Performance Tuning)
--- =============================================================================
-CREATE INDEX idx_coders_email ON coders(email);
-CREATE INDEX idx_coders_cedula ON coders(cedula);
-CREATE INDEX idx_coders_active ON coders(is_active);
+-- 5. ÍNDICES DE RENDIMIENTO (Performance Tuning)
+CREATE INDEX idx_coders_email ON public.coders(email);
+CREATE INDEX idx_coders_cedula ON public.coders(cedula);
+CREATE INDEX idx_coders_active ON public.coders(is_active);
 
-CREATE INDEX idx_justifications_status_created ON justifications(validation_status, created_at DESC);
-CREATE INDEX idx_justifications_ai_rec ON justifications(ai_recommendation);
-CREATE INDEX idx_justifications_resolution_mode ON justifications(resolution_mode);
-CREATE INDEX idx_justifications_human_interv ON justifications(has_human_intervention);
-CREATE INDEX idx_justifications_coder_id ON justifications(coder_id);
-CREATE INDEX idx_justifications_hse_user_id ON justifications(hse_user_id);
-CREATE INDEX idx_justifications_sender_email ON justifications(sender_email);
-CREATE INDEX idx_justifications_received_at ON justifications(received_at DESC);
-CREATE INDEX idx_justifications_message_id ON justifications(message_id);
+CREATE INDEX idx_justifications_status_created ON public.justifications(validation_status, created_at DESC);
+CREATE INDEX idx_justifications_resolution_mode ON public.justifications(resolution_mode);
+CREATE INDEX idx_justifications_human_interv ON public.justifications(has_human_intervention);
+CREATE INDEX idx_justifications_coder_id ON public.justifications(coder_id);
+CREATE INDEX idx_justifications_hse_user_id ON public.justifications(hse_user_id);
+CREATE INDEX idx_justifications_sender_email ON public.justifications(sender_email);
+CREATE INDEX idx_justifications_received_at ON public.justifications(received_at DESC);
+CREATE INDEX idx_justifications_message_id ON public.justifications(message_id);
 
-CREATE INDEX idx_justifications_ai_response ON justifications USING GIN (ai_response);
-CREATE INDEX idx_justifications_attachments ON justifications USING GIN (attachments);
+CREATE INDEX idx_justifications_ai_response ON public.justifications USING GIN (ai_response);
+CREATE INDEX idx_justifications_attachments ON public.justifications USING GIN (attachments);
 
--- =============================================================================
--- TRIGGERS PARA AUDITORÍA AUTOMÁTICA (updated_at)
--- =============================================================================
-CREATE OR REPLACE FUNCTION update_updated_at_column()
+-- 6. TRIGGERS PARA AUDITORÍA AUTOMÁTICA (updated_at)
+CREATE OR REPLACE FUNCTION public.update_updated_at_column()
 RETURNS TRIGGER AS $$
 BEGIN
     NEW.updated_at = CURRENT_TIMESTAMP;
@@ -163,22 +144,20 @@ END;
 $$ LANGUAGE plpgsql;
 
 CREATE TRIGGER trg_coders_updated_at
-BEFORE UPDATE ON coders
+BEFORE UPDATE ON public.coders
 FOR EACH ROW
-EXECUTE FUNCTION update_updated_at_column();
+EXECUTE FUNCTION public.update_updated_at_column();
 
 CREATE TRIGGER trg_justifications_updated_at
-BEFORE UPDATE ON justifications
+BEFORE UPDATE ON public.justifications
 FOR EACH ROW
-EXECUTE FUNCTION update_updated_at_column();
+EXECUTE FUNCTION public.update_updated_at_column();
 
--- =============================================================================
--- VISTA DE CONSULTA OPTIMIZADA PARA EL DASHBOARD HSE
--- =============================================================================
-CREATE OR REPLACE VIEW v_justifications_dashboard AS
+-- 7. VISTA DE CONSULTA OPTIMIZADA PARA EL DASHBOARD HSE (Con security_invoker)
+CREATE OR REPLACE VIEW public.v_justifications_dashboard
+WITH (security_invoker = true) AS
 SELECT 
     j.id,
-    j.ai_recommendation,
     j.validation_status,
     j.resolution_mode,
     j.has_human_intervention,
@@ -209,12 +188,31 @@ SELECT
         WHEN j.attachments IS NOT NULL AND jsonb_array_length(j.attachments) > 0 THEN TRUE 
         ELSE FALSE 
     END AS has_attachments
-FROM justifications j
-LEFT JOIN coders c ON j.coder_id = c.id
-LEFT JOIN hse_users u ON j.hse_user_id = u.id;
+FROM public.justifications j
+LEFT JOIN public.coders c ON j.coder_id = c.id
+LEFT JOIN public.hse_users u ON j.hse_user_id = u.id;
 
-COMMENT ON VIEW v_justifications_dashboard IS 'Vista enriquecida con trazabilidad completa de intervención humana para el Dashboard HSE';
+COMMENT ON VIEW public.v_justifications_dashboard IS 'Vista enriquecida con trazabilidad completa de intervención humana para el Dashboard HSE';
 
+-- 8. CONFIGURACIÓN DE SEGURIDAD (Row Level Security - RLS)
+ALTER TABLE public.coders ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.hse_users ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.justifications ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Permitir lectura de coders a usuarios autenticados"
+ON public.coders FOR SELECT TO authenticated USING (true);
+
+CREATE POLICY "Permitir lectura de hse_users a usuarios autenticados"
+ON public.hse_users FOR SELECT TO authenticated USING (true);
+
+CREATE POLICY "Permitir lectura de justificaciones a usuarios autenticados"
+ON public.justifications FOR SELECT TO authenticated USING (true);
+
+CREATE POLICY "Permitir actualizar justificaciones a usuarios autenticados"
+ON public.justifications FOR UPDATE TO authenticated USING (true);
+
+-- 9. ACTIVACIÓN DE SUPABASE REALTIME
+ALTER TABLE public.justifications REPLICA IDENTITY FULL;
 
 -- 10. USUARIOS ADMINISTRATIVOS DE HSE (Contraseña inicial de prueba: admin123)
 INSERT INTO public.hse_users (email, password_hash, full_name, role) VALUES
