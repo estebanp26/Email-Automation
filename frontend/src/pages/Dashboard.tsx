@@ -1,4 +1,6 @@
-import { Mail, CheckCircle, XCircle, Clock, Bell, ChevronDown, Maximize2, BarChart2, PieChart as PieChartIcon } from 'lucide-react';
+import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { Mail, CheckCircle, XCircle, Clock, ChevronDown, Maximize2, BarChart2, PieChart as PieChartIcon, Download, Settings as SettingsIcon, Bell, LogOut } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 
 const weeklyData = [
@@ -25,6 +27,9 @@ const recentEmails = [
 ];
 
 export default function Dashboard() {
+  const [showProfileMenu, setShowProfileMenu] = useState(false);
+  const navigate = useNavigate();
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -35,19 +40,33 @@ export default function Dashboard() {
           <p className="text-[#7C8499] text-sm">Aquí tienes un resumen del estado de las solicitudes del sistema.</p>
         </div>
         
-        <div className="flex items-center gap-4 mt-2">
-          <button className="flex items-center gap-2 bg-white px-4 py-2.5 rounded-full shadow-sm text-sm font-medium text-[#11132C]">
-            Perfil de acciones <ChevronDown size={16} className="text-gray-400" />
+        <div className="flex items-center gap-4 mt-2 relative">
+          <button className="flex items-center gap-2 bg-[#5B3FF5] hover:bg-[#4a32cc] px-4 py-2 rounded-full shadow-lg shadow-[#5B3FF5]/30 text-sm font-semibold text-white transition-colors cursor-pointer">
+            <Download size={16} /> Descargar reporte
           </button>
-          
-          <button className="w-10 h-10 bg-white rounded-full shadow-sm flex items-center justify-center relative">
-            <Bell size={18} className="text-gray-600" />
-            <span className="absolute -top-1 -right-1 w-4 h-4 bg-[#FF5C67] rounded-full text-[9px] font-bold text-white flex items-center justify-center border-2 border-[#F5F7FB]">3</span>
-          </button>
-          
-          <div className="w-10 h-10 rounded-full bg-[#11132C] flex items-center justify-center text-white font-bold text-sm">
+
+          <div 
+            className="w-10 h-10 rounded-full bg-[#11132C] flex items-center justify-center text-white font-bold text-sm cursor-pointer select-none"
+            onClick={() => setShowProfileMenu(!showProfileMenu)}
+          >
             PA
           </div>
+          {showProfileMenu && (
+            <div className="absolute top-12 right-0 w-48 bg-white rounded-xl shadow-lg border border-gray-100 py-2 z-50">
+              <button onClick={() => navigate('/requests')} className="w-full text-left px-4 py-2 text-sm text-[#11132C] hover:bg-gray-50 flex items-center gap-3 transition-colors cursor-pointer">
+                <Bell size={16} className="text-[#7C8499]" />
+                Notificaciones
+              </button>
+              <button onClick={() => navigate('/settings')} className="w-full text-left px-4 py-2 text-sm text-[#11132C] hover:bg-gray-50 flex items-center gap-3 transition-colors cursor-pointer">
+                <SettingsIcon size={16} className="text-[#7C8499]" />
+                Configuración
+              </button>
+              <button onClick={() => { localStorage.removeItem('hse_token'); window.location.href = '/login'; }} className="w-full text-left px-4 py-2 text-sm text-[#FF5C67] hover:bg-red-50 flex items-center gap-3 transition-colors cursor-pointer">
+                <LogOut size={16} className="text-[#FF5C67]" />
+                Cerrar sesión
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
@@ -96,7 +115,6 @@ export default function Dashboard() {
                 <p className="text-xs text-[#7C8499]">Total, aprobadas y denegadas</p>
               </div>
             </div>
-            <ChevronDown size={16} className="text-gray-300 -rotate-90 cursor-pointer" />
           </div>
           
           <div className="h-[280px] w-full">
@@ -187,7 +205,7 @@ export default function Dashboard() {
             </div>
             <h3 className="font-bold text-[#11132C] text-lg">Correos recientes</h3>
           </div>
-          <button className="bg-[#5B3FF5] text-white px-5 py-2.5 rounded-full text-sm font-semibold flex items-center gap-2 hover:bg-[#4a32cc] transition-colors shadow-lg shadow-[#5B3FF5]/30">
+          <button className="bg-[#5B3FF5] text-white px-5 py-2.5 rounded-full text-sm font-semibold flex items-center gap-2 hover:bg-[#4a32cc] transition-colors shadow-lg shadow-[#5B3FF5]/30 cursor-pointer">
             <Maximize2 size={16} /> Ver en pantalla completa
           </button>
         </div>

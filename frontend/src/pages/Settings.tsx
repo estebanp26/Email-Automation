@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { 
   Bell, 
@@ -19,7 +20,10 @@ import {
   AlertTriangle,
   Play,
   Save,
-  Server
+  Server,
+  Settings as SettingsIcon,
+  Download,
+  LogOut
 } from 'lucide-react';
 import { 
   getN8nConfig, 
@@ -32,6 +36,9 @@ import {
 } from '../services/n8n';
 
 export default function Settings() {
+  const [showProfileMenu, setShowProfileMenu] = useState(false);
+  const navigate = useNavigate();
+
   // Local state for interactive elements
   const [twoFactorEnabled, setTwoFactorEnabled] = useState(false);
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
@@ -111,15 +118,33 @@ export default function Settings() {
           <h1 className="text-[28px] font-bold text-[#151A2D]">Configuración</h1>
           <p className="text-[#7B8195] mt-1 text-sm">Administra tu cuenta, integraciones de n8n y seguridad.</p>
         </div>
-        <div className="flex items-center gap-5">
-          <span className="text-sm font-medium text-[#7B8195] hidden sm:block">Perfil de acciones <span className="ml-1 text-[10px]">▼</span></span>
-          <div className="relative cursor-pointer hover:bg-gray-100 p-2 rounded-full transition-colors">
-            <Bell size={20} className="text-[#7B8195]" />
-            <span className="absolute top-1.5 right-2 w-2 h-2 bg-[#FF5C67] rounded-full border border-white" />
-          </div>
-          <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-[#5B3DF5] to-[#7357FF] flex items-center justify-center text-white font-bold shadow-md shadow-[#5B3DF5]/20 cursor-pointer">
+        <div className="flex items-center gap-4 relative">
+          <button className="flex items-center gap-2 bg-[#5B3FF5] hover:bg-[#4a32cc] px-4 py-2 rounded-full shadow-lg shadow-[#5B3FF5]/30 text-sm font-semibold text-white transition-colors cursor-pointer">
+            <Download size={16} /> Descargar reporte
+          </button>
+
+          <div 
+            className="w-10 h-10 rounded-full bg-gradient-to-tr from-[#5B3DF5] to-[#7357FF] flex items-center justify-center text-white font-bold shadow-md shadow-[#5B3DF5]/20 cursor-pointer select-none"
+            onClick={() => setShowProfileMenu(!showProfileMenu)}
+          >
             PA
           </div>
+          {showProfileMenu && (
+            <div className="absolute top-12 right-0 w-48 bg-white rounded-xl shadow-lg border border-gray-100 py-2 z-50">
+              <button onClick={() => navigate('/requests')} className="w-full text-left px-4 py-2 text-sm text-[#11132C] hover:bg-gray-50 flex items-center gap-3 transition-colors cursor-pointer">
+                <Bell size={16} className="text-[#7C8499]" />
+                Notificaciones
+              </button>
+              <button onClick={() => navigate('/settings')} className="w-full text-left px-4 py-2 text-sm text-[#11132C] hover:bg-gray-50 flex items-center gap-3 transition-colors cursor-pointer">
+                <SettingsIcon size={16} className="text-[#7C8499]" />
+                Configuración
+              </button>
+              <button onClick={() => { localStorage.removeItem('hse_token'); window.location.href = '/login'; }} className="w-full text-left px-4 py-2 text-sm text-[#FF5C67] hover:bg-red-50 flex items-center gap-3 transition-colors cursor-pointer">
+                <LogOut size={16} className="text-[#FF5C67]" />
+                Cerrar sesión
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
@@ -370,10 +395,10 @@ export default function Settings() {
               </div>
 
               <div>
-                <p className="text-[13px] font-bold text-[#151A2D] mb-2">Idioma</p>
+                <p className="text-[13px] font-bold text-[#151A2D] mb-3">Idioma</p>
                 <div className="relative">
                   <select 
-                    value={language} 
+                    value={language}
                     onChange={(e) => setLanguage(e.target.value)}
                     className="w-full appearance-none bg-white border border-[#E8EAF2] rounded-[12px] px-4 py-2.5 text-[14px] text-[#151A2D] font-medium focus:outline-none focus:border-[#5B3DF5] focus:ring-2 focus:ring-[#5B3DF5]/10 cursor-pointer"
                   >

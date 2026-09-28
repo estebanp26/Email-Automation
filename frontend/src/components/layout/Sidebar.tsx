@@ -1,13 +1,12 @@
 import { useState } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { LayoutDashboard, Inbox, Settings, PieChart, Users } from 'lucide-react';
+import { LayoutDashboard, Inbox, Settings, Users } from 'lucide-react';
 import clsx from 'clsx';
 
 const navItems = [
   { path: '/', name: 'Panel de Control', icon: LayoutDashboard },
   { path: '/requests', name: 'Solicitudes', icon: Inbox },
-  { path: '/reports', name: 'Reportes', icon: PieChart },
   { path: '/students', name: 'Coders', icon: Users },
   { path: '/settings', name: 'Configuración HSE', icon: Settings },
 ];
@@ -30,19 +29,21 @@ export function Sidebar() {
       </div>
 
       {/* Header / Logo */}
-      <div className={clsx("h-20 flex items-center px-6 relative z-10 border-b border-white/5", isOpen ? "justify-between" : "justify-center")}>
-        {isOpen && (
-          <div className="flex items-center overflow-hidden whitespace-nowrap">
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex items-center gap-2">
-              <img src="https://moodle.riwi.io/pluginfile.php/1/theme_academi/logo/1789715233/Imagen1%20%281%29.png" alt="Riwi Logo" className="h-8 object-contain" />
-            </motion.div>
-          </div>
-        )}
+      <div className={clsx("h-20 flex items-center relative z-10 border-b border-white/5", isOpen ? "px-6 justify-start" : "justify-center")}>
         <button
           onClick={() => setIsOpen(!isOpen)}
-          className="w-8 h-8 rounded-full overflow-hidden hover:opacity-80 transition-opacity flex items-center justify-center bg-white/10"
+          className={clsx(
+            "hover:opacity-80 transition-opacity flex items-center justify-center cursor-pointer",
+            !isOpen && "w-8 h-8 rounded-full bg-white/10 overflow-hidden"
+          )}
         >
-          <img src="https://riwi.io/wp-content/uploads/2023/07/favicon.png" alt="Toggle Menu" className="w-6 h-6 object-contain" />
+          {isOpen ? (
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex items-center">
+              <img src="https://moodle.riwi.io/pluginfile.php/1/theme_academi/logo/1789715233/Imagen1%20%281%29.png" alt="Riwi Logo" className="h-8 object-contain" />
+            </motion.div>
+          ) : (
+            <img src="https://riwi.io/wp-content/uploads/2023/07/favicon.png" alt="Toggle Menu" className="w-6 h-6 object-contain" />
+          )}
         </button>
       </div>
 
@@ -101,7 +102,7 @@ export function Sidebar() {
             window.location.href = '/login';
           }}
           className={clsx(
-            "w-full flex items-center justify-center gap-2 bg-white/5 hover:bg-white/10 text-white rounded-lg py-2 transition-colors",
+            "w-full flex items-center justify-center gap-2 bg-white/5 hover:bg-white/10 text-white rounded-lg py-2 transition-colors cursor-pointer",
             !isOpen && "hidden"
           )}
         >
