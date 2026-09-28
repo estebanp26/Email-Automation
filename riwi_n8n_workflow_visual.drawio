@@ -1,0 +1,237 @@
+<mxfile host="65bd71144e">
+    <diagram id="hse-main" name="01 - Flujo principal n8n">
+        <mxGraphModel dx="7575" dy="5535" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1920" pageHeight="1080" math="0" shadow="0">
+            <root>
+                <mxCell id="0"/>
+                <mxCell id="1" parent="0"/>
+                <mxCell id="title" parent="1" style="text;fontSize=24;fontStyle=1;align=center;verticalAlign=middle;" value="RIWI / HSE — Workflow objetivo n8n + Strata Core" vertex="1">
+                    <mxGeometry height="50" width="620" x="1410" as="geometry"/>
+                </mxCell>
+                <mxCell id="email" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e8f0fe;strokeColor=#4285f4;fontStyle=1;" value="EMAIL INBOX\nOutlook / Gmail" vertex="1">
+                    <mxGeometry height="70" width="150" x="750" y="130" as="geometry"/>
+                </mxCell>
+                <mxCell id="normalize" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f3f3f3;strokeColor=#666666;" value="01 Normalize Email\nPayload unificado" vertex="1">
+                    <mxGeometry height="70" width="160" x="940" y="130" as="geometry"/>
+                </mxCell>
+                <mxCell id="attach" parent="1" style="rhombus;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" value="02 Attachments?\nBinary / Base64" vertex="1">
+                    <mxGeometry height="90" width="150" x="1140" y="120" as="geometry"/>
+                </mxCell>
+                <mxCell id="url" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f3f3f3;strokeColor=#666666;" value="03 Email URL\nAuditoría" vertex="1">
+                    <mxGeometry height="70" width="150" x="1330" y="130" as="geometry"/>
+                </mxCell>
+                <mxCell id="coder" parent="1" style="shape=cylinder;whiteSpace=wrap;html=1;fillColor=#eaf4e3;strokeColor=#6aa84f;fontStyle=1;" value="04 PostgreSQL\nBuscar coder\nemail → cédula → nombre" vertex="1">
+                    <mxGeometry height="100" width="190" x="1520" y="110" as="geometry"/>
+                </mxCell>
+                <mxCell id="found" parent="1" style="rhombus;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontStyle=1;" value="Coder encontrado?" vertex="1">
+                    <mxGeometry height="90" width="150" x="1750" y="120" as="geometry"/>
+                </mxCell>
+                <mxCell id="notfound" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f4cccc;strokeColor=#cc0000;" value="CODER_NO_ENCONTRADO\nGuardar + pedir más datos" vertex="1">
+                    <mxGeometry height="80" width="190" x="1730" y="290" as="geometry"/>
+                </mxCell>
+                <mxCell id="strata" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#eadcf8;strokeColor=#8e7cc3;fontStyle=1;" value="05 HTTP Request\nStrata Core\nPOST /api/evaluate-excuse\nTimeout ≥ 60 s" vertex="1">
+                    <mxGeometry height="100" width="220" x="1950" y="110" as="geometry"/>
+                </mxCell>
+                <mxCell id="validate" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f3f3f3;strokeColor=#666666;" value="06 Validate AI JSON\nSchema + sanity checks" vertex="1">
+                    <mxGeometry height="70" width="190" x="2220" y="125" as="geometry"/>
+                </mxCell>
+                <mxCell id="tech" parent="1" style="rhombus;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" value="Technical error?" vertex="1">
+                    <mxGeometry height="90" width="150" x="2450" y="115" as="geometry"/>
+                </mxCell>
+                <mxCell id="manualerror" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fce5cd;strokeColor=#e69138;fontStyle=1;" value="MANUAL HSE\nOllama / timeout / invalid" vertex="1">
+                    <mxGeometry height="80" width="190" x="2430" y="290" as="geometry"/>
+                </mxCell>
+                <mxCell id="guard" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d9ead3;strokeColor=#6aa84f;" value="07 Business Guardrails\ncalamidad / salida / falla técnica / spam / borroso" vertex="1">
+                    <mxGeometry height="90" width="260" x="2220" y="450" as="geometry"/>
+                </mxCell>
+                <mxCell id="switch" parent="1" style="rhombus;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontStyle=1;" value="08 Decision Switch" vertex="1">
+                    <mxGeometry height="100" width="150" x="2520" y="445" as="geometry"/>
+                </mxCell>
+                <mxCell id="approved" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d9ead3;strokeColor=#38761d;fontStyle=1;" value="APPROVED\nGuardar + responder" vertex="1">
+                    <mxGeometry height="80" width="180" x="2220" y="630" as="geometry"/>
+                </mxCell>
+                <mxCell id="rejected" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f4cccc;strokeColor=#cc0000;fontStyle=1;" value="DISAPPROVED\nGuardar + motivo + responder" vertex="1">
+                    <mxGeometry height="80" width="210" x="2450" y="630" as="geometry"/>
+                </mxCell>
+                <mxCell id="manual" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fce5cd;strokeColor=#e69138;fontStyle=1;" value="MANUAL_INTERACTION\nGuardar + Dashboard HSE" vertex="1">
+                    <mxGeometry height="80" width="220" x="2710" y="630" as="geometry"/>
+                </mxCell>
+                <mxCell id="db" parent="1" style="shape=cylinder;whiteSpace=wrap;html=1;fillColor=#eaf4e3;strokeColor=#6aa84f;fontStyle=1;" value="PostgreSQL\njustifications" vertex="1">
+                    <mxGeometry height="90" width="220" x="2470" y="800" as="geometry"/>
+                </mxCell>
+                <mxCell id="hse" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fce5cd;strokeColor=#e69138;" value="HSE Dashboard\nmanual decision" vertex="1">
+                    <mxGeometry height="80" width="190" x="2740" y="800" as="geometry"/>
+                </mxCell>
+                <mxCell id="coderreply" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e8f0fe;strokeColor=#4285f4;" value="Coder\nReply-to / respuesta" vertex="1">
+                    <mxGeometry height="80" width="190" x="2220" y="800" as="geometry"/>
+                </mxCell>
+                <mxCell id="e1" edge="1" parent="1" source="email" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;" target="normalize"/>
+                <mxCell id="e2" edge="1" parent="1" source="normalize" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;" target="attach"/>
+                <mxCell id="e3" edge="1" parent="1" source="attach" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;" target="url"/>
+                <mxCell id="e4" edge="1" parent="1" source="url" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;" target="coder"/>
+                <mxCell id="e5" edge="1" parent="1" source="coder" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;" target="found"/>
+                <mxCell id="e6" edge="1" parent="1" source="found" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;fontStyle=1;" target="notfound" value="NO"/>
+                <mxCell id="e7" edge="1" parent="1" source="found" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;fontStyle=1;" target="strata" value="YES"/>
+                <mxCell id="e8" edge="1" parent="1" source="strata" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;" target="validate"/>
+                <mxCell id="e9" edge="1" parent="1" source="validate" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;" target="tech"/>
+                <mxCell id="e10" edge="1" parent="1" source="tech" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;fontStyle=1;" target="manualerror" value="YES"/>
+                <mxCell id="e11" edge="1" parent="1" source="tech" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;fontStyle=1;" target="guard" value="NO"/>
+                <mxCell id="e12" edge="1" parent="1" source="guard" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;" target="switch"/>
+                <mxCell id="e13" edge="1" parent="1" source="switch" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;fontStyle=1;" target="approved" value="APPROVED"/>
+                <mxCell id="e14" edge="1" parent="1" source="switch" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;fontStyle=1;" target="rejected" value="DISAPPROVED"/>
+                <mxCell id="e15" edge="1" parent="1" source="switch" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;fontStyle=1;" target="manual" value="MANUAL"/>
+                <mxCell id="e16" edge="1" parent="1" source="approved" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;" target="db"/>
+                <mxCell id="e17" edge="1" parent="1" source="rejected" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;" target="db"/>
+                <mxCell id="e18" edge="1" parent="1" source="manual" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;" target="db"/>
+                <mxCell id="e19" edge="1" parent="1" source="manual" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;" target="hse"/>
+                <mxCell id="e20" edge="1" parent="1" source="approved" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;" target="coderreply"/>
+                <mxCell id="e21" edge="1" parent="1" source="rejected" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;" target="coderreply"/>
+            </root>
+        </mxGraphModel>
+    </diagram>
+    <diagram id="strata" name="02 - Interior Strata Core">
+        <mxGraphModel dx="10740" dy="6300" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1920" pageHeight="1080" math="0" shadow="0">
+            <root>
+                <mxCell id="0"/>
+                <mxCell id="1" parent="0"/>
+                <mxCell id="s_title" parent="1" style="text;fontSize=24;fontStyle=1;align=center;" value="Strata Core — Evaluación interna consumida por n8n" vertex="1">
+                    <mxGeometry height="50" width="800" x="520" y="20" as="geometry"/>
+                </mxCell>
+                <mxCell id="s_input" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#eadcf8;strokeColor=#8e7cc3;fontStyle=1;" value="n8n HTTP Request\nJSON o Multipart" vertex="1">
+                    <mxGeometry height="80" width="180" x="40" y="170" as="geometry"/>
+                </mxCell>
+                <mxCell id="s_pdf" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#eaf4e3;strokeColor=#6aa84f;" value="PDFEngineReader\nPyMuPDF" vertex="1">
+                    <mxGeometry height="80" width="180" x="270" y="170" as="geometry"/>
+                </mxCell>
+                <mxCell id="s_ocr" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#eaf4e3;strokeColor=#6aa84f;" value="OCR adaptativo\nTesseract + preprocesamiento" vertex="1">
+                    <mxGeometry height="80" width="220" x="500" y="170" as="geometry"/>
+                </mxCell>
+                <mxCell id="s_vocab" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f3f3f3;strokeColor=#666666;" value="FastVocabCleaner\nlimpieza de OCR" vertex="1">
+                    <mxGeometry height="80" width="200" x="770" y="170" as="geometry"/>
+                </mxCell>
+                <mxCell id="s_index" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f3f3f3;strokeColor=#666666;" value="Search / word index\ncoords + snippets" vertex="1">
+                    <mxGeometry height="80" width="200" x="1020" y="170" as="geometry"/>
+                </mxCell>
+                <mxCell id="s_prune" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" value="Smart Context Pruning\nkeywords → contexto" vertex="1">
+                    <mxGeometry height="80" width="210" x="1270" y="170" as="geometry"/>
+                </mxCell>
+                <mxCell id="s_prompt" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fce5cd;strokeColor=#e69138;" value="System Prompt + reglas\nemail + documento" vertex="1">
+                    <mxGeometry height="80" width="210" x="1530" y="170" as="geometry"/>
+                </mxCell>
+                <mxCell id="s_ollama" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#eadcf8;strokeColor=#8e7cc3;fontStyle=1;" value="Ollama\n/api/generate\nJSON-only" vertex="1">
+                    <mxGeometry height="100" width="190" x="1790" y="160" as="geometry"/>
+                </mxCell>
+                <mxCell id="s_qwen" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#eadcf8;strokeColor=#8e7cc3;fontStyle=1;" value="Qwen 2.5\nqwen2.5:1.5b\ntemperature 0.1" vertex="1">
+                    <mxGeometry height="90" width="190" x="1790" y="340" as="geometry"/>
+                </mxCell>
+                <mxCell id="s_json" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d9ead3;strokeColor=#6aa84f;fontStyle=1;" value="JSON HSE\nveredicto + confianza + detalle" vertex="1">
+                    <mxGeometry height="90" width="210" x="1530" y="360" as="geometry"/>
+                </mxCell>
+                <mxCell id="s_fail" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fce5cd;strokeColor=#e69138;fontStyle=1;" value="Failover\nOllama offline / timeout\n→ manual" vertex="1">
+                    <mxGeometry height="90" width="210" x="1270" y="360" as="geometry"/>
+                </mxCell>
+                <mxCell id="s_stats" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f3f3f3;strokeColor=#666666;" value="/api/stats\ntelemetría en memoria" vertex="1">
+                    <mxGeometry height="80" width="200" x="1020" y="370" as="geometry"/>
+                </mxCell>
+                <mxCell id="se1" edge="1" parent="1" source="s_input" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;" target="s_pdf"/>
+                <mxCell id="se2" edge="1" parent="1" source="s_pdf" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;" target="s_ocr"/>
+                <mxCell id="se3" edge="1" parent="1" source="s_ocr" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;" target="s_vocab"/>
+                <mxCell id="se4" edge="1" parent="1" source="s_vocab" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;" target="s_index"/>
+                <mxCell id="se5" edge="1" parent="1" source="s_index" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;" target="s_prune"/>
+                <mxCell id="se6" edge="1" parent="1" source="s_prune" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;" target="s_prompt"/>
+                <mxCell id="se7" edge="1" parent="1" source="s_prompt" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;" target="s_ollama"/>
+                <mxCell id="se8" edge="1" parent="1" source="s_ollama" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;" target="s_qwen"/>
+                <mxCell id="se9" edge="1" parent="1" source="s_qwen" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;" target="s_json"/>
+                <mxCell id="se10" edge="1" parent="1" source="s_ollama" style="edgeStyle=orthogonalEdgeStyle;dashed=1;endArrow=block;" target="s_fail" value="error"/>
+                <mxCell id="se11" edge="1" parent="1" source="s_json" style="edgeStyle=orthogonalEdgeStyle;dashed=1;endArrow=block;" target="s_stats" value="metrics"/>
+            </root>
+        </mxGraphModel>
+    </diagram>
+    <diagram id="branching" name="03 - Branches de decisión">
+        <mxGraphModel dx="3580" dy="2100" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1920" pageHeight="1080" math="0" shadow="0">
+            <root>
+                <mxCell id="0"/>
+                <mxCell id="1" parent="0"/>
+                <mxCell id="btitle" parent="1" style="text;fontSize=24;fontStyle=1;align=center;" value="Branches de negocio — salida de Strata Core" vertex="1">
+                    <mxGeometry height="50" width="680" x="620" y="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="result" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#eadcf8;strokeColor=#8e7cc3;fontStyle=1;" value="AI JSON\nvalido + manual + confianza + tipo" vertex="1">
+                    <mxGeometry height="90" width="250" x="740" y="160" as="geometry"/>
+                </mxCell>
+                <mxCell id="decision" parent="1" style="rhombus;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontStyle=1;" value="Decision Switch" vertex="1">
+                    <mxGeometry height="100" width="180" x="775" y="320" as="geometry"/>
+                </mxCell>
+                <mxCell id="ap" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d9ead3;strokeColor=#38761d;fontStyle=1;" value="APPROVED\nvalido = true\nmanual = false" vertex="1">
+                    <mxGeometry height="100" width="230" x="240" y="500" as="geometry"/>
+                </mxCell>
+                <mxCell id="rej" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f4cccc;strokeColor=#cc0000;fontStyle=1;" value="DISAPPROVED\nvalido = false\nmanual = false" vertex="1">
+                    <mxGeometry height="100" width="230" x="680" y="500" as="geometry"/>
+                </mxCell>
+                <mxCell id="man" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fce5cd;strokeColor=#e69138;fontStyle=1;" value="MANUAL_INTERACTION\nmanual = true" vertex="1">
+                    <mxGeometry height="100" width="230" x="1120" y="500" as="geometry"/>
+                </mxCell>
+                <mxCell id="apr2" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#eaf4e3;strokeColor=#6aa84f;" value="PostgreSQL\nvalidation_status=APPROVED\n+ correo" vertex="1">
+                    <mxGeometry height="90" width="230" x="240" y="690" as="geometry"/>
+                </mxCell>
+                <mxCell id="rej2" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#eaf4e3;strokeColor=#6aa84f;" value="PostgreSQL\nvalidation_status=DISAPPROVED\n+ motivo + correo" vertex="1">
+                    <mxGeometry height="90" width="230" x="680" y="690" as="geometry"/>
+                </mxCell>
+                <mxCell id="man2" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#eaf4e3;strokeColor=#6aa84f;" value="PostgreSQL\nvalidation_status=MANUAL_INTERACTION\n+ Dashboard HSE" vertex="1">
+                    <mxGeometry height="90" width="230" x="1120" y="690" as="geometry"/>
+                </mxCell>
+                <mxCell id="be1" edge="1" parent="1" source="result" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;" target="decision"/>
+                <mxCell id="be2" edge="1" parent="1" source="decision" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;" target="ap" value="true / false + manual=false"/>
+                <mxCell id="be3" edge="1" parent="1" source="decision" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;" target="rej" value="false + manual=false"/>
+                <mxCell id="be4" edge="1" parent="1" source="decision" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;" target="man" value="manual=true"/>
+                <mxCell id="be5" edge="1" parent="1" source="ap" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;" target="apr2"/>
+                <mxCell id="be6" edge="1" parent="1" source="rej" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;" target="rej2"/>
+                <mxCell id="be7" edge="1" parent="1" source="man" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;" target="man2"/>
+            </root>
+        </mxGraphModel>
+    </diagram>
+    <diagram id="hse" name="04 - Interacción manual HSE">
+        <mxGraphModel dx="5335" dy="3195" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1600" pageHeight="900" math="0" shadow="0">
+            <root>
+                <mxCell id="0"/>
+                <mxCell id="1" parent="0"/>
+                <mxCell id="ht" parent="1" style="text;fontSize=24;fontStyle=1;align=center;" value="Manual HSE — resolución de casos inciertos" vertex="1">
+                    <mxGeometry height="50" width="760" x="420" y="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="mcase" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fce5cd;strokeColor=#e69138;fontStyle=1;" value="justifications\nMANUAL_INTERACTION" vertex="1">
+                    <mxGeometry height="90" width="280" x="610" y="150" as="geometry"/>
+                </mxCell>
+                <mxCell id="dash" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e8f0fe;strokeColor=#4285f4;fontStyle=1;" value="HSE Dashboard\ncorreo original + evidencia + IA" vertex="1">
+                    <mxGeometry height="90" width="280" x="610" y="310" as="geometry"/>
+                </mxCell>
+                <mxCell id="d" parent="1" style="rhombus;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontStyle=1;" value="Decisión HSE" vertex="1">
+                    <mxGeometry height="90" width="170" x="665" y="470" as="geometry"/>
+                </mxCell>
+                <mxCell id="ha" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d9ead3;strokeColor=#38761d;fontStyle=1;" value="APPROVED" vertex="1">
+                    <mxGeometry height="70" width="190" x="200" y="640" as="geometry"/>
+                </mxCell>
+                <mxCell id="hr" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f4cccc;strokeColor=#cc0000;fontStyle=1;" value="DISAPPROVED" vertex="1">
+                    <mxGeometry height="70" width="190" x="590" y="640" as="geometry"/>
+                </mxCell>
+                <mxCell id="hc" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontStyle=1;" value="REQUEST_CORRECTION" vertex="1">
+                    <mxGeometry height="70" width="230" x="980" y="640" as="geometry"/>
+                </mxCell>
+                <mxCell id="hdb" parent="1" style="shape=cylinder;whiteSpace=wrap;html=1;fillColor=#eaf4e3;strokeColor=#6aa84f;" value="PostgreSQL\nhse_user_id + notes + hse_reviewed_at" vertex="1">
+                    <mxGeometry height="80" width="260" x="400" y="780" as="geometry"/>
+                </mxCell>
+                <mxCell id="hmail" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e8f0fe;strokeColor=#4285f4;" value="Reply to coder" vertex="1">
+                    <mxGeometry height="70" width="200" x="820" y="780" as="geometry"/>
+                </mxCell>
+                <mxCell id="he1" edge="1" parent="1" source="mcase" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;" target="dash"/>
+                <mxCell id="he2" edge="1" parent="1" source="dash" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;" target="d"/>
+                <mxCell id="he3" edge="1" parent="1" source="d" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;" target="ha" value="approve"/>
+                <mxCell id="he4" edge="1" parent="1" source="d" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;" target="hr" value="reject"/>
+                <mxCell id="he5" edge="1" parent="1" source="d" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;" target="hc" value="correction"/>
+                <mxCell id="he6" edge="1" parent="1" source="ha" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;" target="hdb"/>
+                <mxCell id="he7" edge="1" parent="1" source="hr" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;" target="hdb"/>
+                <mxCell id="he8" edge="1" parent="1" source="hc" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;" target="hdb"/>
+                <mxCell id="he9" edge="1" parent="1" source="ha" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;" target="hmail"/>
+                <mxCell id="he10" edge="1" parent="1" source="hr" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;" target="hmail"/>
+                <mxCell id="he11" edge="1" parent="1" source="hc" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;" target="hmail"/>
+            </root>
+        </mxGraphModel>
+    </diagram>
+</mxfile>

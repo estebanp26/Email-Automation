@@ -1,20 +1,32 @@
-# Squad Frontend Dashboard
+# React + TypeScript + Vite
 
-**Integrantes:** Kevin, Camilo  
+This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
 
-## Stack:
-- Next.js 14+ (App Router) o Vite + React
-- Tailwind CSS + shadcn/ui
-- Supabase Client (`@supabase/supabase-js`)
+Currently, two official plugins are available:
 
-## Vistas Requeridas para la Team Leader:
-1. **Bandeja de Entrada HSE (Split-View):**
-   - Lista lateral con estados: `🟢 Aprobado Auto`, `🔴 Rechazado Auto`, `🟡 Revisión Manual`.
-   - Panel de detalle: Datos del coder, correo original, visor embebido del adjunto (PDF / Imagen) y veredicto de la IA.
-2. **Acciones 1-Click:**
-   - Botón *Aprobar*: Actualiza estado a `APROBADO_MANUAL` y dispara webhook a n8n para enviar correo al coder.
-   - Botón *Rechazar*: Abre modal para escribir motivo y dispara correo de rechazo.
-3. **Pestaña de Métricas:**
-   - Contador de correos procesados hoy, % aprobación y tiempo medio de respuesta.
-4. **Pestaña de Configuración (El Salvavidas del Lunes):**
-   - Interfaz simple para editar `hse_system_config` y `email_templates` sin tocar código.
+- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
+- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+
+## React Compiler
+
+The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+
+## Expanding the Oxlint configuration
+
+If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
+
+```json
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": ["react", "typescript", "oxc"],
+  "options": {
+    "typeAware": true
+  },
+  "rules": {
+    "react/rules-of-hooks": "error",
+    "react/only-export-components": ["warn", { "allowConstantExport": true }]
+  }
+}
+```
+
+See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
