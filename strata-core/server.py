@@ -19,6 +19,21 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Optional, Dict, Any, Union
 import base64
+from pathlib import Path
+try:
+    import psycopg2
+    import psycopg2.extras
+except ImportError:
+    psycopg2 = None
+
+# Auto-load root .env if present
+_root_env = Path(__file__).resolve().parent.parent / ".env"
+if _root_env.exists():
+    for _line in _root_env.read_text(encoding="utf-8").splitlines():
+        _line = _line.strip()
+        if _line and not _line.startswith("#") and "=" in _line:
+            _k, _v = _line.split("=", 1)
+            os.environ.setdefault(_k.strip(), _v.strip().strip('"').strip("'"))
 
 from engine.pdf_reader import PDFEngineReader
 from engine.search_index import SearchEngine
@@ -480,3 +495,336 @@ async def search_document(
     finally:
         if os.path.exists(temp_file_path):
             os.remove(temp_file_path)
+
+
+# =============================================================================
+# HSE DASHBOARD & POSTGRESQL REAL DATA ENDPOINTS
+# =============================================================================
+
+def get_db_connection():
+    if not psycopg2:
+        raise HTTPException(status_code=500, detail="psycopg2 no disponible en el entorno")
+    host = os.getenv("POSTGRES_HOST", "localhost")
+    port = int(os.getenv("POSTGRES_PORT", "5432"))
+    dbname = os.getenv("POSTGRES_DB", "hse_email_automation")
+    user = os.getenv("POSTGRES_USER", "hse_admin")
+    password = os.getenv("POSTGRES_PASSWORD", "hse_segura_123")
+    return psycopg2.connect(
+        host=host,
+        port=port,
+        dbname=dbname,
+        user=user,
+        password=password,
+        connect_timeout=3
+    )
+
+@app.get("/api/kpis")
+async def get_dashboard_kpis():
+    """Retorna los indicadores clave (KPIs) del dashboard calculados desde la base de datos."""
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        cur.execute("""
+            SELECT 
+                COUNT(*) as total,
+                COUNT(*) FILTER (WHERE validation_status IN ('POSIBLEMENTE_VALIDO', 'APPROVED')) as approved,
+                COUNT(*) FILTER (WHERE validation_status IN ('POSIBLEMENTE_INVALIDO', 'DISAPPROVED')) as denied,
+                COUNT(*) FILTER (WHERE validation_status NOT IN ('POSIBLEMENTE_VALIDO', 'APPROVED', 'POSIBLEMENTE_INVALIDO', 'DISAPPROVED')) as pending
+            FROM justifications;
+        """)
+        row = cur.fetchone()
+        cur.close()
+        conn.close()
+        tot = row["total"] or 0
+        appr = row["approved"] or 0
+        den = row["denied"] or 0
+        pend = row["pending"] or 0
+        return {
+            "total": tot,
+            "approved": appr,
+            "denied": den,
+            "pending": pend,
+            "approval_rate": round((appr / tot * 100), 1) if tot > 0 else 0.0,
+            "revisadas": appr + den,
+            "por_revisar": pend
+        }
+    except Exception as e:
+        return {
+            "total": 0, "approved": 0, "denied": 0, "pending": 0,
+            "approval_rate": 0.0, "revisadas": 0, "por_revisar": 0, "error": str(e)
+        }
+
+@app.get("/api/requests")
+async def get_requests_list(status: Optional[str] = None, limit: int = 250):
+    """Lista de justificaciones con formato adaptado para el frontend de Requests y Dashboard."""
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        query = """
+            SELECT 
+                j.id,
+                j.coder_id,
+                j.sender_name,
+                j.sender_email,
+                j.email_subject,
+                j.email_body,
+                j.received_at,
+                j.excuse_type,
+                j.validation_status,
+                j.ai_recommendation,
+                j.ai_confidence,
+                j.ai_reason,
+                j.has_human_intervention,
+                j.hse_decision,
+                j.hse_notes,
+                j.hse_reviewed_at,
+                j.attachments,
+                COALESCE(c.route, 'Ruta General') as coder_route
+            FROM justifications j
+            LEFT JOIN coders c ON j.coder_id = c.id
+        """
+        params = []
+        if status:
+            if status == "approved":
+                query += " WHERE j.validation_status IN ('POSIBLEMENTE_VALIDO', 'APPROVED')"
+            elif status == "denied":
+                query += " WHERE j.validation_status IN ('POSIBLEMENTE_INVALIDO', 'DISAPPROVED')"
+            elif status == "pending_review":
+                query += " WHERE j.validation_status NOT IN ('POSIBLEMENTE_VALIDO', 'APPROVED', 'POSIBLEMENTE_INVALIDO', 'DISAPPROVED')"
+        
+        query += " ORDER BY j.received_at DESC LIMIT %s;"
+        params.append(limit)
+        cur.execute(query, tuple(params))
+        rows = cur.fetchall()
+        cur.close()
+        conn.close()
+
+        formatted = []
+        for r in rows:
+            raw_status = (r["validation_status"] or "").upper()
+            if raw_status in ["POSIBLEMENTE_VALIDO", "APPROVED"]:
+                frontend_status = "approved"
+            elif raw_status in ["POSIBLEMENTE_INVALIDO", "DISAPPROVED"]:
+                frontend_status = "denied"
+            else:
+                frontend_status = "pending_review"
+
+            raw_attachments = r["attachments"] or []
+            if isinstance(raw_attachments, str):
+                try:
+                    raw_attachments = json.loads(raw_attachments)
+                except Exception:
+                    raw_attachments = []
+            
+            attachments_list = []
+            if isinstance(raw_attachments, list):
+                for att in raw_attachments:
+                    if isinstance(att, dict):
+                        attachments_list.append({
+                            "name": att.get("filename") or att.get("name") or "documento.pdf",
+                            "url": "#"
+                        })
+
+            formatted.append({
+                "id": str(r["id"]),
+                "studentId": str(r["coder_id"]) if r["coder_id"] else "s-ext",
+                "route": r["coder_route"],
+                "status": frontend_status,
+                "emailInfo": {
+                    "senderName": r["sender_name"] or "Coder RIWI",
+                    "senderEmail": r["sender_email"],
+                    "subject": r["email_subject"],
+                    "body": r["email_body"],
+                    "date": r["received_at"].isoformat() if r["received_at"] else "",
+                    "attachments": attachments_list
+                },
+                "decision": {
+                    "source": "human" if r["has_human_intervention"] else "ai",
+                    "confidence": float(r["ai_confidence"]) if r["ai_confidence"] is not None else 0.85,
+                    "reasoning": r["hse_notes"] if r["has_human_intervention"] and r["hse_notes"] else (r["ai_reason"] or "Evaluación realizada por Strata Core"),
+                    "modifiedBy": "Team Leader Paola" if r["has_human_intervention"] else None,
+                    "modifiedAt": r["hse_reviewed_at"].isoformat() if r["hse_reviewed_at"] else None
+                }
+            })
+        return formatted
+    except Exception as e:
+        print(f"Error en get_requests: {e}")
+        return []
+
+@app.get("/api/requests/recent")
+async def get_recent_emails(limit: int = 10):
+    """Lista de correos recientes formateados para el carrusel de inicio."""
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        cur.execute("""
+            SELECT 
+                id, sender_email, sender_name, email_subject, email_body, received_at, validation_status
+            FROM justifications
+            ORDER BY received_at DESC
+            LIMIT %s;
+        """, (limit,))
+        rows = cur.fetchall()
+        cur.close()
+        conn.close()
+
+        recent = []
+        for r in rows:
+            st = (r["validation_status"] or "").upper()
+            if st in ["POSIBLEMENTE_VALIDO", "APPROVED"]:
+                st_label = "Aprobado"
+                color = "bg-[#20B486]/10 text-[#20B486]"
+                dot = "bg-[#20B486]"
+            elif st in ["POSIBLEMENTE_INVALIDO", "DISAPPROVED"]:
+                st_label = "Denegado"
+                color = "bg-[#FF5C67]/10 text-[#FF5C67]"
+                dot = "bg-[#FF5C67]"
+            else:
+                st_label = "Por revisar"
+                color = "bg-[#F5B83D]/10 text-[#F5B83D]"
+                dot = "bg-[#F5B83D]"
+
+            time_str = r["received_at"].strftime("%d %b, %I:%M %p") if r["received_at"] else "Hoy"
+
+            recent.append({
+                "id": str(r["id"]),
+                "sender": r["sender_email"],
+                "senderName": r["sender_name"],
+                "title": r["email_subject"],
+                "snippet": (r["email_body"] or "")[:45] + "...",
+                "time": time_str,
+                "status": st_label,
+                "color": color,
+                "dot": dot
+            })
+        return recent
+    except Exception as e:
+        print(f"Error en get_recent_emails: {e}")
+        return []
+
+@app.get("/api/requests/weekly")
+async def get_requests_weekly():
+    """Agrupación de justificaciones para gráficos semanales del Dashboard."""
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        cur.execute("""
+            SELECT 
+                TO_CHAR(received_at, 'Dy') as day_key,
+                DATE(received_at) as date,
+                COUNT(*) as total,
+                COUNT(*) FILTER (WHERE validation_status IN ('POSIBLEMENTE_VALIDO', 'APPROVED')) as aprobados,
+                COUNT(*) FILTER (WHERE validation_status IN ('POSIBLEMENTE_INVALIDO', 'DISAPPROVED')) as denegados,
+                COUNT(*) FILTER (WHERE validation_status NOT IN ('POSIBLEMENTE_VALIDO', 'APPROVED', 'POSIBLEMENTE_INVALIDO', 'DISAPPROVED')) as pendientes
+            FROM justifications
+            GROUP BY TO_CHAR(received_at, 'Dy'), DATE(received_at)
+            ORDER BY DATE(received_at) ASC;
+        """)
+        rows = cur.fetchall()
+        cur.close()
+        conn.close()
+
+        day_map = {"Mon": "Lun", "Tue": "Mar", "Wed": "Mié", "Thu": "Jue", "Fri": "Vie", "Sat": "Sáb", "Sun": "Dom"}
+        result = []
+        for r in rows:
+            name = day_map.get(r["day_key"], r["day_key"])
+            result.append({
+                "name": name,
+                "Total": r["total"],
+                "Aprobados": r["aprobados"],
+                "Denegados": r["denegados"],
+                "Pendientes": r["pendientes"],
+                "solicitudes": r["total"]
+            })
+        
+        if not result:
+            result = [
+                {"name": "Lun", "Total": 0, "Aprobados": 0, "Denegados": 0, "Pendientes": 0, "solicitudes": 0}
+            ]
+        return result
+    except Exception as e:
+        return [{"name": "Lun", "Total": 0, "Aprobados": 0, "Denegados": 0, "Pendientes": 0, "solicitudes": 0}]
+
+@app.get("/api/students")
+async def get_students_list():
+    """Lista de estudiantes / coders reales desde PostgreSQL agrupados por ruta."""
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        cur.execute("""
+            SELECT 
+                c.id,
+                c.full_name as name,
+                c.email,
+                COALESCE(c.route, 'Sin ruta') as route,
+                c.cedula,
+                c.is_active,
+                COUNT(j.id) as total_justifications
+            FROM coders c
+            LEFT JOIN justifications j ON c.id = j.coder_id
+            GROUP BY c.id, c.full_name, c.email, c.route, c.cedula, c.is_active
+            ORDER BY c.full_name ASC;
+        """)
+        rows = cur.fetchall()
+        cur.close()
+        conn.close()
+
+        students = []
+        for r in rows:
+            students.append({
+                "id": str(r["id"]),
+                "name": r["name"],
+                "email": r["email"],
+                "route": r["route"],
+                "cedula": r["cedula"],
+                "status": "Activo" if r["is_active"] else "Inactivo",
+                "attendance": {
+                    "present": 38,
+                    "late": 1,
+                    "justifiedAbsence": r["total_justifications"],
+                    "unjustifiedAbsence": 0
+                }
+            })
+        return students
+    except Exception as e:
+        return []
+
+class ResolveRequestModel(BaseModel):
+    action: str
+    notes: Optional[str] = ""
+    reviewer_name: Optional[str] = "Team Leader Paola"
+
+@app.post("/api/requests/{justification_id}/resolve")
+async def resolve_justification_in_db(justification_id: str, payload: ResolveRequestModel):
+    """Actualiza la decisión de la Team Leader directamente en PostgreSQL."""
+    try:
+        action = payload.action.upper()
+        if action == "APPROVED":
+            val_status = "APPROVED"
+        elif action == "DISAPPROVED":
+            val_status = "DISAPPROVED"
+        else:
+            val_status = "MANUAL_INTERACTION"
+
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute("""
+            UPDATE justifications
+            SET validation_status = %s,
+                hse_decision = %s,
+                hse_notes = %s,
+                has_human_intervention = true,
+                hse_reviewed_at = NOW()
+            WHERE id = %s RETURNING id;
+        """, (val_status, action, payload.notes, justification_id))
+        updated = cur.fetchone()
+        conn.commit()
+        cur.close()
+        conn.close()
+
+        if not updated:
+            raise HTTPException(status_code=404, detail="Justificación no encontrada")
+        return {"status": "ok", "justification_id": justification_id, "decision": action}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+

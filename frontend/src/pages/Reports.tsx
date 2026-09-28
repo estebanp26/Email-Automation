@@ -5,10 +5,11 @@ import { motion } from 'framer-motion';
 
 export default function Reports() {
   const [chartData, setChartData] = useState<any[]>([]);
+  const [stats, setStats] = useState<any>({ approval_rate: 0, total: 200, pending: 200 });
 
   useEffect(() => {
-    // Reusing the per week data for the area chart
     api.getRequestsPerWeek().then(setChartData);
+    api.getDashboardStats().then(setStats);
   }, []);
 
   return (
@@ -53,15 +54,15 @@ export default function Reports() {
             <div className="flex-1 space-y-4">
                <div className="p-4 bg-gray-50 rounded-xl">
                  <p className="text-sm text-gray-500 mb-1">Tasa de Aprobación</p>
-                 <p className="text-2xl font-bold text-green-600">85%</p>
+                 <p className="text-2xl font-bold text-green-600">{stats.approval_rate || 0}%</p>
                </div>
                <div className="p-4 bg-gray-50 rounded-xl">
-                 <p className="text-sm text-gray-500 mb-1">Tiempo de Respuesta</p>
-                 <p className="text-2xl font-bold text-blue-600">2.4 hrs</p>
+                 <p className="text-sm text-gray-500 mb-1">Total Radicadas</p>
+                 <p className="text-2xl font-bold text-blue-600">{stats.total || 0}</p>
                </div>
                <div className="p-4 bg-gray-50 rounded-xl">
-                 <p className="text-sm text-gray-500 mb-1">Picos de Solicitudes</p>
-                 <p className="text-lg font-bold text-gray-800">Lunes, Jueves</p>
+                 <p className="text-sm text-gray-500 mb-1">Casos en Revisión Manual</p>
+                 <p className="text-lg font-bold text-amber-600">{stats.por_revisar ?? stats.pending ?? 0} pendientes</p>
                </div>
             </div>
             <button className="mt-6 w-full bg-[#5B3FF5] text-white py-3 rounded-xl font-medium hover:bg-[#4a31d4] transition-colors">
