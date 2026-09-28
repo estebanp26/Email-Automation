@@ -412,6 +412,74 @@ class OutlookGraphClient:
             })
         return normalized
 
+    @classmethod
+    def from_env(cls) -> Optional["OutlookGraphClient"]:
+        """Instancia el cliente Graph API desde variables de entorno."""
+        tenant_id = os.getenv("OUTLOOK_TENANT_ID") or os.getenv("AZURE_TENANT_ID")
+        client_id = os.getenv("OUTLOOK_CLIENT_ID") or os.getenv("AZURE_CLIENT_ID")
+        client_secret = os.getenv("OUTLOOK_CLIENT_SECRET") or os.getenv("AZURE_CLIENT_SECRET")
+        user_email = os.getenv("OUTLOOK_MAILBOX") or os.getenv("OUTLOOK_USER") or "hse@riwi.io"
+
+        if not (tenant_id and client_id and client_secret):
+            return None
+        return cls(tenant_id=tenant_id, client_id=client_id, client_secret=client_secret, user_email=user_email)
+
+    def send_mail(
+        self,
+        to_email: str,
+        subject: str,
+        body_html: str,
+        in_reply_to: Optional[str] = None,
+        references: Optional[str] = None,
+        attachments: Optional[List[Dict[str, Any]]] = None
+    ) -> Dict[str, Any]:
+        """Envía un correo mediante Microsoft Graph sendMail manteniendo el hilo."""
+        token = self.get_token()
+        url = f"{self.GRAPH_ENDPOINT}/users/{self.user_email}/sendMail"
+
+        headers = []
+        if in_reply_to:
+            headers.append({"name": "In-Reply-To", "value": in_reply_to})
+        if references:
+            headers.append({"name": "References", "value": references})
+
+        message = {
+            "subject": subject,
+            "body": {
+                "contentType": "HTML",
+                "content": body_html
+            },
+            "toRecipients": [
+                {"emailAddress": {"address": to_email}}
+            ]
+        }
+        if headers:
+            message["internetMessageHeaders"] = headers
+
+        if attachments:
+            msg_attachments = []
+            for att in attachments:
+                msg_attachments.append({
+                    "@odata.type": "#microsoft.graph.fileAttachment",
+                    "name": att.get("filename", "adjunto.bin"),
+                    "contentType": att.get("mime_type", "application/octet-stream"),
+                    "contentBytes": att.get("data_base64", "")
+                })
+            message["attachments"] = msg_attachments
+
+        req_payload = json.dumps({"message": message, "saveToSentItems": "true"}).encode("utf-8")
+        req = urllib.request.Request(
+            url,
+            data=req_payload,
+            headers={
+                "Authorization": f"Bearer {token}",
+                "Content-Type": "application/json"
+            },
+            method="POST"
+        )
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            return {"status": "SUCCESS", "status_code": resp.status}
+
 
 # =============================================================================
 # DESPACHADOR A N8N WEBHOOK

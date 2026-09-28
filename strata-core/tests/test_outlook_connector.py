@@ -55,3 +55,21 @@ Content-Transfer-Encoding: base64
 
 def test_offline_suite_runs():
     assert outlook_connector.run_offline_test() == 0
+
+def test_graph_client_from_env(monkeypatch):
+    # Test when vars are missing
+    monkeypatch.delenv("OUTLOOK_TENANT_ID", raising=False)
+    monkeypatch.delenv("AZURE_TENANT_ID", raising=False)
+    assert outlook_connector.OutlookGraphClient.from_env() is None
+
+    # Test when Azure vars are provided
+    monkeypatch.setenv("AZURE_TENANT_ID", "tenant-123")
+    monkeypatch.setenv("AZURE_CLIENT_ID", "client-456")
+    monkeypatch.setenv("AZURE_CLIENT_SECRET", "secret-789")
+    monkeypatch.setenv("OUTLOOK_MAILBOX", "hse@riwi.io")
+    client = outlook_connector.OutlookGraphClient.from_env()
+    assert client is not None
+    assert client.tenant_id == "tenant-123"
+    assert client.client_id == "client-456"
+    assert client.client_secret == "secret-789"
+    assert client.user_email == "hse@riwi.io"
