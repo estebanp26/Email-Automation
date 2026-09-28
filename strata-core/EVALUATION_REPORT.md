@@ -1,5 +1,5 @@
 # 📊 Reporte Oficial de Evaluación: Strata Core HSE Evaluator
-**Squad 2 — AI Engine** | **Fecha:** `2026-09-28 07:17:49` | **Modelo Evaluado:** `qwen2.5:1.5b`
+**Squad 2 — AI Engine** | **Fecha:** `2026-09-28 16:41:47` | **Modelo Evaluado:** `qwen2.5:1.5b`
 **Responsables:** Sebastián (Test Runner & Schema) & Andrés (Prompt & Dataset)
 
 ---
@@ -9,13 +9,13 @@
 | Métrica | Resultado | Meta / SLA | Estado |
 | :--- | :---: | :---: | :---: |
 | **Cumplimiento JSON Schema** | **100.0%** | 100% | ✅ APROBADO |
-| **Exactitud Veredicto (Válido)** | **100.0%** | >= 85.0% | ✅ APROBADO |
-| **F1-Score Veredicto** | **100.0%** | >= 80.0% | ✅ APROBADO |
+| **Exactitud Veredicto (Válido)** | **70.0%** | >= 85.0% | ⚠️ ALERTA |
+| **F1-Score Veredicto** | **72.7%** | >= 80.0% | ⚠️ ALERTA |
 | **Recall Veredicto (Sensibilidad)** | **100.0%** | >= 85.0% | ✅ APROBADO |
-| **F1-Score Revisión Manual** | **100.0%** | >= 80.0% | ✅ APROBADO |
-| **Precisión Tipo de Novedad** | **90.0%** | >= 75.0% | ✅ APROBADO |
-| **Latencia Mediana (P50)** | **12.332s** | < 8.0s | ⏱️ MODERADO |
-| **Latencia P95** | **16.703s** | < 15.0s | ⚠️ COLA |
+| **F1-Score Revisión Manual** | **50.0%** | >= 80.0% | ⚠️ ALERTA |
+| **Precisión Tipo de Novedad** | **80.0%** | >= 75.0% | ✅ APROBADO |
+| **Latencia Mediana (P50)** | **16.478s** | < 8.0s | ⏱️ MODERADO |
+| **Latencia P95** | **58.877s** | < 15.0s | ⚠️ COLA |
 
 ---
 
@@ -26,21 +26,21 @@
 | Ground Truth \ Predicción | Predicho VÁLIDO (Positivo) | Predicho INVÁLIDO (Negativo) | Total |
 | :--- | :---: | :---: | :---: |
 | **Esperado VÁLIDO** | **TP = 4** | **FN = 0** | 4 |
-| **Esperado INVÁLIDO** | **FP = 0** | **TN = 6** | 6 |
-| **Total** | 4 | 6 | **10** |
+| **Esperado INVÁLIDO** | **FP = 3** | **TN = 3** | 6 |
+| **Total** | 7 | 3 | **10** |
 
-- **Precision:** `100.0%` (De los que el modelo aprobó, cuántos eran realmente legítimos).
+- **Precision:** `57.14%` (De los que el modelo aprobó, cuántos eran realmente legítimos).
 - **Recall:** `100.0%` (De todas las excusas válidas, cuántas logró rescatar el modelo).
-- **F1-Score:** `100.0%` (Media armónica entre precisión y recall).
+- **F1-Score:** `72.73%` (Media armónica entre precisión y recall).
 
 ### B. Bandera de Auditoría (`requiere_revision_manual`)
 
 | Ground Truth \ Predicción | Predicho AUDITAR | Predicho AUTOMÁTICO |
 | :--- | :---: | :---: |
-| **Esperado AUDITAR** | **TP = 6** | **FN = 0** |
+| **Esperado AUDITAR** | **TP = 2** | **FN = 4** |
 | **Esperado AUTOMÁTICO** | **FP = 0** | **TN = 4** |
 
-- **Accuracy Auditoría:** `100.0%` | **F1-Score:** `100.0%`
+- **Accuracy Auditoría:** `60.0%` | **F1-Score:** `50.0%`
 
 ---
 
@@ -48,7 +48,7 @@
 
 | Mínimo | P50 (Mediana) | P90 | P95 | Máximo | Promedio |
 | :---: | :---: | :---: | :---: | :---: | :---: |
-| `11.493s` | `12.332s` | `14.45s` | `16.703s` | `16.703s` | `13.031s` |
+| `9.279s` | `16.478s` | `18.78s` | `58.877s` | `58.877s` | `19.857s` |
 
 ---
 
@@ -56,16 +56,16 @@
 
 | ID | Título del Caso | Veredicto Pred (Exp) | Novedad Pred (Exp) | Manual Rev | Latencia | Schema |
 | :-: | :--- | :---: | :---: | :---: | :---: | :---: |
-| 1 | Incapacidad médica EPS Sanitas válida con sello y fecha actual | 🎯 ✅ Válido (✅ Válido) | 🎯 `inasistencia_medica` (`inasistencia_medica`) | 🟢 No (🟢 No) | 12.85s | ✅ OK |
-| 2 | Escaneo de Incapacidad SURA EPS con sello profesional | 🎯 ✅ Válido (✅ Válido) | 🎯 `inasistencia_medica` (`inasistencia_medica`) | 🟢 No (🟢 No) | 16.703s | ✅ OK |
-| 3 | Incapacidad médica extemporánea (fecha vencida hace 15 días) | 🎯 ❌ Inválido (❌ Inválido) | 🎯 `inasistencia_medica` (`inasistencia_medica`) | 🚩 Sí (🚩 Sí) | 14.45s | ✅ OK |
-| 4 | Constancia médica informal sin firma ni sello profesional | 🎯 ❌ Inválido (❌ Inválido) | 🎯 `inasistencia_medica` (`inasistencia_medica`) | 🚩 Sí (🚩 Sí) | 12.332s | ✅ OK |
-| 5 | Calamidad doméstica en texto plano (sin adjunto) | 🎯 ❌ Inválido (❌ Inválido) | 🎯 `calamidad` (`calamidad`) | 🚩 Sí (🚩 Sí) | 12.26s | ✅ OK |
-| 6 | Reporte de falla técnica de proveedor de internet | 🎯 ✅ Válido (✅ Válido) | 🎯 `falla_tecnica` (`falla_tecnica`) | 🟢 No (🟢 No) | 12.863s | ✅ OK |
-| 7 | Fórmula médica de farmacia (no es incapacidad) | 🎯 ❌ Inválido (❌ Inválido) | 🎯 `inasistencia_medica` (`inasistencia_medica`) | 🚩 Sí (🚩 Sí) | 12.317s | ✅ OK |
-| 8 | Salida temprana con cita odontológica programada | 🎯 ✅ Válido (✅ Válido) | 🎯 `salida_temprana` (`salida_temprana`) | 🟢 No (🟢 No) | 12.14s | ✅ OK |
-| 9 | Fotografía totalmente borrosa e ilegible | 🎯 ❌ Inválido (❌ Inválido) | ⚠️ `inasistencia_medica` (`no_identificado`) | 🚩 Sí (🚩 Sí) | 12.906s | ✅ OK |
-| 10 | Correo de Spam / Asunto no relacionado con asistencia | 🎯 ❌ Inválido (❌ Inválido) | 🎯 `no_identificado` (`no_identificado`) | 🚩 Sí (🚩 Sí) | 11.493s | ✅ OK |
+| 1 | Incapacidad médica EPS Sanitas válida con sello y fecha actual | 🎯 ✅ Válido (✅ Válido) | 🎯 `inasistencia_medica` (`inasistencia_medica`) | 🟢 No (🟢 No) | 58.877s | ✅ OK |
+| 2 | Escaneo de Incapacidad SURA EPS con sello profesional | 🎯 ✅ Válido (✅ Válido) | 🎯 `inasistencia_medica` (`inasistencia_medica`) | 🟢 No (🟢 No) | 14.813s | ✅ OK |
+| 3 | Incapacidad médica extemporánea (fecha vencida hace 15 días) | 🎯 ❌ Inválido (❌ Inválido) | 🎯 `inasistencia_medica` (`inasistencia_medica`) | 🟢 No (🚩 Sí) | 18.78s | ✅ OK |
+| 4 | Constancia médica informal sin firma ni sello profesional | ⚠️ ✅ Válido (❌ Inválido) | 🎯 `inasistencia_medica` (`inasistencia_medica`) | 🟢 No (🚩 Sí) | 16.478s | ✅ OK |
+| 5 | Calamidad doméstica en texto plano (sin adjunto) | 🎯 ❌ Inválido (❌ Inválido) | 🎯 `calamidad` (`calamidad`) | 🚩 Sí (🚩 Sí) | 16.828s | ✅ OK |
+| 6 | Reporte de falla técnica de proveedor de internet | 🎯 ✅ Válido (✅ Válido) | 🎯 `falla_tecnica` (`falla_tecnica`) | 🟢 No (🟢 No) | 9.279s | ✅ OK |
+| 7 | Fórmula médica de farmacia (no es incapacidad) | ⚠️ ✅ Válido (❌ Inválido) | ⚠️ `no_identificado` (`inasistencia_medica`) | 🟢 No (🚩 Sí) | 17.195s | ✅ OK |
+| 8 | Salida temprana con cita odontológica programada | 🎯 ✅ Válido (✅ Válido) | 🎯 `salida_temprana` (`salida_temprana`) | 🟢 No (🟢 No) | 16.661s | ✅ OK |
+| 9 | Fotografía totalmente borrosa e ilegible | ⚠️ ✅ Válido (❌ Inválido) | ⚠️ `inasistencia_medica` (`no_identificado`) | 🟢 No (🚩 Sí) | 13.262s | ✅ OK |
+| 10 | Correo de Spam / Asunto no relacionado con asistencia | 🎯 ❌ Inválido (❌ Inválido) | 🎯 `no_identificado` (`no_identificado`) | 🚩 Sí (🚩 Sí) | 16.399s | ✅ OK |
 
 ---
 

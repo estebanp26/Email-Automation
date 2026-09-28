@@ -404,11 +404,18 @@ async def evaluate_excuse(
                 valido = False
                 requiere_revision_manual = True
 
+        if any(w in full_text_lower for w in ["ansiedad", "depresion", "depresión", "panico", "pánico", "salud mental", "psicolog", "psiquiatr", "crisis emocional"]):
+            tipo_novedad = "calamidad"
+            categoria_sugerida = "REVISION_MANUAL"
+            valido = False
+            requiere_revision_manual = True
+            motivo_decision = "Situación de alta sensibilidad (salud mental/emocional). Se recomienda remitir a conversación presencial con el equipo de HSE."
+
         # Guardrail de Temporalidad: Citas médicas programadas vs Eventos Impredecibles
         is_cita_programada = any(w in full_text_lower for w in ["cita medica", "cita médica", "cita odontol", "procedimiento programado", "cita con especialista", "constancia de asistencia a cita"])
         if is_cita_programada:
             tipo_novedad = "inasistencia_medica"
-            has_negation_or_past = bool(re.search(r'\b(no alcanc[eé]|no avis[eé]|sin antelaci[oó]n|sin preaviso|despu[eé]s de la jornada|ayer|asist[ií]|estuve en la cita)\b', text_lower))
+            has_negation_or_past = bool(re.search(r'\b(no alcanc[eé]|no avis[eé]|sin antelaci[oó]n|sin preaviso|despu[eé]s de la jornada|ayer|asist[ií]|estuve en la cita|se me olvid[oó] avisar)\b', text_lower))
             is_preaviso = not has_negation_or_past and bool(re.search(r'\b(asistir[eé]|preaviso|con antelaci[oó]n|agendada para|ma[nñ]ana|futur[oa]|solicito permiso previo)\b', text_lower))
             is_post_evento = has_negation_or_past or bool(re.search(r'\b(asist[ií]|estuve en|fui a|despu[eé]s|ayer|semana pasada)\b', text_lower))
             if is_post_evento:
