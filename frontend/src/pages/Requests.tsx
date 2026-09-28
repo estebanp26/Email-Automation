@@ -239,13 +239,18 @@ export default function Requests() {
                 
                 <div className="flex items-center justify-between gap-2 mb-1">
                   <h4 className="text-[13px] font-semibold text-[#17203A] truncate">{subject}</h4>
-                  {status && (
-                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 ${
-                      status === 'approved' ? 'bg-[#20B486]/10 text-[#20B486]' :
-                      status === 'denied' ? 'bg-[#FF5C67]/10 text-[#FF5C67]' :
+                  {(item.category || status) && (
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 flex items-center gap-1 ${
+                      (item.category === 'POSIBLEMENTE_VALIDO' || status === 'approved') ? 'bg-[#20B486]/10 text-[#20B486]' :
+                      (item.category === 'POSIBLEMENTE_INVALIDO' || status === 'denied') ? 'bg-[#FF5C67]/10 text-[#FF5C67]' :
                       'bg-[#F5B83D]/10 text-[#F5B83D]'
                     }`}>
-                      {status === 'approved' ? 'Aprobado' : status === 'denied' ? 'Denegado' : 'Por revisar'}
+                      {(item.category === 'POSIBLEMENTE_VALIDO' || status === 'approved') ? 'Posiblemente Válido' :
+                       (item.category === 'POSIBLEMENTE_INVALIDO' || status === 'denied') ? 'Posiblemente Inválido' :
+                       'Revisión Manual'}
+                      {typeof item.decision?.confidence === 'number' && item.decision.confidence > 0 && (
+                        <span className="font-semibold opacity-90">({(item.decision.confidence * 100).toFixed(0)}%)</span>
+                      )}
                     </span>
                   )}
                 </div>
@@ -349,15 +354,20 @@ export default function Requests() {
                   <h2 className="text-[20px] font-bold text-[#111827]">
                     {selectedEmail.emailInfo?.subject || selectedEmail.subject}
                   </h2>
-                  {selectedEmail.status && (
-                    <span className={`text-[11px] font-bold px-3 py-1 rounded-full ${
-                      selectedEmail.status === 'approved' ? 'bg-[#20B486]/15 text-[#20B486]' :
-                      selectedEmail.status === 'denied' ? 'bg-[#FF5C67]/15 text-[#FF5C67]' :
+                  {(selectedEmail.category || selectedEmail.status) && (
+                    <span className={`text-[11px] font-bold px-3 py-1 rounded-full flex items-center gap-1.5 ${
+                      (selectedEmail.category === 'POSIBLEMENTE_VALIDO' || selectedEmail.status === 'approved') ? 'bg-[#20B486]/15 text-[#20B486]' :
+                      (selectedEmail.category === 'POSIBLEMENTE_INVALIDO' || selectedEmail.status === 'denied') ? 'bg-[#FF5C67]/15 text-[#FF5C67]' :
                       'bg-[#F5B83D]/15 text-[#F5B83D]'
                     }`}>
-                      {selectedEmail.status === 'approved' ? '● APROBADO' : 
-                       selectedEmail.status === 'denied' ? '● RECHAZADO' : 
-                       '● PENDIENTE REVISIÓN'}
+                      {(selectedEmail.category === 'POSIBLEMENTE_VALIDO' || selectedEmail.status === 'approved') ? '● POSIBLEMENTE VÁLIDO' :
+                       (selectedEmail.category === 'POSIBLEMENTE_INVALIDO' || selectedEmail.status === 'denied') ? '● POSIBLEMENTE INVÁLIDO' :
+                       '● REVISIÓN MANUAL'}
+                      {typeof selectedEmail.decision?.confidence === 'number' && selectedEmail.decision.confidence > 0 && (
+                        <span className="font-mono bg-white/70 px-1.5 py-0.5 rounded text-[10px] text-gray-700">
+                          {(selectedEmail.decision.confidence * 100).toFixed(0)}%
+                        </span>
+                      )}
                     </span>
                   )}
                 </div>
@@ -406,25 +416,42 @@ export default function Requests() {
                 </div>
               )}
 
-              {/* Caja de Análisis de IA HSE */}
+              {/* Caja de Análisis Asistido de IA HSE */}
               {selectedEmail.decision && (
                 <div className="p-5 bg-gradient-to-br from-[#F2F0FF] to-[#FAF8FF] border border-[#5B3FF5]/25 rounded-2xl shadow-xs">
-                  <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center justify-between mb-3">
                     <div className="flex items-center gap-2">
                       <div className="w-7 h-7 rounded-lg bg-[#5B3FF5] flex items-center justify-center text-white shadow-xs">
                         <User size={15} />
                       </div>
                       <span className="font-bold text-[14px] text-[#5B3FF5]">
-                        {selectedEmail.decision.source === 'human' ? 'Resolución Humana Registrada' : 'Análisis Inicial de Inteligencia Artificial (Strata Core)'}
+                        {selectedEmail.decision.source === 'human' ? 'Resolución Humana Registrada' : 'Recomendación Asistida para la Team Leader (Strata Core)'}
                       </span>
                     </div>
-                    {selectedEmail.decision.confidence && (
-                      <span className="text-[11px] font-bold text-[#5B3FF5] bg-[#5B3FF5]/10 px-2.5 py-1 rounded-full">
-                        {(selectedEmail.decision.confidence * 100).toFixed(0)}% Certidumbre
+                    {typeof selectedEmail.decision?.confidence === 'number' && selectedEmail.decision.confidence > 0 && (
+                      <span className="text-[12px] font-bold text-[#5B3FF5] bg-[#5B3FF5]/10 px-3 py-1 rounded-full border border-[#5B3FF5]/20">
+                        {(selectedEmail.decision.confidence * 100).toFixed(0)}% de Certidumbre
                       </span>
                     )}
                   </div>
-                  <p className="text-sm text-[#17203A] mb-2 leading-relaxed">{selectedEmail.decision.reasoning}</p>
+
+                  {/* Indicador de categoría sugerida */}
+                  <div className="mb-2.5 flex items-center gap-2">
+                    <span className="text-xs font-semibold text-[#7C8499] uppercase tracking-wider">Categoría Asistida:</span>
+                    <span className={`text-xs font-bold px-2.5 py-0.5 rounded-full ${
+                      (selectedEmail.category === 'POSIBLEMENTE_VALIDO' || selectedEmail.status === 'approved') ? 'bg-[#20B486]/15 text-[#20B486]' :
+                      (selectedEmail.category === 'POSIBLEMENTE_INVALIDO' || selectedEmail.status === 'denied') ? 'bg-[#FF5C67]/15 text-[#FF5C67]' :
+                      'bg-[#F5B83D]/15 text-[#F5B83D]'
+                    }`}>
+                      {(selectedEmail.category === 'POSIBLEMENTE_VALIDO' || selectedEmail.status === 'approved') ? 'POSIBLEMENTE VÁLIDO' :
+                       (selectedEmail.category === 'POSIBLEMENTE_INVALIDO' || selectedEmail.status === 'denied') ? 'POSIBLEMENTE INVÁLIDO' :
+                       'REVISIÓN MANUAL'}
+                    </span>
+                  </div>
+
+                  <p className="text-sm text-[#17203A] mb-2 leading-relaxed bg-white/70 p-3.5 rounded-xl border border-gray-100">
+                    {selectedEmail.decision.reasoning}
+                  </p>
                   {selectedEmail.decision.modifiedBy && (
                     <p className="text-xs text-[#7C8499] font-medium">
                       Modificado por: <strong className="text-[#111827]">{selectedEmail.decision.modifiedBy}</strong> · {new Date(selectedEmail.decision.modifiedAt).toLocaleTimeString('es-ES')}
