@@ -32,11 +32,35 @@ export default function Requests() {
     details?: string;
   } | null>(null);
 
+  // Listas derivadas: Bandeja (pendientes por resolver) vs Enviados (respondidos / resueltos)
+  const inboxList = requests.filter(r => !r.hasHumanIntervention && !r.hseDecision && !r.isResponded);
+  const resolvedRequests = requests.filter(r => r.hasHumanIntervention || r.hseDecision || r.isResponded);
+  const sentList = [...resolvedRequests, ...sentEmails];
+  const activeList = activeFolder === 'inbox' ? inboxList : activeFolder === 'sent' ? sentList : [];
+
   useEffect(() => {
     api.getRequests().then(data => {
       setRequests(data);
+      const pending = data.filter((r: any) => !r.hasHumanIntervention && !r.hseDecision && !r.isResponded);
+      if (pending.length > 0) {
+        handleSelectEmail(pending[0]);
+      } else if (data.length > 0) {
+        handleSelectEmail(data[0]);
+      }
     });
   }, []);
+
+  const handleFolderChange = (folder: 'inbox' | 'sent' | 'drafts') => {
+    setActiveFolder(folder);
+    setIsComposing(false);
+    setResolutionStatus(null);
+    const targetList = folder === 'inbox' ? inboxList : folder === 'sent' ? sentList : [];
+    if (targetList.length > 0) {
+      handleSelectEmail(targetList[0]);
+    } else {
+      setSelectedEmail(null);
+    }
+  };
 
   const handleSelectEmail = (email: any) => {
     setSelectedEmail(email);
@@ -54,8 +78,9 @@ export default function Requests() {
     setComposeData({
       to: selectedEmail.emailInfo?.senderEmail || selectedEmail.to,
       subject: `Re: ${selectedEmail.emailInfo?.subject || selectedEmail.subject}`,
-      body: `\n\n--- Mensaje original ---\nDe: ${selectedEmail.emailInfo?.senderEmail || selectedEmail.to}\nAsunto: ${selectedEmail.emailInfo?.subject || selectedEmail.subject}`
-    });
+      body: `\n\n--- Mensaje original ---\nDe: ${selectedEmail.emailInfo?.senderEmail || selectedEmail.to}\nAsunto: ${selectedEmail.emailInfo?.subject || selectedEmail.subject}`,
+      replyToId: selectedEmail.id
+    } as any);
     setIsComposing(true);
   };
 
@@ -68,23 +93,59 @@ export default function Requests() {
   const handleSendEmail = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSending(true);
-    await new Promise(r => setTimeout(r, 1200));
+    await new Promise(r => setTimeout(r, 800));
     
+    const replyingId = (composeData as any).replyToId;
     const newSentEmail = {
       id: `sent-${Date.now()}`,
       to: composeData.to,
       subject: composeData.subject,
       body: composeData.body,
       date: new Date().toISOString(),
+      status: 'approved',
+      hasHumanIntervention: true,
+      hseDecision: 'RESPONDED',
+      isResponded: true,
+      decision: {
+        source: 'human',
+        confidence: 1.0,
+        reasoning: composeData.body,
+        modifiedBy: 'Paola Admin (HSE)',
+        modifiedAt: new Date().toISOString(),
+      },
+      emailInfo: {
+        senderName: composeData.to,
+        senderEmail: composeData.to,
+        subject: composeData.subject,
+        body: composeData.body,
+        date: new Date().toISOString(),
+      }
     };
     
-    setSentEmails([newSentEmail, ...sentEmails]);
+    if (replyingId) {
+      setRequests(prev => prev.map(r => r.id === replyingId ? {
+        ...r,
+        hasHumanIntervention: true,
+        hseDecision: 'RESPONDED',
+        isResponded: true,
+        decision: {
+          ...r.decision,
+          source: 'human',
+          reasoning: composeData.body,
+          modifiedBy: 'Paola Admin (HSE)',
+          modifiedAt: new Date().toISOString(),
+        }
+      } : r));
+      api.resolveRequestWithN8n(replyingId, 'REQUEST_CORRECTION', composeData.body).catch(() => {});
+    }
+
+    setSentEmails(prev => [newSentEmail, ...prev]);
     setIsSending(false);
     setIsComposing(false);
     setSelectedEmail(newSentEmail);
     setActiveFolder('sent');
     
-    setToastMessage('Mensaje enviado exitosamente');
+    setToastMessage('Respuesta enviada y trasladada a Enviados');
     setShowToast(true);
     setTimeout(() => setShowToast(false), 3000);
   };
@@ -114,26 +175,27 @@ export default function Requests() {
         }
       );
 
-      // Actualizar en la lista local
-      setRequests(prev => prev.map(r => r.id === selectedEmail.id ? result.request : r));
-      setSelectedEmail({ ...result.request });
+      const updatedReq = {
+        ...result.request,
+        hasHumanIntervention: true,
+        hseDecision: action,
+        isResponded: true,
+      };
 
-      if (result.n8n.success) {
-        setResolutionStatus({
-          type: 'success',
-          message: `¡Caso ${action === 'APPROVED' ? 'Aprobado' : action === 'DISAPPROVED' ? 'Rechazado' : 'Notificado'} y despachado con éxito a n8n!`,
-          details: `El workflow ejecutó el webhook de despacho y encoló el correo formal al coder.`
-        });
-        setToastMessage(`Decisión (${action}) sincronizada con n8n`);
-        setShowToast(true);
-        setTimeout(() => setShowToast(false), 3500);
+      // Actualizar en la lista local (sale automáticamente de Bandeja y entra a Enviados)
+      setRequests(prev => prev.map(r => r.id === selectedEmail.id ? updatedReq : r));
+      
+      // Seleccionar el siguiente pendiente de la bandeja si quedan
+      const remainingPending = inboxList.filter(r => r.id !== selectedEmail.id);
+      if (remainingPending.length > 0) {
+        handleSelectEmail(remainingPending[0]);
       } else {
-        setResolutionStatus({
-          type: 'warning',
-          message: `Estado actualizado localmente a ${action}, pero hubo un aviso con el Webhook de n8n.`,
-          details: result.n8n.error
-        });
+        setSelectedEmail(null);
       }
+
+      setToastMessage(`Caso ${action === 'APPROVED' ? 'Aprobado' : action === 'DISAPPROVED' ? 'Rechazado' : 'Notificado'} y movido a Enviados`);
+      setShowToast(true);
+      setTimeout(() => setShowToast(false), 3500);
     } catch (err: any) {
       setResolutionStatus({
         type: 'error',
@@ -144,9 +206,6 @@ export default function Requests() {
       setIsResolving(false);
     }
   };
-
-  // Get active list to render
-  const activeList = activeFolder === 'inbox' ? requests : activeFolder === 'sent' ? sentEmails : [];
   const n8nConfig = getN8nConfig();
 
   return (
@@ -165,21 +224,21 @@ export default function Requests() {
           <div className="space-y-1">
             <FolderButton 
               active={activeFolder === 'inbox'} 
-              onClick={() => setActiveFolder('inbox')} 
+              onClick={() => handleFolderChange('inbox')} 
               icon={<Inbox size={18} />} 
               label="Bandeja" 
-              count={requests.length} 
+              count={inboxList.length} 
             />
             <FolderButton 
               active={activeFolder === 'sent'} 
-              onClick={() => setActiveFolder('sent')} 
+              onClick={() => handleFolderChange('sent')} 
               icon={<Send size={18} />} 
               label="Enviados" 
-              count={sentEmails.length} 
+              count={sentList.length} 
             />
             <FolderButton 
               active={activeFolder === 'drafts'} 
-              onClick={() => setActiveFolder('drafts')} 
+              onClick={() => handleFolderChange('drafts')} 
               icon={<FileEdit size={18} />} 
               label="Borradores" 
               count={0} 
@@ -463,7 +522,53 @@ export default function Requests() {
               {/* ============================================================== */}
               {/* PANEL DE RESOLUCIÓN MANUAL Y DESPACHO A N8N                    */}
               {/* ============================================================== */}
-              {activeFolder === 'inbox' && (
+              {/* ============================================================== */}
+              {/* PANEL DE DETALLE: ENVIADOS (NOTIFICADO) vs BANDEJA (POR RESOLVER) */}
+              {/* ============================================================== */}
+              {(activeFolder === 'sent' || selectedEmail.hasHumanIntervention || selectedEmail.hseDecision) ? (
+                <div className="border border-[#20B486]/30 bg-[#F4FDF9] rounded-2xl p-6 shadow-sm space-y-4">
+                  <div className="flex items-center justify-between border-b border-[#20B486]/20 pb-3">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-8 h-8 rounded-lg bg-[#20B486]/10 text-[#20B486] flex items-center justify-center">
+                        <CheckCircle2 size={18} />
+                      </div>
+                      <div>
+                        <h3 className="text-[15px] font-bold text-[#111827]">
+                          Notificación Enviada al Coder
+                        </h3>
+                        <p className="text-xs text-[#7C8499]">
+                          Esta justificación ya fue tramitada y su respuesta formal fue despachada.
+                        </p>
+                      </div>
+                    </div>
+                    <span className={`text-xs font-bold px-3 py-1 rounded-full ${
+                      (selectedEmail.hseDecision === 'APPROVED' || selectedEmail.status === 'approved') ? 'bg-[#20B486]/15 text-[#20B486]' :
+                      (selectedEmail.hseDecision === 'DISAPPROVED' || selectedEmail.status === 'denied') ? 'bg-[#FF5C67]/15 text-[#FF5C67]' :
+                      'bg-[#F5B83D]/15 text-[#F5B83D]'
+                    }`}>
+                      {(selectedEmail.hseDecision === 'APPROVED' || selectedEmail.status === 'approved') ? 'Aprobado' :
+                       (selectedEmail.hseDecision === 'DISAPPROVED' || selectedEmail.status === 'denied') ? 'Rechazado' :
+                       (selectedEmail.hseDecision === 'REQUEST_CORRECTION') ? 'Soporte Solicitado' : 'Respondido'}
+                    </span>
+                  </div>
+
+                  <div className="bg-white p-4 rounded-xl border border-emerald-100 shadow-xs">
+                    <p className="text-xs font-bold text-[#7C8499] uppercase tracking-wider mb-1.5">
+                      Respuesta / Justificación registrada por HSE:
+                    </p>
+                    <p className="text-sm text-[#17203A] leading-relaxed">
+                      {selectedEmail.decision?.reasoning || selectedEmail.hseNotes || selectedEmail.body || 'Notificación formal enviada al estudiante.'}
+                    </p>
+                  </div>
+
+                  <div className="flex items-center justify-between text-xs text-[#7C8499] pt-1">
+                    <span>Revisor: <strong className="text-[#111827]">{selectedEmail.decision?.modifiedBy || 'Team Leader Paola'}</strong></span>
+                    {selectedEmail.decision?.modifiedAt && (
+                      <span>Fecha de envío: <strong>{new Date(selectedEmail.decision.modifiedAt).toLocaleString('es-ES')}</strong></span>
+                    )}
+                  </div>
+                </div>
+              ) : (
                 <div className="border-2 border-[#5B3FF5]/20 bg-white rounded-2xl p-6 shadow-sm space-y-4">
                   <div className="flex items-center justify-between border-b border-[#E8EAF2] pb-3">
                     <div className="flex items-center gap-2">
@@ -475,7 +580,7 @@ export default function Requests() {
                           Resolución Manual HSE & Despacho a n8n
                         </h3>
                         <p className="text-xs text-[#7C8499]">
-                          Al confirmar la decisión, se enviará el payload al Webhook <code className="text-[#5B3FF5] bg-[#F2F0FF] px-1 py-0.5 rounded">riwi-hse-dispatch-email</code>
+                          Al confirmar la decisión, el mensaje se responderá formalmente y se moverá a <strong>Enviados</strong>.
                         </p>
                       </div>
                     </div>

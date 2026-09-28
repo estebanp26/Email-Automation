@@ -336,10 +336,19 @@ async def evaluate_excuse(
                 tipo_novedad = "inasistencia_medica"
                 motivo_decision = "Incapacidad médica formal con diagnóstico CIE-10 expedida por entidad promotora de salud (EPS) y soporte adjunto verificado."
             elif "cita" in text_eval or "odontol" in text_eval or "medico general" in text_eval or "especialista" in text_eval:
-                categoria_sugerida = "POSIBLEMENTE_VALIDO"
-                confianza_score = 0.91
                 tipo_novedad = "inasistencia_medica"
-                motivo_decision = "Constancia de cita médica prioritaria o examen asistencial con entidad de salud."
+                # Regla HSE: Citas programadas deben notificarse con preaviso (antes del día de entrenamiento)
+                has_negation_or_past = bool(re.search(r'\b(no alcanc[eé]|no avis[eé]|sin antelaci[oó]n|sin preaviso|despu[eé]s de la jornada|ayer|asist[ií]|estuve en la cita)\b', text_eval))
+                is_preaviso = not has_negation_or_past and bool(re.search(r'\b(asistir[eé]|preaviso|con antelaci[oó]n|agendada para|ma[nñ]ana|futur[oa]|solicito permiso previo)\b', text_eval))
+                is_posterior = has_negation_or_past or bool(re.search(r'\b(asist[ií]|estuve|fui|despu[eé]s|ayer|semana pasada)\b', text_eval))
+                if is_posterior:
+                    categoria_sugerida = "POSIBLEMENTE_INVALIDO"
+                    confianza_score = 0.88
+                    motivo_decision = "Las citas médicas programadas deben notificarse previamente antes del día de entrenamiento. No fue remitida con la antelación reglamentaria requerida."
+                else:
+                    categoria_sugerida = "POSIBLEMENTE_VALIDO"
+                    confianza_score = 0.94
+                    motivo_decision = "Cita médica programada notificada con antelación reglamentaria antes del día de entrenamiento y constancia adjunta."
             elif "calamidad" in text_eval or "urgencia" in text_eval or "falleci" in text_eval:
                 categoria_sugerida = "POSIBLEMENTE_VALIDO"
                 confianza_score = 0.88
@@ -394,6 +403,26 @@ async def evaluate_excuse(
                 categoria_sugerida = "REVISION_MANUAL"
                 valido = False
                 requiere_revision_manual = True
+
+        # Guardrail de Temporalidad: Citas médicas programadas vs Eventos Impredecibles
+        is_cita_programada = any(w in full_text_lower for w in ["cita medica", "cita médica", "cita odontol", "procedimiento programado", "cita con especialista", "constancia de asistencia a cita"])
+        if is_cita_programada:
+            tipo_novedad = "inasistencia_medica"
+            has_negation_or_past = bool(re.search(r'\b(no alcanc[eé]|no avis[eé]|sin antelaci[oó]n|sin preaviso|despu[eé]s de la jornada|ayer|asist[ií]|estuve en la cita)\b', text_lower))
+            is_preaviso = not has_negation_or_past and bool(re.search(r'\b(asistir[eé]|preaviso|con antelaci[oó]n|agendada para|ma[nñ]ana|futur[oa]|solicito permiso previo)\b', text_lower))
+            is_post_evento = has_negation_or_past or bool(re.search(r'\b(asist[ií]|estuve en|fui a|despu[eé]s|ayer|semana pasada)\b', text_lower))
+            if is_post_evento:
+                categoria_sugerida = "POSIBLEMENTE_INVALIDO"
+                valido = False
+                requiere_revision_manual = False
+                confianza_score = 0.88
+                motivo_decision = "Las citas médicas programadas deben notificarse obligatoriamente antes del día de entrenamiento (con preaviso). No se admite radicación posterior a la inasistencia."
+            else:
+                categoria_sugerida = "POSIBLEMENTE_VALIDO"
+                valido = True
+                requiere_revision_manual = False
+                confianza_score = 0.94
+                motivo_decision = "Cita médica programada notificada con antelación reglamentaria antes del día de entrenamiento y constancia adjunta."
 
         if any(w in text_lower for w in ["retirarme", "salir antes", "salida temprana"]):
             tipo_novedad = "salida_temprana"
@@ -678,6 +707,10 @@ async def get_requests_list(status: Optional[str] = None, limit: int = 250):
                     "date": r["received_at"].isoformat() if r["received_at"] else "",
                     "attachments": attachments_list
                 },
+                "hasHumanIntervention": bool(r["has_human_intervention"]),
+                "hseDecision": r["hse_decision"],
+                "hseNotes": r["hse_notes"],
+                "hseReviewedAt": r["hse_reviewed_at"].isoformat() if r["hse_reviewed_at"] else None,
                 "decision": {
                     "source": "human" if r["has_human_intervention"] else "ai",
                     "recommendation": r["ai_recommendation"] or raw_status,

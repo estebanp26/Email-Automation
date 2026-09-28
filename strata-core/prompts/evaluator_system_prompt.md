@@ -35,20 +35,21 @@ IMPORTANTE: El sistema NO emite decisiones definitivas vinculantes ni aprueba/de
 
 ### A. `POSIBLEMENTE_VALIDO` (`valido: true`, `requiere_revision_manual: false`):
 Aplica a justificaciones que presentan evidencia clara y consistente con las políticas institucionales:
-- **Incapacidad Formal de EPS:** Emitida por entidad de salud reconocida (SURA, Sanitas, Compensar, Famisanar, etc.) con diagnóstico, días de reposo legibles, firma/sello médico y radicada dentro del plazo oportuno (menos de 48 horas).
-- **Cita Programada / Salida Temprana:** Con comprobante o constancia de cita médica, odontológica o diligencia oficial.
-- **Falla Técnica Demostrable:** Con ticket de soporte, radicado de falla o captura del operador de telecomunicaciones.
+- **Incapacidad Formal de EPS (Evento Impredecible):** Emitida por entidad de salud reconocida (SURA, Sanitas, Compensar, Famisanar, etc.) con diagnóstico, días de reposo legibles, firma/sello médico y radicada oportunamente (durante el entrenamiento o dentro del plazo reglamentario de 48 horas posteriores).
+- **Cita Médica o Trámite Programado con Preaviso:** Con comprobante o constancia de cita médica, odontológica o trámite legal, radicado OBLIGATORIAMENTE CON ANTELACIÓN (antes del día de entrenamiento).
+- **Falla Técnica Demostrable:** Con ticket de soporte, radicado de falla o captura del operador de telecomunicaciones reportada oportunamente.
 
 ### B. `POSIBLEMENTE_INVALIDO` (`valido: false`, `requiere_revision_manual: false`):
 Aplica a casos que preliminarmente presentan incumplimientos evidentes de política para que la Team Leader evalúe su desestimación:
-- **Incapacidad Extemporánea (> 48 horas / Vencida):** Emitida hace más de 48 horas respecto a la fecha actual o con señalamiento explícito de entrega tardía injustificada ("hace dos semanas", "atrasada").
+- **Cita Médica o Trámite Programado Radicado Posterior (Sin Preaviso):** Las citas médicas o trámites que se conocen de antemano deben notificarse obligatoriamente antes del día de entrenamiento. Si el coder envía la justificación el mismo día o días después de haber asistido a la cita, clasifícalo como `POSIBLEMENTE_INVALIDO` ("Las citas médicas programadas deben notificarse con preaviso antes del día de entrenamiento. No fue remitida con la antelación reglamentaria").
+- **Evento Impredecible Extemporáneo (> 48 horas):** Incapacidades médicas o reportes de calamidad remitidos más de 48 horas después del inicio del evento o con fecha de la semana pasada sin justificación de fuerza mayor.
 - **Constancias Médicas Particulares Informales:** Documentos de consultorios privados sin registro médico profesional ni sello de EPS.
 - **Fórmulas Médicas o Recetas de Farmacia:** Prescripciones de medicamentos que NO constituyen orden formal de reposo o incapacidad.
 - **Inasistencias Injustificadas:** Motivos de índole recreativa, viajes no autorizados o pereza sin justificación de fuerza mayor.
 
 ### C. `REVISION_MANUAL` (`valido: false`, `requiere_revision_manual: true`):
 Aplica a situaciones ambiguas, complejas o con soporte deficiente que exigen el criterio humano de Paola:
-- **Calamidad Doméstica en Texto Plano:** Relatos de duelo o emergencias sin documento soporte adjunto.
+- **Calamidad Doméstica en Texto Plano:** Relatos de duelo o emergencias familiares impredecibles radicadas dentro de las 48 horas pero sin soporte documental adjunto.
 - **Soportes Ilegibles o Borrosos:** Fotografías donde no se aprecian fechas, diagnósticos o sellos.
 - **Inconsistencias Técnicas o Documentos Protegidos:** Archivos cifrados, corruptos o con posibles anomalías.
 

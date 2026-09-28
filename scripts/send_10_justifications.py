@@ -158,53 +158,51 @@ Saludos cordiales,
         }]
     })
 
-    # Caso 4: Constancia de Asistencia a Cita Médica
+    # Caso 4: Cita Médica Programada con Preaviso (notificada ANTES del día de entrenamiento)
     c = coders[3]
-    dt1 = today.strftime("%d/%m/%Y")
+    dt_future = (today + timedelta(days=1)).strftime("%d/%m/%Y")
     cases.append({
         "target_category": "POSIBLEMENTE_VALIDO",
         "sender_name": c[1],
         "sender_email": c[2],
-        "email_subject": f"Constancia de Asistencia a Cita Médica Odontológica - {c[1]}",
+        "email_subject": f"Preaviso oportuno de Cita Médica Odontológica Programada - {c[1]}",
         "email_body": f"""Buenos días Paola y equipo HSE,
 
-El día de hoy {dt1} asistí a una cita médica prioritaria y procedimiento odontológico en Salud Total EPS en horario matutino.
+Notifico con antelación reglamentaria previa al día de entrenamiento que el día de mañana {dt_future} asistiré a una cita médica programada y procedimiento odontológico en Salud Total EPS en horario matutino.
 Atendido por: Dra. Diana Patricia Osorio (RM 31405).
 Coder: {c[1]} (CC {c[3]}).
 
-Adjunto el comprobante de asistencia emitido por la entidad de salud. Ya me encuentro al día con el material formativo.
+Adjunto la constancia de cita agendada emitida previamente por la entidad de salud. Me adelantaré con las actividades asignadas.
 
-Muchas gracias,
+Muchas gracias por su autorización previa,
 {c[1]}""",
         "attachments": [{
-            "filename": f"constancia_cita_{c[3]}.pdf",
+            "filename": f"preaviso_cita_{c[3]}.pdf",
             "mime_type": "application/pdf",
-            "data_base64": create_mock_pdf_base64("CONSTANCIA DE CITA MEDICA SALUD TOTAL", c[1], c[3], dt1)
+            "data_base64": create_mock_pdf_base64("CONSTANCIA PREVIA CITA PROGRAMADA", c[1], c[3], dt_future)
         }]
     })
 
     # =========================================================================
     # GRUPO 2: POSIBLEMENTE INVÁLIDOS (RECHAZADOS) - 3 CASOS
     # =========================================================================
-    # Caso 5: Radicación extemporánea (semana pasada)
+    # Caso 5: Cita Médica Programada enviada DESPUÉS de la jornada (sin preaviso obligatorio)
     c = coders[4]
-    dt_old = (today - timedelta(days=7)).strftime("%d/%m/%Y")
     cases.append({
         "target_category": "POSIBLEMENTE_INVALIDO",
         "sender_name": c[1],
         "sender_email": c[2],
-        "email_subject": f"Certificado con fecha de la semana pasada - {c[1]}",
-        "email_body": f"""Equipo HSE,
-Buenos días, adjunto la incapacidad que tuve la semana pasada el día {dt_old} que se me olvidó enviar a tiempo.
-Es una incapacidad vencida que no alcancé a radicar oportunamente.
+        "email_subject": f"Constancia de cita médica enviada después de la jornada - {c[1]}",
+        "email_body": f"""Equipo HSE y Paola,
+Buenos días, el día de hoy asistí a una cita médica odontológica programada que tenía agendada y no alcancé a avisar antes de iniciar el entrenamiento.
+Ayer asistí y estuve en la cita después de clase. Adjunto la constancia para ver si me la aceptan aunque no avisé con antelación.
 Coder: {c[1]} (CC {c[3]}).
 
-Quedo atento si aún es posible validarla.
 Saludos.""",
         "attachments": [{
-            "filename": f"incapacidad_vencida_{c[3]}.pdf",
+            "filename": f"constancia_cita_sin_preaviso_{c[3]}.pdf",
             "mime_type": "application/pdf",
-            "data_base64": create_mock_pdf_base64("CERTIFICADO EXTEMPORANEO", c[1], c[3], dt_old)
+            "data_base64": create_mock_pdf_base64("CONSTANCIA POSTERIOR SIN PREAVISO", c[1], c[3], today.strftime("%d/%m/%Y"))
         }]
     })
 
