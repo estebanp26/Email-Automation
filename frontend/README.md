@@ -1,32 +1,65 @@
-# React + TypeScript + Vite
+# Dashboard HSE RIWI (Frontend)
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+Panel web administrativo para el equipo de Habilidades Socioemocionales (HSE) de RIWI, diseñado para auditar, gestionar y resolver justificaciones de inasistencia y contingencias formativas con integración directa al workflow de **n8n**.
 
-Currently, two official plugins are available:
+---
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## ⚡ Tecnologías Principales
 
-## React Compiler
+- **React 19** + **TypeScript**
+- **Vite 8**
+- **Tailwind CSS v4**
+- **Framer Motion** (Animaciones fluidas y micro-interacciones)
+- **Recharts** (Gráficos estadísticos y KPIs)
+- **Lucide Icons**
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+---
 
-## Expanding the Oxlint configuration
+## 🔗 Integración con n8n Workflow
 
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
+El frontend se comunica con n8n mediante endpoints webhook tipo REST:
 
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
+1. **Webhook de Despacho Manual HSE (`POST /webhook/riwi-hse-dispatch-email` o `/webhook-test/...`):**
+   - Disparado al presionar **Aprobar Excusa** (`APPROVED`), **Rechazar Caso** (`DISAPPROVED`) o **Pedir Soporte** (`REQUEST_CORRECTION`).
+   - Envía el ID de justificación, la acción, las fechas, tipo de excusa, el nombre del revisor y las observaciones de HSE.
+2. **Webhook de Ingesta / Prueba (`POST /webhook/riwi-email-incoming` o `/webhook-test/...`):**
+   - Permite simular y probar la ingesta de correos entrantes directamente desde el módulo de configuración.
+
+### Módulos Clave:
+- [`src/services/n8n.ts`](./src/services/n8n.ts): Cliente de conexión con n8n, manejo de URLs, modo Test vs Producción y métodos de despacho y diagnóstico.
+- [`src/pages/Requests.tsx`](./src/pages/Requests.tsx): Bandeja de entrada con panel de resolución manual y feedback visual en tiempo real.
+- [`src/pages/Settings.tsx`](./src/pages/Settings.tsx): Tarjeta de configuración en vivo para cambiar la URL de n8n, probar conectividad o simular correos.
+
+---
+
+## 🚀 Inicio Rápido
+
+### 1. Variables de entorno
+
+Crea o revisa el archivo `.env` en la raíz de `frontend/`:
+
+```env
+VITE_API_URL=http://localhost:8000
+VITE_N8N_URL=http://localhost:5678
+VITE_N8N_USE_TEST_WEBHOOK=true
 ```
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+### 2. Instalar dependencias
+
+```bash
+npm install
+```
+
+### 3. Modo desarrollo
+
+```bash
+npm run dev
+```
+
+La aplicación quedará disponible en `http://localhost:5173`.
+
+### 4. Compilar para producción
+
+```bash
+npm run build
+```

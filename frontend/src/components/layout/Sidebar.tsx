@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { LayoutDashboard, Inbox, Settings, PieChart, Users } from 'lucide-react';
+import { LayoutDashboard, Inbox, Settings, Users } from 'lucide-react';
 import clsx from 'clsx';
 
 const navItems = [
@@ -102,7 +102,7 @@ export function Sidebar() {
             window.location.href = '/login';
           }}
           className={clsx(
-            "w-full flex items-center justify-center gap-2 bg-white/5 hover:bg-white/10 text-white rounded-lg py-2 transition-colors",
+            "w-full flex items-center justify-center gap-2 bg-white/5 hover:bg-white/10 text-white rounded-lg py-2 transition-colors cursor-pointer",
             !isOpen && "hidden"
           )}
         >
