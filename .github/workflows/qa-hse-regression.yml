@@ -1,0 +1,31 @@
+name: QA HSE Regression (QA-04)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'backend/**'
+      - '.github/workflows/qa-hse-regression.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'backend/**'
+
+jobs:
+  hse-regression:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install dependencies
+        run: |
+          pip install fastapi httpx pytest pytest-cov pytest-asyncio anyio pydantic-settings
+      - name: Run HSE regression matrix (QA-04 + BE-05)
+        run: |
+          pytest backend/tests/test_qa04_hse_matrix.py backend/tests/test_be05_hse_engine.py -v \
+            --cov=backend.app.services.hse_rules \
+            --cov=backend.app.services.hse_engine \
+            --cov-report=term-missing \
+            --cov-fail-under=85
