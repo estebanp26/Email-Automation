@@ -54,11 +54,15 @@ else
 fi
 
 # 2. Detección del intérprete Python para Strata Core
-echo -e "${CYAN}[2/4] Configurando entorno Python para Backend Strata Core...${NC}"
+echo -e "${CYAN}[2/5] Configurando entorno Python para Backend Strata Core...${NC}"
 if [ -f "$PROJECT_ROOT/strata-core/.venv/bin/python3" ]; then
     PYTHON_CMD="$PROJECT_ROOT/strata-core/.venv/bin/python3"
 elif [ -f "$PROJECT_ROOT/strata-core/.venv/bin/python" ]; then
     PYTHON_CMD="$PROJECT_ROOT/strata-core/.venv/bin/python"
+elif [ -f "$PROJECT_ROOT/strata-core/.venv/Scripts/python.exe" ]; then
+    PYTHON_CMD="$PROJECT_ROOT/strata-core/.venv/Scripts/python.exe"
+elif [ -f "$PROJECT_ROOT/strata-core/.venv/Scripts/python" ]; then
+    PYTHON_CMD="$PROJECT_ROOT/strata-core/.venv/Scripts/python"
 elif command -v python3 &>/dev/null; then
     PYTHON_CMD="python3"
 else
