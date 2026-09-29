@@ -1,12 +1,23 @@
 # Contratos de Datos & Interfaces
 
-## 1. Payload Normalizado del Correo (Samuel -> n8n)
+## 1. Ingesta Nativa Desacoplada: `POST /api/v1/inbound-email` (Samuel -> Strata Core Backend) [CONN-04]
+Reemplaza el webhook de n8n por un controlador FastAPI nativo con validación Pydantic, deduplicación e idempotencia.
+
+### Cabeceras de Autenticación Interna:
+- `Authorization: Bearer <INBOUND_API_KEY>` (o `X-API-Key: <INBOUND_API_KEY>`)
+- `X-Signature-SHA256: <HMAC_HEX>` (Firma opcional HMAC-SHA256 con `INBOUND_HMAC_SECRET`)
+
+### Política de Reintentos (Conectores):
+- Reintentos con **Exponential Backoff** (1s, 2s, 4s) ante errores de servidor temporal (`HTTP 502, 503, 504`) o fallos de red (`URLError`).
+- Cero reintentos ante errores cliente `400, 401, 422`.
+
+### Request Body (`InboundEmailDTO`):
 ```json
 {
   "source_provider": "OUTLOOK", // o "GMAIL"
   "message_id": "AAMkAGI2...",
   "conversation_id": "AAQkAGI...",
-  "sender_email": "coder@example.com",
+  "sender_email": "coder@riwi.io",
   "sender_name": "Laura Gómez",
   "email_subject": "Justificación inasistencia 25 Septiembre",
   "email_body": "Buenos días, adjunto comprobante médico de mi cita de hoy...",
@@ -18,6 +29,28 @@
       "data_base64": "JVBERi0xLjQK..."
     }
   ]
+}
+```
+
+### Response HTTP 202 Accepted (Nuevo evento encolado):
+```json
+{
+  "status": "ACCEPTED",
+  "message": "Event queued for identification and validation",
+  "message_id": "AAMkAGI2...",
+  "conversation_id": "AAQkAGI...",
+  "transaction_id": "8e2a90d0-2150-4be2-bc4d-18237ebc9a2e",
+  "state": "PENDING_IDENTIFICATION",
+  "attachments_count": 1
+}
+```
+
+### Response HTTP 200 OK (Idempotencia - Evento duplicado):
+```json
+{
+  "status": "OK",
+  "message": "Event already processed",
+  "message_id": "AAMkAGI2..."
 }
 ```
 

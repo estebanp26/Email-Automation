@@ -6,6 +6,8 @@ from ..schemas.policy import (
     PolicyEvaluationResult,
     AttendanceThresholdSummary,
 )
+from ..ports.sister_platform import SisterPlatformAttendancePort
+from ..adapters.sister_platform.factory import get_sister_platform_attendance_service
 
 PREVISIBLE_MOTIVES = [
     "cita_medica",
@@ -23,14 +25,24 @@ MANDATORY_SUPPORT_MOTIVES = [
 
 class HSEPolicyEngine:
     """
-    Motor Determinista de Reglas de Asistencia y Permanencia HSE (BE-05).
+    Motor Determinista de Reglas de Asistencia y Permanencia HSE (BE-05 & CONN-03).
     Traduce fielmente a código los lineamientos de la Team Leader de Riwi:
     - Validación de los 10 motivos oficiales de inasistencia.
     - Oportunidad temporal: Previsible vs Imprevisto vs Fuerza Mayor (máx 3 días).
     - Límite de 2 días para malestar sin incapacidad médica.
     - Tratamiento confidencial de situaciones sensibles (salud mental/emocional).
+    - Cotejo desacoplado con la API de Asistencia de Plataforma Hermana (CONN-03 / Arquitectura Hexagonal).
     - Evaluación de los 4 umbrales progresivos (Semanales y Mensuales).
     """
+
+    def __init__(self, attendance_adapter: Optional[SisterPlatformAttendancePort] = None):
+        self._attendance_adapter = attendance_adapter
+
+    @property
+    def attendance_adapter(self) -> SisterPlatformAttendancePort:
+        if self._attendance_adapter is None:
+            self._attendance_adapter = get_sister_platform_attendance_service()
+        return self._attendance_adapter
 
     @classmethod
     def parse_date(cls, date_str: str) -> date:
@@ -118,12 +130,54 @@ class HSEPolicyEngine:
             rule_triggered = "FALTA_INJUSTIFICADA"
             support_notes = "Ausencia sin causa válida o sin reporte oportuno conforme al Slide 2 del PPTX."
 
+        # 6. Cotejo con la Plataforma Hermana (CONN-03 / EPIC-06)
+        absence_verified = False
+        external_absence_status = None
+        sister_platform_notes = "Cotejo no realizado (no se suministró coder_id o verificación desactivada)."
+
+        if payload.coder_id and payload.verify_external_attendance:
+            verification = self.attendance_adapter.verify_absence(
+                coder_id=payload.coder_id,
+                start_date=start_d,
+                end_date=end_d
+            )
+            if verification.has_records:
+                if verification.is_absent_recorded:
+                    absence_verified = True
+                    external_absence_status = "ABSENT"
+                    sister_platform_notes = (
+                        f"Inasistencia (ABSENT) verificada exitosamente en la plataforma hermana: "
+                        f"{verification.details}"
+                    )
+                else:
+                    external_absence_status = "PRESENT"
+                    absence_verified = False
+                    sister_platform_notes = (
+                        f"Inconsistencia detectada: La plataforma hermana no registra inasistencia (ABSENT), "
+                        f"sino presencia ({', '.join(verification.present_days)}). "
+                        f"Requiere validación manual con Team Leader."
+                    )
+                    # Si no es un caso ya catalogado como sensible o inválido, marcar inconsistencia
+                    if not is_sensitive and decision == "POSIBLEMENTE_VALIDO":
+                        decision = "POSIBLEMENTE_INVALIDO"
+                        escalate_to_hse = True
+                        rule_triggered = "REGISTRO_PRESENTE_CONTRADICTORIO"
+                        confidence = 0.92
+            else:
+                external_absence_status = "NO_RECORDS"
+                absence_verified = False
+                sister_platform_notes = (
+                    f"Sin registros remotos: No se encontraron registros de asistencia para coder "
+                    f"'{payload.coder_id}' entre {start_d} y {end_d}."
+                )
+
         # Resumen de recomendación
         rec_summary = (
             f"Veredicto: {decision}. Motivo: '{motive}' ({days} día(s)). "
             f"Oportunidad: {'Oportuno' if is_timely else 'Extemporáneo'}. "
             f"Soporte: {'Válido' if support_valid else 'Inválido/Incompleto'}. "
-            f"Escalamiento HSE: {'SÍ' if escalate_to_hse else 'NO'}."
+            f"Escalamiento HSE: {'SÍ' if escalate_to_hse else 'NO'}. "
+            f"Plataforma Hermana: {'ABSENT confirmado' if absence_verified else (external_absence_status or 'Sin cotejar')}."
         )
 
         return PolicyEvaluationResult(
@@ -138,7 +192,10 @@ class HSEPolicyEngine:
             is_sensitive=is_sensitive,
             requires_human_review=(decision == "REVISION_MANUAL" or escalate_to_hse),
             policy_rule_triggered=rule_triggered,
-            recommendation_summary=rec_summary
+            recommendation_summary=rec_summary,
+            absence_verified=absence_verified,
+            external_absence_status=external_absence_status,
+            sister_platform_notes=sister_platform_notes
         )
 
     def calculate_thresholds(
