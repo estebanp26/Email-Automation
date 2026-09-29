@@ -1,6 +1,6 @@
 -- =============================================================================
 -- SISTEMA DE AUTOMATIZACIÓN DE JUSTIFICACIONES RIWI / HSE
--- Script DDL de Migración a Supabase (PostgreSQL 15+ con RBAC)
+-- Script DDL de Base de Datos PostgreSQL — Migración 001
 -- Módulo: DB-01 — RBAC, Funciones de Rol, system_users, evidence_files y RLS
 -- Versión: 2.2
 -- =============================================================================
@@ -194,6 +194,35 @@ COMMENT ON COLUMN evidence_files.justification_id IS 'FK a justifications.id';
 COMMENT ON COLUMN evidence_files.spatial_boxes IS 'Coordenadas espaciales (rects) de OCR/PyMuPDF para resaltado en visor web';
 
 -- =============================================================================
+-- 5.1. TABLA attendance_records (Sincronización de Asistencias Externas)
+-- =============================================================================
+CREATE TABLE IF NOT EXISTS attendance_records (
+    id                  VARCHAR(100) PRIMARY KEY DEFAULT gen_random_uuid()::text,
+    coder_id            VARCHAR(100) NOT NULL REFERENCES coders(id) ON DELETE CASCADE,
+    justification_id    VARCHAR(100) REFERENCES justifications(id) ON DELETE SET NULL,
+    attendance_date     DATE          NOT NULL,
+    session_type        VARCHAR(50)   NOT NULL DEFAULT 'CLASE',
+    status              VARCHAR(30)   NOT NULL DEFAULT 'AUSENTE',
+    source_platform     VARCHAR(100),
+    external_record_id  VARCHAR(255),
+    synced_at           TIMESTAMPTZ   NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_at          TIMESTAMPTZ   NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at          TIMESTAMPTZ   NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT uq_attendance_coder_date_session UNIQUE (coder_id, attendance_date, session_type),
+    CONSTRAINT chk_attendance_status CHECK (
+        status IN ('PRESENTE', 'AUSENTE', 'TARDANZA', 'EXCUSADO')
+    ),
+    CONSTRAINT chk_session_type CHECK (
+        session_type IN ('CLASE', 'TALLER', 'EVALUACION', 'OTRO')
+    )
+);
+
+COMMENT ON TABLE attendance_records IS 'Registros de asistencia sincronizados desde la plataforma hermana con enlace a coders y justificaciones.';
+COMMENT ON COLUMN attendance_records.coder_id IS 'FK obligatoria al coder. Al eliminar un coder se eliminan sus registros en cascada.';
+COMMENT ON COLUMN attendance_records.justification_id IS 'FK opcional a justifications. Se asigna cuando existe una excusa radicada para esta inasistencia.';
+COMMENT ON COLUMN attendance_records.status IS 'Estado del registro: PRESENTE, AUSENTE, TARDANZA o EXCUSADO.';
+
+-- =============================================================================
 -- 6. ÍNDICES DE RENDIMIENTO (Performance Tuning)
 -- =============================================================================
 CREATE INDEX idx_coders_email ON coders(email);
@@ -218,6 +247,12 @@ CREATE INDEX idx_justifications_attachments ON justifications USING GIN (attachm
 
 CREATE INDEX idx_evidence_files_justification_id ON evidence_files(justification_id);
 CREATE INDEX idx_evidence_files_created_at ON evidence_files(created_at DESC);
+
+CREATE INDEX idx_attendance_coder_id ON attendance_records(coder_id);
+CREATE INDEX idx_attendance_date ON attendance_records(attendance_date DESC);
+CREATE INDEX idx_attendance_status ON attendance_records(status);
+CREATE INDEX idx_attendance_justification_id ON attendance_records(justification_id);
+CREATE INDEX idx_attendance_synced_at ON attendance_records(synced_at DESC);
 
 -- =============================================================================
 -- 7. FUNCIONES DE CONVENIENCIA Y GESTIÓN DE ROLES / SESIÓN (RBAC)
@@ -574,6 +609,76 @@ AFTER INSERT ON evidence_files
 FOR EACH ROW
 EXECUTE FUNCTION fn_sync_evidence_file_to_attachments();
 
+CREATE TRIGGER trg_inbound_emails_updated_at
+BEFORE UPDATE ON inbound_emails
+FOR EACH ROW
+EXECUTE FUNCTION update_updated_at_column();
+
+-- Triggers para attendance_records
+CREATE TRIGGER trg_attendance_records_updated_at
+BEFORE UPDATE ON attendance_records
+FOR EACH ROW
+EXECUTE FUNCTION update_updated_at_column();
+
+CREATE OR REPLACE FUNCTION fn_auto_link_attendance_to_justification()
+RETURNS TRIGGER AS $$
+DECLARE
+    v_just_id VARCHAR(100);
+BEGIN
+    IF NEW.justification_id IS NOT NULL THEN
+        IF NEW.status = 'AUSENTE' THEN
+            NEW.status := 'EXCUSADO';
+        END IF;
+        RETURN NEW;
+    END IF;
+
+    IF NEW.status = 'AUSENTE' THEN
+        SELECT j.id INTO v_just_id
+        FROM justifications j
+        WHERE j.coder_id = NEW.coder_id
+          AND NEW.attendance_date BETWEEN j.start_date AND j.end_date
+          AND j.validation_status = 'APPROVED'
+        ORDER BY j.created_at DESC
+        LIMIT 1;
+
+        IF v_just_id IS NOT NULL THEN
+            NEW.justification_id := v_just_id;
+            NEW.status := 'EXCUSADO';
+        END IF;
+    END IF;
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_attendance_records_auto_link ON attendance_records;
+CREATE TRIGGER trg_attendance_records_auto_link
+BEFORE INSERT OR UPDATE OF coder_id, attendance_date, status ON attendance_records
+FOR EACH ROW
+EXECUTE FUNCTION fn_auto_link_attendance_to_justification();
+
+CREATE OR REPLACE FUNCTION fn_sync_approved_justification_to_attendance()
+RETURNS TRIGGER AS $$
+BEGIN
+    IF NEW.validation_status = 'APPROVED' AND (OLD.validation_status IS NULL OR OLD.validation_status != 'APPROVED') THEN
+        UPDATE attendance_records
+        SET justification_id = NEW.id,
+            status = 'EXCUSADO',
+            updated_at = CURRENT_TIMESTAMP
+        WHERE coder_id = NEW.coder_id
+          AND attendance_date BETWEEN NEW.start_date AND NEW.end_date
+          AND status = 'AUSENTE';
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_sync_justification_approved_attendance ON justifications;
+CREATE TRIGGER trg_sync_justification_approved_attendance
+AFTER UPDATE OF validation_status ON justifications
+FOR EACH ROW
+EXECUTE FUNCTION fn_sync_approved_justification_to_attendance();
+
 -- =============================================================================
 -- 9. CONFIGURACIÓN DE SEGURIDAD POR FILA (Row Level Security - RLS)
 -- =============================================================================
@@ -586,6 +691,8 @@ ALTER TABLE evidence_files FORCE ROW LEVEL SECURITY;
 
 ALTER TABLE system_users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE system_users FORCE ROW LEVEL SECURITY;
+
+ALTER TABLE attendance_records ENABLE ROW LEVEL SECURITY;
 
 -- -----------------------------------------------------------------------------
 -- 9.1. Políticas RLS para justifications
@@ -728,8 +835,42 @@ USING (
     OR email = fn_get_current_user_id()
 );
 
+-- -----------------------------------------------------------------------------
+-- 9.4. Políticas RLS para attendance_records
+-- -----------------------------------------------------------------------------
+CREATE POLICY p_attendance_records_select ON attendance_records
+FOR SELECT
+USING (
+    fn_check_user_role('HSE_ANALYST')
+    OR fn_get_current_user_role() IN ('HSE_ANALYST', 'HSE', 'TEAM_LEADER', 'ADMIN')
+    OR (CURRENT_USER IN ('postgres', 'hse_admin') AND fn_get_current_user_role() IS NULL)
+    OR coder_id = fn_get_current_user_id()
+    OR coder_id IN (
+        SELECT su.coder_id 
+        FROM system_users su 
+        WHERE (su.id = fn_get_current_user_id() OR su.email = fn_get_current_user_id())
+          AND su.coder_id IS NOT NULL
+    )
+);
+
+CREATE POLICY p_attendance_records_insert ON attendance_records
+FOR INSERT
+WITH CHECK (
+    fn_check_user_role('HSE_ANALYST')
+    OR fn_get_current_user_role() IN ('HSE_ANALYST', 'HSE', 'TEAM_LEADER', 'ADMIN')
+    OR (CURRENT_USER IN ('postgres', 'hse_admin') AND fn_get_current_user_role() IS NULL)
+);
+
+CREATE POLICY p_attendance_records_update ON attendance_records
+FOR UPDATE
+USING (
+    fn_check_user_role('HSE_ANALYST')
+    OR fn_get_current_user_role() IN ('HSE_ANALYST', 'HSE', 'TEAM_LEADER', 'ADMIN')
+    OR (CURRENT_USER IN ('postgres', 'hse_admin') AND fn_get_current_user_role() IS NULL)
+);
+
 -- =============================================================================
--- 10. VISTA DE CONSULTA OPTIMIZADA PARA EL DASHBOARD HSE (Con security_invoker)
+-- 10. VISTAS DE CONSULTA Y CONCILIACIÓN (Con security_invoker)
 -- =============================================================================
 CREATE OR REPLACE VIEW v_justifications_dashboard
 WITH (security_invoker = true) AS
@@ -774,6 +915,57 @@ LEFT JOIN hse_users u ON j.hse_user_id = u.id
 LEFT JOIN system_users su ON j.hse_user_id = su.id;
 
 COMMENT ON VIEW v_justifications_dashboard IS 'Vista enriquecida con trazabilidad completa de intervención humana y RLS invoker para el Dashboard HSE';
+
+CREATE OR REPLACE VIEW v_unjustified_absences
+WITH (security_invoker = true) AS
+SELECT
+    ar.id                                               AS record_id,
+    ar.attendance_date,
+    ar.session_type,
+    ar.status,
+    ar.source_platform,
+    ar.external_record_id,
+    ar.synced_at,
+
+    -- Datos del coder
+    c.id                                                AS coder_id,
+    c.full_name                                         AS coder_name,
+    c.email                                             AS coder_email,
+    c.cedula                                            AS coder_cedula,
+    c.route                                             AS coder_route,
+    c.is_active                                         AS coder_is_active,
+
+    -- Días transcurridos sin justificación
+    CURRENT_DATE - ar.attendance_date                   AS days_without_justification,
+
+    -- Alerta si existe una justificación en trámite (revisión manual o pendiente)
+    CASE 
+        WHEN pj.id IS NOT NULL THEN TRUE 
+        ELSE FALSE 
+    END                                                 AS has_pending_justification,
+    pj.id                                               AS pending_justification_id,
+    pj.validation_status                                AS pending_justification_status
+
+FROM attendance_records ar
+INNER JOIN coders c ON ar.coder_id = c.id
+LEFT JOIN LATERAL (
+    SELECT j.id, j.validation_status
+    FROM justifications j
+    WHERE j.coder_id = ar.coder_id
+      AND ar.attendance_date BETWEEN j.start_date AND j.end_date
+      AND j.validation_status NOT IN ('APPROVED', 'DISAPPROVED')
+    ORDER BY j.created_at DESC
+    LIMIT 1
+) pj ON TRUE
+WHERE
+    ar.status = 'AUSENTE'
+    AND ar.justification_id IS NULL
+    AND c.is_active = TRUE
+ORDER BY
+    ar.attendance_date DESC,
+    c.full_name ASC;
+
+COMMENT ON VIEW v_unjustified_absences IS 'Vista unificada de inasistencias sin justificación radicada. Filtra registros AUSENTE sin justification_id asignado para coders activos.';
 
 
 -- =============================================================================

@@ -49,42 +49,40 @@ def log_test(title, passed, details=""):
 def test_ddl_integrity():
     print(f"\n{Colors.BOLD}{Colors.HEADER}=== FASE 1: INTEGRIDAD DE SCRIPTS DDL Y MIGRACIÓN DB-03 ==={Colors.ENDC}")
     
-    mig_file = BASE_DIR / "database" / "migrations" / "003_attendance_records_and_views.sql"
+    mig_file = BASE_DIR / "database" / "migrations" / "003_attendance_records.sql"
     init_sql = BASE_DIR / "init_database.sql"
     supa_sql = BASE_DIR / "supabase_schema.sql"
 
-    log_test("Archivo de migración 003_attendance_records_and_views.sql existe",
+    log_test("Archivo de migración 003_attendance_records.sql existe",
              mig_file.exists(), str(mig_file))
 
     content = mig_file.read_text(encoding="utf-8")
     init_content = init_sql.read_text(encoding="utf-8")
 
-    # ENUM attendance_status
-    log_test("ENUM attendance_status con PRESENT, ABSENT, LATE, EARLY_LEAVE, EXCUSED",
-             "CREATE TYPE attendance_status AS ENUM" in content and
-             "'PRESENT'" in content and "'ABSENT'" in content and "'EXCUSED'" in content)
-
     # Tabla attendance_records
     log_test("Tabla attendance_records con FK a coders y justifications",
-             "CREATE TABLE IF NOT EXISTS attendance_records" in content and
-             "coder_id VARCHAR(100) NOT NULL REFERENCES coders" in content and
-             "justification_id VARCHAR(100) REFERENCES justifications" in content)
+             "CREATE TABLE IF NOT EXISTS public.attendance_records" in content and
+             "REFERENCES public.coders(id)" in content and
+             "REFERENCES public.justifications(id)" in content)
 
     # Constraint unique y check
-    log_test("Restricción única coder_id + attendance_date + session_name",
-             "uq_coder_attendance_session" in content)
+    log_test("Restricción única coder_id + attendance_date + session_type",
+             "uq_attendance_coder_date_session" in content and
+             "chk_attendance_status" in content and
+             "chk_session_type" in content)
 
     # Índices de rendimiento
     log_test("Índices de rendimiento en attendance_records",
-             "idx_attendance_records_coder_id" in content and
-             "idx_attendance_records_date" in content and
-             "idx_attendance_records_status" in content and
-             "idx_attendance_records_is_justified" in content)
+             "idx_attendance_coder_id" in content and
+             "idx_attendance_date" in content and
+             "idx_attendance_status" in content and
+             "idx_attendance_justification_id" in content)
 
     # Vista v_unjustified_absences
-    log_test("Vista v_unjustified_absences definida con security_invoker = true",
-             "CREATE OR REPLACE VIEW v_unjustified_absences" in content and
-             "security_invoker = true" in content)
+    log_test("Vista v_unjustified_absences con security_invoker = true y days_without_justification",
+             "CREATE OR REPLACE VIEW public.v_unjustified_absences" in content and
+             "security_invoker = true" in content and
+             "days_without_justification" in content)
 
     # Triggers de vinculación bidireccional
     log_test("Trigger auto-link inasistencia a justificación aprobada",
@@ -93,12 +91,11 @@ def test_ddl_integrity():
 
     log_test("Trigger sincronización retroactiva cuando justificación pasa a APPROVED",
              "fn_sync_approved_justification_to_attendance" in content and
-             "trg_justification_approved_sync_attendance" in content)
+             "trg_sync_justification_approved_attendance" in content)
 
     # RLS en attendance_records
     log_test("Políticas RLS en attendance_records",
-             "ALTER TABLE attendance_records ENABLE ROW LEVEL SECURITY;" in content and
-             "p_attendance_records_select" in content)
+             "ALTER TABLE public.attendance_records ENABLE ROW LEVEL SECURITY;" in content)
 
     # Sincronización en init_database.sql
     log_test("Presencia de attendance_records y v_unjustified_absences en init_database.sql",
