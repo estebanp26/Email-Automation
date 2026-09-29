@@ -13,6 +13,7 @@ class PolicyEvaluationInput(BaseModel):
     is_sensitive: bool = Field(default=False, description="Indica si contiene datos sensibles de salud mental o calamidad íntima")
     unjustified_history_week: int = Field(default=0, description="Inasistencias injustificadas acumuladas esta semana")
     unjustified_history_month: int = Field(default=0, description="Inasistencias injustificadas acumuladas este mes")
+    verify_external_attendance: bool = Field(default=True, description="Indica si debe consultar el adaptador de la plataforma hermana")
 
 class PolicyEvaluationResult(BaseModel):
     decision: str = Field(..., description="POSIBLEMENTE_VALIDO | POSIBLEMENTE_INVALIDO | REVISION_MANUAL")
@@ -27,6 +28,10 @@ class PolicyEvaluationResult(BaseModel):
     requires_human_review: bool
     policy_rule_triggered: str
     recommendation_summary: str
+    # Integración Plataforma Hermana (CONN-03 / EPIC-06)
+    absence_verified: bool = Field(default=False, description="True si la inasistencia (ABSENT) fue confirmada en la plataforma hermana")
+    external_absence_status: Optional[str] = Field(default=None, description="Estado reportado por la plataforma hermana: ABSENT, PRESENT, NO_RECORDS")
+    sister_platform_notes: Optional[str] = Field(default=None, description="Detalles del cotejo realizado con el adaptador de asistencia")
 
 class AttendanceThresholdSummary(BaseModel):
     coder_id: str
