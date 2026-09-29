@@ -574,6 +574,11 @@ AFTER INSERT ON evidence_files
 FOR EACH ROW
 EXECUTE FUNCTION fn_sync_evidence_file_to_attachments();
 
+CREATE TRIGGER trg_inbound_emails_updated_at
+BEFORE UPDATE ON inbound_emails
+FOR EACH ROW
+EXECUTE FUNCTION update_updated_at_column();
+
 -- =============================================================================
 -- 9. CONFIGURACIÓN DE SEGURIDAD POR FILA (Row Level Security - RLS)
 -- =============================================================================
