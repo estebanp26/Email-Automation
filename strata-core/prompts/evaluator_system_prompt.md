@@ -21,11 +21,12 @@ IMPORTANTE: El sistema NO emite decisiones definitivas vinculantes ni aprueba/de
 ---
 
 ## 1. REGLAS ESTRICTAS DE CLASIFICACIÓN (`tipo_novedad`):
+- **`inasistencia_medica`**: Ausencia de jornada completa o varios días por enfermedad SOPORTADA con incapacidad médica formal expedida por EPS o IPS reconocida con sello y días de reposo.
+- **`enfermedad_sin_soporte`**: Reporte de quebranto de salud, malestar general, fiebre, migraña, dolor o vómito donde el estudiante NO adjunta incapacidad formal de EPS/IPS (o solo remite receta/texto). Se clasifica aquí para que el sistema contabilice la gabela institucional de hasta 2 faltas por malestar en 30 días.
 - **`calamidad`**: Si el correo menciona fallecimiento de un familiar, luto, trámites funerarios, emergencia familiar grave o desastre en la vivienda. NUNCA lo clasifiques como inasistencia médica.
 - **`salida_temprana`**: Si el estudiante pide permiso para retirarse antes de finalizar la jornada (por ejemplo, salir 1 o 2 horas antes de que termine la clase) con constancia de cita médica, odontológica o trámite. NUNCA lo clasifiques como tardanza ni inasistencia médica.
 - **`tardanza`**: EXCLUSIVAMENTE si el estudiante ingresa tarde al inicio de la jornada justificando el retraso matutino.
 - **`falla_tecnica`**: Si se reporta interrupción de energía o corte de internet con radicado, ticket de soporte o captura de pantalla del operador (Tigo, Claro, Movistar, ETB).
-- **`inasistencia_medica`**: Ausencia de jornada completa o varios días por enfermedad o incapacidad médica.
 - **`tramite_oficial`**: Si es una citación judicial, pasaporte, fiscalía, notaría o servicio militar.
 - **`no_identificado`**: Para spam publicitario, correos vacíos o imágenes totalmente ilegibles.
 
@@ -49,6 +50,7 @@ Aplica a casos que preliminarmente presentan incumplimientos evidentes de polít
 
 ### C. `REVISION_MANUAL` (`valido: false`, `requiere_revision_manual: true`):
 Aplica a situaciones ambiguas, complejas o con soporte deficiente que exigen el criterio humano y acompañamiento de Paola:
+- **Enfermedad sin Soporte / Malestar General:** Relatos de enfermedad, fiebre, migraña, cólicos, vómito o malestar general donde el estudiante NO adjunta constancia formal de reposo de EPS/IPS (o solo envía receta/fórmula). Se clasifica como `tipo_novedad: "enfermedad_sin_soporte"` y `REVISION_MANUAL` para que el sistema y HSE verifiquen si el coder está dentro de la tolerancia de 2 faltas en 30 días.
 - **Salud Mental y Casos de Alta Sensibilidad:** Solicitudes que refieran crisis de ansiedad, depresión, duelo severo o problemas de seguridad personal. Se debe marcar `REVISION_MANUAL` y sugerir en `motivo_decision`: "Situación de alta sensibilidad; se sugiere remitir a conversación presencial con el área de HSE".
 - **Calamidad Doméstica en Texto Plano:** Relatos de duelo o emergencias sin documento soporte adjunto (recordar que cuentan con hasta 3 días hábiles para radicar el acta o soporte).
 - **Soportes Ilegibles o Borrosos:** Fotografías donde no se aprecian fechas, diagnósticos o sellos.

@@ -318,8 +318,13 @@ async def evaluate_excuse(
             elif "formula" in text_eval or "farmacia" in text_eval or "orden medica" in text_eval:
                 categoria_sugerida = "REVISION_MANUAL"
                 confianza_score = 0.65
-                tipo_novedad = "inasistencia_medica"
+                tipo_novedad = "enfermedad_sin_soporte"
                 motivo_decision = "El soporte suministrado corresponde a una fórmula o prescripción de farmacia y no a un certificado oficial de incapacidad EPS con días de reposo."
+            elif any(w in text_eval for w in ["fiebre", "malestar", "vomit", "vómit", "colico", "cólico", "diarrea", "migraña", "indispuest", "descompuest", "enfermo", "quebranto", "dolor de cabeza"]):
+                categoria_sugerida = "REVISION_MANUAL"
+                confianza_score = 0.82
+                tipo_novedad = "enfermedad_sin_soporte"
+                motivo_decision = "Reporte de quebranto de salud o malestar general sin incapacidad formal de EPS/IPS adjunta. Sujeto a verificación de tolerancia (hasta 2 faltas en 30 días)."
             elif "registraduria" in text_eval or "cedula" in text_eval or "tramite" in text_eval or "pasaporte" in text_eval:
                 categoria_sugerida = "REVISION_MANUAL"
                 confianza_score = 0.72
@@ -379,7 +384,7 @@ async def evaluate_excuse(
             requiere_revision_manual = (categoria_sugerida == "REVISION_MANUAL")
 
             tipo_novedad = ai_verdict.get("tipo_novedad") or "no_identificado"
-            valid_types = ["inasistencia_medica", "calamidad", "tramite_oficial", "falla_tecnica", "tardanza", "salida_temprana", "no_identificado"]
+            valid_types = ["inasistencia_medica", "enfermedad_sin_soporte", "calamidad", "tramite_oficial", "falla_tecnica", "tardanza", "salida_temprana", "no_identificado"]
             if tipo_novedad not in valid_types:
                 tipo_novedad = "no_identificado"
                 
@@ -411,12 +416,30 @@ async def evaluate_excuse(
         doc_text_lower = " ".join([p.get("text", "") for p in doc_data.get("pages", [])]).lower()
         full_text_lower = text_lower + " " + doc_text_lower
 
-        if any(w in text_lower for w in ["falleci", "luto", "funerari", "entierro", "calamidad"]):
+        is_calamidad_event = any(w in text_lower for w in [
+            "falleci", "luto", "funerari", "entierro", "duelo", "calamidad",
+            "inundaci", "incendio", "derrumbe", "desastre", "bomberos",
+            "emergencia familiar", "fuerza mayor", "emergencia grave"
+        ])
+        is_sickness_symptom = any(w in full_text_lower for w in [
+            "fiebre", "malestar", "gripe", "vomit", "vómit", "diarrea",
+            "migraña", "colico", "cólico", "dolor de cabeza", "enfermo",
+            "indispuest", "descompuest", "quebranto", "indisposición", "nausea", "náusea"
+        ])
+        has_formal_eps = any(eps in full_text_lower for eps in [
+            "sanitas", "sura", "compensar", "famisanar", "salud total",
+            "nueva eps", "coosalud", "mutual ser", "colsanitas", "medimas"
+        ]) and any(m in full_text_lower for m in [
+            "incapacidad", "dias de reposo", "días de reposo", "orden de reposo", "incapacidad temporal"
+        ])
+
+        if is_calamidad_event and not is_sickness_symptom:
             tipo_novedad = "calamidad"
             if not temp_file_path:
                 categoria_sugerida = "REVISION_MANUAL"
                 valido = False
                 requiere_revision_manual = True
+                motivo_decision = "Calamidad doméstica o contingencia de fuerza mayor reportada en texto. Cuenta con hasta 72 horas hábiles para radicar el soporte."
 
         if any(w in full_text_lower for w in ["ansiedad", "depresion", "depresión", "panico", "pánico", "salud mental", "psicolog", "psiquiatr", "crisis emocional"]):
             tipo_novedad = "calamidad"
@@ -445,6 +468,16 @@ async def evaluate_excuse(
                 confianza_score = 0.94
                 motivo_decision = "Cita médica programada notificada con antelación reglamentaria antes del día de entrenamiento y constancia adjunta."
 
+        # Guardrail para malestar general / enfermedad sin incapacidad formal de EPS
+        if (is_sickness_symptom or (tipo_novedad in ["inasistencia_medica", "enfermedad_sin_soporte"] and not is_calamidad_event)) and not is_cita_programada:
+            if not temp_file_path or not has_formal_eps:
+                tipo_novedad = "enfermedad_sin_soporte"
+                categoria_sugerida = "REVISION_MANUAL"
+                valido = False
+                requiere_revision_manual = True
+                confianza_score = 0.88
+                motivo_decision = "Reporte de malestar general / enfermedad sin incapacidad formal de EPS/IPS adjunta. Requiere validación de gabela de hasta 2 faltas en 30 días."
+
         if any(w in text_lower for w in ["retirarme", "salir antes", "salida temprana"]):
             tipo_novedad = "salida_temprana"
             if any(w in full_text_lower for w in ["odontolog", "dental", "procedimiento", "cita"]):
@@ -452,12 +485,24 @@ async def evaluate_excuse(
                 valido = True
                 requiere_revision_manual = False
 
-        if any(w in full_text_lower for w in ["ticket", "fibra", "tigo", "claro", "movistar", "sin internet"]):
+        is_falla_tecnica_word = any(w in full_text_lower for w in [
+            "falla tecnica", "falla técnica", "sin internet", "no tengo internet",
+            "corte de internet", "corte de luz", "corte de fluido", "corte de energía",
+            "corte de energia", "fluido electrico", "fluido eléctrico", "fibra", "tigo",
+            "claro", "movistar", "etb", "ticket", "se cayó la red", "se cayo la red",
+            "problemas con el internet"
+        ])
+        if is_falla_tecnica_word:
             tipo_novedad = "falla_tecnica"
             if temp_file_path:
                 categoria_sugerida = "POSIBLEMENTE_VALIDO"
                 valido = True
                 requiere_revision_manual = False
+            else:
+                categoria_sugerida = "REVISION_MANUAL"
+                valido = False
+                requiere_revision_manual = True
+                motivo_decision = "Reporte de falla técnica o corte de conectividad sin radicado ni comprobante adjunto. Requiere verificación de ticket técnico."
 
         if any(w in text_lower for w in ["descuento", "cursos de", "promocion", "suscripciones"]):
             tipo_novedad = "no_identificado"
@@ -477,10 +522,17 @@ async def evaluate_excuse(
             is_particular = any(w in full_text_lower for w in ["particular", "sin registro", "sin sello"])
             is_formula = any(w in full_text_lower for w in ["formula", "farmacia", "receta", "medicamentos"]) and "dias de reposo" not in full_text_lower and "días de reposo" not in full_text_lower and "incapacidad temporal" not in full_text_lower
 
-            if is_extemporanea or is_particular or is_formula:
+            if is_extemporanea or is_particular:
                 categoria_sugerida = "POSIBLEMENTE_INVALIDO"
                 valido = False
                 requiere_revision_manual = False
+                tipo_novedad = "inasistencia_medica"
+            elif is_formula:
+                categoria_sugerida = "REVISION_MANUAL"
+                valido = False
+                requiere_revision_manual = True
+                tipo_novedad = "enfermedad_sin_soporte"
+                motivo_decision = "El soporte suministrado corresponde a una fórmula o prescripción de farmacia y no a un certificado oficial de incapacidad EPS con días de reposo."
             else:
                 categoria_sugerida = "POSIBLEMENTE_VALIDO"
                 valido = True
