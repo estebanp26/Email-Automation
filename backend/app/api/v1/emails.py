@@ -1,6 +1,13 @@
 from fastapi import APIRouter, HTTPException, status
 from typing import Dict, Any, List
 
+from ...core.security_file import (
+    PathTraversalException,
+    MalwareDetectedException,
+    ContentSpoofingException,
+    PayloadTooLargeException,
+    SecurityValidationException,
+)
 from ...schemas.email import (
     RawEmailInput,
     NormalizedEmail,
@@ -33,16 +40,41 @@ async def ingest_email(payload: RawEmailInput):
     """
     Punto de entrada nativo para correos entrantes de Outlook Graph, Gmail Pub/Sub o Conectores.
     
-    Aplica el pipeline de normalización:
+    Aplica el pipeline de normalización y seguridad estricta (QA-01):
     1. Limpieza y desduplicación de remitentes y asuntos (RFC 822).
     2. Stripping de firmas, HTML y citas de hilos anteriores.
-    3. Validación y hash SHA-256 de adjuntos médicos y soportes.
+    3. Inspección de Magic Bytes, detección de malware/EICAR y bloqueo de Path Traversal.
     4. Comprobación de copia obligatoria a `formacion.barranquilla@riwi.io` (Slide 5 PPTX).
     5. Extracción preliminar de cédula, fechas, clan y motivo tipificado.
     """
     try:
-        response = email_normalizer.ingest(payload)
+        response = email_normalizer.ingest(payload, strict=True)
         return response
+    except PathTraversalException as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Error de seguridad (Path Traversal): {e.message}"
+        )
+    except MalwareDetectedException as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Error de seguridad (Malware Detectado): {e.message}"
+        )
+    except ContentSpoofingException as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Error de seguridad (Falsificación de Archivo / MIME): {e.message}"
+        )
+    except PayloadTooLargeException as e:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail=f"Error de seguridad (Límite de Tamaño Excedido): {e.message}"
+        )
+    except SecurityValidationException as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Error de seguridad en adjunto: {e.message}"
+        )
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -93,7 +125,7 @@ async def simulate_incoming_email(scenario: str = "incapacidad_sura"):
             attachments=[{
                 "filename": "incapacidad_sura_20260928.pdf",
                 "mime_type": "application/pdf",
-                "data_base64": "JVBERi0xLjQKJcTl8uXr...Cg==",
+                "data_base64": "JVBERi0xLjQKMSAwIG9iajw8L1R5cGUvQ2F0YWxvZy9QYWdlcyAyIDAgUj4+ZW5kb2JqIDIgMCBvYmo8PC9UeXBlL1BhZ2VzL0tpZHNbMyAwIFJdL0NvdW50IDE+PmVuZG9iaiAzIDAgb2JqPDwvVHlwZS9QYWdlL01lZGlhQm94WzAgMCAzMDAgMTQ0XT4+ZW5kb2JqCnhyZWYKMCA0CjAwMDAwMDAwMDAgNjU1MzUgZiAKMDAwMDAwMDAxOCAwMDAwMCBuIAowMDAwMDAwMDc3IDAwMDAwIG4gCjAwMDAwMDAxNzggMDAwMDAgbiAKdHJhaWxlcjw8L1Jvb3QgMSAwIFIvU2l6ZSA0Pj4Kc3RhcnR4cmVmCjIyNQolJUVPRgo=",
                 "size_bytes": 1024
             }]
         ),

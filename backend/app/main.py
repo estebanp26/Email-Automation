@@ -21,7 +21,7 @@ app = FastAPI(
     """
 )
 
-# Configuración de CORS
+# Configuración de Middlewares
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.ALLOWED_ORIGINS,
@@ -29,6 +29,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+from .core.middleware import RequestSizeLimitMiddleware
+app.add_middleware(RequestSizeLimitMiddleware, max_upload_size_bytes=20 * 1024 * 1024)
 
 # Montaje de Routers API v1
 app.include_router(emails_router, prefix=settings.API_V1_PREFIX)
