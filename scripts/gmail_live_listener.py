@@ -277,19 +277,31 @@ def listen_inbox(user: str, password: str, webhook_url: str, poll_interval: int 
             mail = imaplib.IMAP4_SSL("imap.gmail.com", 993)
             mail.login(clean_user, clean_pwd)
             mail.select("INBOX")
-            print(f"{GREEN}[✓] Conexión IMAP autenticada con éxito. Escuchando activamente...{RESET}")
+            
+            # Obtener el UID más alto actual para ignorar todos los 2900+ correos antiguos al instante
+            status, data = mail.uid("search", None, "ALL")
+            all_uids = [int(x) for x in data[0].split()] if (status == "OK" and data and data[0]) else []
+            last_uid = all_uids[-1] if all_uids else 0
+            
+            print(f"{GREEN}[✓] Conexión IMAP autenticada con éxito.{RESET}")
+            print(f"{GREEN}[✓] Marcador fijado en el correo más reciente (UID={last_uid}).{RESET}")
+            print(f"{CYAN}[✓] Se omiten al 100% los {len(all_uids)} correos existentes en el buzón.{RESET}")
+            print(f"{BOLD}[⚡] Escuchando EXCLUSIVAMENTE correos que lleguen a partir de este instante...{RESET}\n")
 
             while True:
-                status, response = mail.search(None, "UNSEEN")
-                if status == "OK" and response[0]:
-                    email_ids = response[0].split()
-                    for eid in email_ids:
-                        status, data = mail.fetch(eid, "(RFC822)")
-                        if status == "OK" and data:
-                            raw_email = data[0][1]
+                # Búsqueda ultra-rápida únicamente de UIDs mayores que last_uid
+                status, response = mail.uid("search", None, f"UID {last_uid + 1}:*")
+                if status == "OK" and response and response[0]:
+                    new_uids = [int(x) for x in response[0].split() if int(x) > last_uid]
+                    for uid_int in sorted(new_uids):
+                        uid_str = str(uid_int)
+                        st, fetch_data = mail.uid("fetch", uid_str, "(RFC822)")
+                        if st == "OK" and fetch_data and fetch_data[0]:
+                            raw_email = fetch_data[0][1]
                             process_message(raw_email, webhook_url, cutoff_time)
-                            # Marcar como visto para no repetir procesamiento
-                            mail.store(eid, "+FLAGS", "\\Seen")
+                            # Marcar como visto
+                            mail.uid("store", uid_str, "+FLAGS", "(\\Seen)")
+                        last_uid = max(last_uid, uid_int)
 
                 time.sleep(poll_interval)
                 mail.noop()
