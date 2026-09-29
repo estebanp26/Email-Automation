@@ -482,8 +482,36 @@ class OutlookGraphClient:
 
 
 # =============================================================================
-# DESPACHADOR A N8N WEBHOOK
+# DESPACHADORES: FASTAPI BACKEND NATIVO Y N8N WEBHOOK
 # =============================================================================
+
+def forward_to_inbound_api(
+    payload: Dict[str, Any],
+    api_url: str = "http://localhost:8001/api/v1/inbound-email",
+    timeout: int = 30
+) -> Dict[str, Any]:
+    """Envía un payload de correo normalizado al controlador nativo FastAPI POST /api/v1/inbound-email."""
+    req_data = json.dumps(payload).encode("utf-8")
+    req = urllib.request.Request(
+        api_url,
+        data=req_data,
+        headers={"Content-Type": "application/json"},
+        method="POST"
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            res_body = resp.read().decode("utf-8")
+            return {
+                "status": "SUCCESS",
+                "code": resp.status,
+                "response": json.loads(res_body) if res_body else {}
+            }
+    except urllib.error.HTTPError as e:
+        err_body = e.read().decode("utf-8") if hasattr(e, "read") else str(e)
+        return {"status": "HTTP_ERROR", "code": e.code, "error": err_body}
+    except urllib.error.URLError as e:
+        return {"status": "CONNECTION_ERROR", "code": None, "error": str(e.reason)}
+
 
 def forward_to_n8n_webhook(
     payload: Dict[str, Any],
@@ -608,6 +636,8 @@ def main():
     parser.add_argument("--password", default=os.getenv("OUTLOOK_PASSWORD"), help="Contraseña o App Password de Outlook")
     parser.add_argument("--host", default=os.getenv("OUTLOOK_HOST", "outlook.office365.com"), help="Servidor IMAP de Outlook")
     parser.add_argument("--port", type=int, default=int(os.getenv("OUTLOOK_PORT", 993)), help="Puerto IMAP SSL")
+    parser.add_argument("--forward-api", action="store_true", help="Reenvía cada correo procesado al endpoint nativo FastAPI /api/v1/inbound-email")
+    parser.add_argument("--api-url", default=os.getenv("INBOUND_API_URL", "http://localhost:8001/api/v1/inbound-email"), help="URL del endpoint de ingesta FastAPI")
     parser.add_argument("--forward-n8n", action="store_true", help="Reenvía cada correo procesado al webhook de n8n")
     parser.add_argument("--webhook-url", default=os.getenv("N8N_WEBHOOK_URL", "http://localhost:5678/webhook/riwi-email-incoming"), help="URL del webhook de n8n")
     parser.add_argument("--once", action="store_true", help="Ejecuta un solo barrido y termina")
@@ -639,6 +669,9 @@ def main():
 
                 for mail in emails:
                     print(f" • [{mail['received_at']}] De: {mail['sender_name']} <{mail['sender_email']}> | Asunto: {mail['email_subject']}")
+                    if args.forward_api:
+                        res = forward_to_inbound_api(mail, api_url=args.api_url)
+                        logger.info(f"Reenvío a Inbound API: {res.get('status')} (Code: {res.get('code')})")
                     if args.forward_n8n:
                         res = forward_to_n8n_webhook(mail, webhook_url=args.webhook_url)
                         logger.info(f"Reenvío a n8n: {res['status']}")
