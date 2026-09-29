@@ -1,4 +1,3 @@
-import { mockStudents, mockEmails, mockRequests, mockStats, mockRequestsPerWeek } from '../data/mock';
 import { dispatchHseDecision, type HseDecisionPayload } from './n8n';
 import type { Request, Student, KPIStats } from '../types';
 
@@ -13,9 +12,17 @@ export const api = {
         return data;
       }
     } catch (e) {
-      console.warn('Fallo al obtener KPIs del backend, usando respaldo:', e);
+      console.warn('Fallo al obtener KPIs del backend:', e);
     }
-    return mockStats;
+    return {
+      total: 0,
+      approved: 0,
+      denied: 0,
+      pending: 0,
+      revisadas: 0,
+      por_revisar: 0,
+      approval_rate: 0
+    };
   },
 
   getRequestsPerWeek: async () => {
@@ -23,14 +30,14 @@ export const api = {
       const res = await fetch(`${API_BASE}/api/requests/weekly`);
       if (res.ok) {
         const data = await res.json();
-        if (Array.isArray(data) && data.length > 0) {
+        if (Array.isArray(data)) {
           return data;
         }
       }
     } catch (e) {
-      console.warn('Fallo al obtener datos semanales, usando respaldo:', e);
+      console.warn('Fallo al obtener datos semanales:', e);
     }
-    return mockRequestsPerWeek;
+    return [];
   },
 
   getRecentEmails: async () => {
@@ -38,14 +45,14 @@ export const api = {
       const res = await fetch(`${API_BASE}/api/requests/recent?limit=10`);
       if (res.ok) {
         const data = await res.json();
-        if (Array.isArray(data) && data.length > 0) {
+        if (Array.isArray(data)) {
           return data;
         }
       }
     } catch (e) {
-      console.warn('Fallo al obtener correos recientes, usando respaldo:', e);
+      console.warn('Fallo al obtener correos recientes:', e);
     }
-    return mockEmails;
+    return [];
   },
 
   getRequests: async (filters?: any): Promise<Request[]> => {
@@ -57,18 +64,14 @@ export const api = {
       const res = await fetch(`${API_BASE}/api/requests?${queryParams.toString()}`);
       if (res.ok) {
         const data = await res.json();
-        if (Array.isArray(data) && data.length > 0) {
+        if (Array.isArray(data)) {
           return data;
         }
       }
     } catch (e) {
-      console.warn('Fallo al obtener solicitudes reales, usando respaldo:', e);
+      console.warn('Fallo al obtener solicitudes reales:', e);
     }
-    let filtered = [...mockRequests];
-    if (filters?.status) {
-      filtered = filtered.filter((r) => r.status === filters.status);
-    }
-    return filtered;
+    return [];
   },
 
   getStudents: async (): Promise<Student[]> => {
@@ -76,14 +79,14 @@ export const api = {
       const res = await fetch(`${API_BASE}/api/students`);
       if (res.ok) {
         const data = await res.json();
-        if (Array.isArray(data) && data.length > 0) {
+        if (Array.isArray(data)) {
           return data;
         }
       }
     } catch (e) {
-      console.warn('Fallo al obtener estudiantes reales, usando respaldo:', e);
+      console.warn('Fallo al obtener estudiantes reales:', e);
     }
-    return mockStudents;
+    return [];
   },
 
   updateRequestStatus: async (id: string, status: any) => {
@@ -99,15 +102,11 @@ export const api = {
     } catch (e) {
       console.warn('No se pudo actualizar en DB:', e);
     }
-    const req = mockRequests.find((r) => r.id === id);
-    if (req) req.status = status;
-    return req;
+    return { id, status };
   },
 
   modifyAiDecision: async (id: string, decision: any) => {
-    const req = mockRequests.find((r) => r.id === id);
-    if (req) (req as any).decision = decision;
-    return req;
+    return { id, decision };
   },
 
   /**
@@ -143,7 +142,7 @@ export const api = {
 
     // 2. Construir objeto de solicitud actualizado para la interfaz
     const mappedStatus = action === 'APPROVED' ? 'approved' : action === 'DISAPPROVED' ? 'denied' : 'pending_review';
-    const baseReq = options?.requestObj || mockRequests.find((r) => r.id === id) || { id };
+    const baseReq = options?.requestObj || { id };
     const updatedRequest = {
       ...baseReq,
       status: mappedStatus,
