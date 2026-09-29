@@ -276,13 +276,21 @@ class EmailNormalizationService:
 
         # 5. Motivo presunto (Catálogo de 10 del PPTX)
         suspected_motive = "falta_injustificada"
-        for motive, patterns in OFFICIAL_MOTIVES_KEYWORDS.items():
-            for pat in patterns:
-                if re.search(pat, full_content, flags=re.IGNORECASE):
-                    suspected_motive = motive
-                    break
-            if suspected_motive != "falta_injustificada":
+        # Comprobar primero identificadores oficiales explícitos
+        for motive in OFFICIAL_MOTIVES_KEYWORDS.keys():
+            if re.search(r"\b" + re.escape(motive) + r"\b", full_content, flags=re.IGNORECASE) or \
+               re.search(r"\b" + re.escape(motive.replace("_", " ")) + r"\b", full_content, flags=re.IGNORECASE):
+                suspected_motive = motive
                 break
+
+        if suspected_motive == "falta_injustificada":
+            for motive, patterns in OFFICIAL_MOTIVES_KEYWORDS.items():
+                for pat in patterns:
+                    if re.search(pat, full_content, flags=re.IGNORECASE):
+                        suspected_motive = motive
+                        break
+                if suspected_motive != "falta_injustificada":
+                    break
 
         # 6. Sensibilidad (Slide 5 PPTX: 'Si contiene información que se considera sensible, remitir a HSE')
         is_sensitive = suspected_motive == "situacion_emocional_critica" or bool(

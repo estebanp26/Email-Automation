@@ -4,6 +4,7 @@ from .hse_engine import HSEPolicyEngine, hse_engine
 from .orchestrator import JustificationOrchestrator, orchestrator
 from .notification import NotificationService, notification_service
 from .resolution_service import ResolutionService, resolution_service
+from .portal_service import CoderPortalService, portal_service
 
 __all__ = [
     "EmailNormalizationService",
@@ -18,4 +19,6 @@ __all__ = [
     "notification_service",
     "ResolutionService",
     "resolution_service",
+    "CoderPortalService",
+    "portal_service",
 ]

@@ -32,6 +32,11 @@ from .resolution import (
     ResolutionAuditEntry,
     ResolutionResponse,
 )
+from .coder_portal import (
+    CoderExcuseSubmission,
+    CoderAttendanceSummary,
+    DashboardGlobalStats,
+)
 
 __all__ = [
     "RawAttachmentInput",
@@ -56,4 +61,7 @@ __all__ = [
     "ReconsiderationInput",
     "ResolutionAuditEntry",
     "ResolutionResponse",
+    "CoderExcuseSubmission",
+    "CoderAttendanceSummary",
+    "DashboardGlobalStats",
 ]

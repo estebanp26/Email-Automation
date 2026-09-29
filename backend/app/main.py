@@ -8,6 +8,7 @@ from .api.v1.policy import router as policy_router
 from .api.v1.pipeline import router as pipeline_router
 from .api.v1.notifications import router as notifications_router
 from .api.v1.justifications import router as justifications_router
+from .api.v1.stats import router as stats_router
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
@@ -36,6 +37,7 @@ app.include_router(policy_router, prefix=settings.API_V1_PREFIX)
 app.include_router(pipeline_router, prefix=settings.API_V1_PREFIX)
 app.include_router(notifications_router, prefix=settings.API_V1_PREFIX)
 app.include_router(justifications_router, prefix=settings.API_V1_PREFIX)
+app.include_router(stats_router, prefix=settings.API_V1_PREFIX)
 
 
 @app.get("/", tags=["Root"])
