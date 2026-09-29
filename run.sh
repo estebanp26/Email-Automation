@@ -69,9 +69,14 @@ echo -e "  ${GREEN}✓ Intérprete Python: $PYTHON_CMD${NC}"
 # Variables de proceso para limpieza
 BACKEND_PID=""
 FRONTEND_PID=""
+LISTENER_PID=""
 
 cleanup() {
     echo -e "\n${YELLOW}Deteniendo servicios del ecosistema...${NC}"
+    if [ -n "$LISTENER_PID" ] && kill -0 "$LISTENER_PID" 2>/dev/null; then
+        echo -e "  Deteniendo Escuchador de Gmail (PID: $LISTENER_PID)..."
+        kill "$LISTENER_PID" 2>/dev/null || true
+    fi
     if [ -n "$BACKEND_PID" ] && kill -0 "$BACKEND_PID" 2>/dev/null; then
         echo -e "  Deteniendo Backend Strata Core (PID: $BACKEND_PID)..."
         kill "$BACKEND_PID" 2>/dev/null || true
@@ -95,7 +100,7 @@ fuser -k 5173/tcp 2>/dev/null || true
 sleep 1
 
 # 3. Iniciar Backend Strata Core (FastAPI en puerto 8001)
-echo -e "${CYAN}[3/4] Levantando Backend Strata Core en puerto 8001...${NC}"
+echo -e "${CYAN}[3/5] Levantando Backend Strata Core en puerto 8001...${NC}"
 cd "$PROJECT_ROOT/strata-core"
 $PYTHON_CMD -m uvicorn server:app --host 0.0.0.0 --port 8001 --reload &
 BACKEND_PID=$!
@@ -105,7 +110,7 @@ cd "$PROJECT_ROOT"
 sleep 2
 
 # 4. Iniciar Frontend (Vite en puerto 5173)
-echo -e "${CYAN}[4/4] Levantando Frontend (Vite + React) en puerto 5173...${NC}"
+echo -e "${CYAN}[4/5] Levantando Frontend (Vite + React) en puerto 5173...${NC}"
 cd "$PROJECT_ROOT/frontend"
 npm run dev -- --host 0.0.0.0 --port 5173 &
 FRONTEND_PID=$!
@@ -113,6 +118,11 @@ cd "$PROJECT_ROOT"
 
 # Esperar que los servicios se estabilicen
 sleep 2
+
+# 5. Iniciar Escuchador en vivo de Gmail (IMAP)
+echo -e "${CYAN}[5/5] Levantando Escuchador en vivo de Gmail (IMAP)...${NC}"
+$PYTHON_CMD "$PROJECT_ROOT/scripts/gmail_live_listener.py" &
+LISTENER_PID=$!
 
 echo -e "\n${GREEN}${BOLD}================================================================${NC}"
 echo -e "${GREEN}${BOLD}  ✓ ECOSISTEMA RIWI HSE LEVANTADO Y LISTO PARA PRUEBAS          ${NC}"
@@ -123,8 +133,9 @@ echo -e "  ${BOLD}👥 Directorio de Coders:${NC}    ${BLUE}http://localhost:517
 echo -e "  ${BOLD}⚡ Backend Strata Core API:${NC} ${BLUE}http://localhost:8001/docs${NC}"
 echo -e "  ${BOLD}🔄 Orquestador n8n:${NC}         ${BLUE}http://localhost:5678${NC}"
 echo -e "  ${BOLD}🗄️  PostgreSQL Database:${NC}     ${BLUE}localhost:5432 (hse_email_automation)${NC}"
+echo -e "  ${BOLD}📨 Escuchador de Gmail:${NC}     ${BLUE}Activo en tiempo real${NC}"
 echo -e "${GREEN}================================================================${NC}"
 echo -e "${YELLOW}Presiona Ctrl+C en cualquier momento para detener todos los servicios.${NC}\n"
 
 # Mantener en ejecución
-wait "$BACKEND_PID" "$FRONTEND_PID"
+wait "$BACKEND_PID" "$FRONTEND_PID" "$LISTENER_PID"

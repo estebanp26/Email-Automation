@@ -156,7 +156,7 @@ def is_received_after(msg: email.message.Message, cutoff_time: datetime) -> bool
         return True
 
 
-def process_message(msg_raw: bytes, webhook_url: str, cutoff_time: datetime):
+def process_message(msg_raw: bytes, webhook_url: str):
     """Parsea el mensaje RFC 822, aplica filtros y lo despacha al webhook de n8n."""
     msg = email.message_from_bytes(msg_raw)
 
@@ -165,11 +165,6 @@ def process_message(msg_raw: bytes, webhook_url: str, cutoff_time: datetime):
     sender_name, sender_email = parse_sender(from_raw)
     message_id = msg.get("Message-ID", f"msg_{int(time.time())}_{sender_email}")
     received_date_str = msg.get("Date", datetime.now().isoformat())
-
-    # 1. Filtro Temporal: Descartar si el correo es anterior a la hora de corte
-    if not is_received_after(msg, cutoff_time):
-        print(f"{YELLOW}[Ignorado - Correo Antiguo]: {subject} (Recibido: {received_date_str}){RESET}")
-        return False
 
     body_text = ""
     attachments = []
@@ -257,9 +252,7 @@ def listen_inbox(user: str, password: str, webhook_url: str, poll_interval: int 
     clean_pwd = password.replace(" ", "").strip()
     clean_user = user.strip()
 
-    # Hora de inicio: solo se procesarán correos que lleguen a partir de este momento
-    # Con un margen de tolerancia de 2 minutos para sincronización de reloj
-    cutoff_time = datetime.now(timezone.utc) - timedelta(minutes=2)
+    uid_cache_file = Path(__file__).resolve().parent.parent / ".gmail_last_uid"
 
     print(f"\n{BLUE}{BOLD}======================================================================{RESET}")
     print(f"{BLUE}{BOLD}   RIWI HSE — ESCUCHADOR EN VIVO DE CORREOS GMAIL (IMAP)             {RESET}")
@@ -267,7 +260,6 @@ def listen_inbox(user: str, password: str, webhook_url: str, poll_interval: int 
     print(f"[*] Conectando a {CYAN}imap.gmail.com:993{RESET}...")
     print(f"[*] Buzón de escucha: {GREEN}{clean_user}{RESET}")
     print(f"[*] Webhook destino: {CYAN}{webhook_url}{RESET}")
-    print(f"[*] Filtro de inicio: {CYAN}Solo correos nuevos (desde {cutoff_time.strftime('%H:%M:%S UTC')}){RESET}")
     print(f"[*] Filtro de contenido: {GREEN}Solo justificaciones HSE (incapacidad, citas, salud, etc.){RESET}")
     print(f"[*] Intervalo de sondeo: {poll_interval} segundos")
     print(f"{YELLOW}[*] Esperando correos de justificación... (Ctrl+C para salir){RESET}\n")
@@ -278,18 +270,26 @@ def listen_inbox(user: str, password: str, webhook_url: str, poll_interval: int 
             mail.login(clean_user, clean_pwd)
             mail.select("INBOX")
             
-            # Obtener el UID más alto actual para ignorar todos los 2900+ correos antiguos al instante
+            # Obtener el UID más alto actual
             status, data = mail.uid("search", None, "ALL")
             all_uids = [int(x) for x in data[0].split()] if (status == "OK" and data and data[0]) else []
-            last_uid = all_uids[-1] if all_uids else 0
+            highest_uid = all_uids[-1] if all_uids else 0
             
+            if uid_cache_file.exists():
+                try:
+                    last_uid = int(uid_cache_file.read_text().strip())
+                except Exception:
+                    last_uid = highest_uid
+            else:
+                last_uid = highest_uid
+                uid_cache_file.write_text(str(last_uid))
+
             print(f"{GREEN}[✓] Conexión IMAP autenticada con éxito.{RESET}")
-            print(f"{GREEN}[✓] Marcador fijado en el correo más reciente (UID={last_uid}).{RESET}")
-            print(f"{CYAN}[✓] Se omiten al 100% los {len(all_uids)} correos existentes en el buzón.{RESET}")
-            print(f"{BOLD}[⚡] Escuchando EXCLUSIVAMENTE correos que lleguen a partir de este instante...{RESET}\n")
+            print(f"{GREEN}[✓] Marcador de posición activo en UID={last_uid}.{RESET}")
+            print(f"{CYAN}[✓] Se omiten correos anteriores. Escuchando nuevos a partir de UID > {last_uid}.{RESET}\n")
 
             while True:
-                # Búsqueda ultra-rápida únicamente de UIDs mayores que last_uid
+                # Búsqueda únicamente de UIDs mayores que last_uid
                 status, response = mail.uid("search", None, f"UID {last_uid + 1}:*")
                 if status == "OK" and response and response[0]:
                     new_uids = [int(x) for x in response[0].split() if int(x) > last_uid]
@@ -298,10 +298,11 @@ def listen_inbox(user: str, password: str, webhook_url: str, poll_interval: int 
                         st, fetch_data = mail.uid("fetch", uid_str, "(RFC822)")
                         if st == "OK" and fetch_data and fetch_data[0]:
                             raw_email = fetch_data[0][1]
-                            process_message(raw_email, webhook_url, cutoff_time)
+                            process_message(raw_email, webhook_url)
                             # Marcar como visto
                             mail.uid("store", uid_str, "+FLAGS", "(\\Seen)")
                         last_uid = max(last_uid, uid_int)
+                        uid_cache_file.write_text(str(last_uid))
 
                 time.sleep(poll_interval)
                 mail.noop()
