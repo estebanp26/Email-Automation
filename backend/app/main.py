@@ -4,6 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from .config import settings
 from .api.v1.emails import router as emails_router
 from .api.v1.coders import router as coders_router
+from .api.v1.policy import router as policy_router
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
@@ -28,6 +29,7 @@ app.add_middleware(
 # Montaje de Routers API v1
 app.include_router(emails_router, prefix=settings.API_V1_PREFIX)
 app.include_router(coders_router, prefix=settings.API_V1_PREFIX)
+app.include_router(policy_router, prefix=settings.API_V1_PREFIX)
 
 
 @app.get("/", tags=["Root"])

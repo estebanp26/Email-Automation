@@ -11,6 +11,11 @@ from .coder import (
     CoderIdentificationQuery,
     CoderIdentificationResult,
 )
+from .policy import (
+    PolicyEvaluationInput,
+    PolicyEvaluationResult,
+    AttendanceThresholdSummary,
+)
 
 __all__ = [
     "RawAttachmentInput",
@@ -22,4 +27,7 @@ __all__ = [
     "CoderBase",
     "CoderIdentificationQuery",
     "CoderIdentificationResult",
+    "PolicyEvaluationInput",
+    "PolicyEvaluationResult",
+    "AttendanceThresholdSummary",
 ]
