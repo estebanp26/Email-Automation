@@ -2,12 +2,12 @@ name: QA HSE Regression (QA-04)
 
 on:
   push:
-    branches: [main]
+    branches: [main, develop]
     paths:
       - 'backend/**'
       - '.github/workflows/qa-hse-regression.yml'
   pull_request:
-    branches: [main]
+    branches: [main, develop]
     paths:
       - 'backend/**'
 
