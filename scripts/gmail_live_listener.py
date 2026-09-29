@@ -213,42 +213,55 @@ def process_message(msg_raw: bytes, webhook_url: str):
         print(f"{YELLOW}[Ignorado - Filtro HSE]: {reason} | De: {sender_email} | Asunto: {subject}{RESET}")
         return False
 
-    # 3. Payload validado para n8n
+    # 3. Payload validado para API Nativa InboundEmailDTO
     payload = {
         "source_provider": "GMAIL",
         "sender_email": sender_email,
         "sender_name": sender_name,
         "email_subject": subject,
         "email_body": body_text,
-        "received_at": datetime.now().isoformat(),
+        "received_at": datetime.now(timezone.utc).isoformat(),
         "message_id": message_id,
+        "conversation_id": message_id,
         "attachments": attachments,
         "has_attachments": len(attachments) > 0
     }
 
-    # Despacho HTTP a n8n
+    # Despacho HTTP a la API Nativa FastAPI
+    headers = {"Content-Type": "application/json", "User-Agent": "Riwi-Gmail-LiveListener/3.0"}
+    api_key = os.getenv("INBOUND_API_KEY") or os.getenv("INTERNAL_API_KEY")
+    if api_key:
+        headers["Authorization"] = f"Bearer {api_key}"
+        headers["X-API-Key"] = api_key
+
     req = urllib.request.Request(
         webhook_url,
         data=json.dumps(payload).encode("utf-8"),
-        headers={"Content-Type": "application/json"}
+        headers=headers,
+        method="POST"
     )
     
     t0 = time.time()
     try:
         with urllib.request.urlopen(req, timeout=30) as resp:
             elapsed = time.time() - t0
-            print(f"{GREEN}[✓] ¡Justificación HSE enviada con éxito a n8n! ({elapsed:.2f}s, HTTP {resp.status}){RESET}")
+            res_body = resp.read().decode("utf-8")
+            parsed = json.loads(res_body) if res_body else {}
+            if resp.status == 202:
+                print(f"{GREEN}[✓] ¡Justificación HSE encolada con éxito en API Nativa! ({elapsed:.2f}s, HTTP 202, TxID={parsed.get('transaction_id')}){RESET}")
+            else:
+                print(f"{GREEN}[✓] ¡Respuesta API Nativa! ({elapsed:.2f}s, HTTP {resp.status}, Msg={parsed.get('message')}){RESET}")
             print(f"    {BOLD}Remitente:{RESET} {sender_name} <{sender_email}>")
             print(f"    {BOLD}Asunto:{RESET} {subject}")
             print(f"    {BOLD}Adjuntos:{RESET} {len(attachments)} archivo(s) -> {[a['filename'] for a in attachments]}")
             print(f"    {CYAN}Visualizar en el panel: http://localhost:5173/requests{RESET}\n")
             return True
     except Exception as e:
-        print(f"{RED}[✗] Error enviando correo a n8n ({webhook_url}): {e}{RESET}\n")
+        print(f"{RED}[✗] Error enviando correo a la API Nativa ({webhook_url}): {e}{RESET}\n")
         return False
 
 
-def listen_inbox(user: str, password: str, webhook_url: str, poll_interval: int = 4):
+def listen_inbox(user: str, password: str, api_url: str, poll_interval: int = 4):
     clean_pwd = password.replace(" ", "").strip()
     clean_user = user.strip()
 
@@ -259,7 +272,7 @@ def listen_inbox(user: str, password: str, webhook_url: str, poll_interval: int 
     print(f"{BLUE}{BOLD}======================================================================{RESET}")
     print(f"[*] Conectando a {CYAN}imap.gmail.com:993{RESET}...")
     print(f"[*] Buzón de escucha: {GREEN}{clean_user}{RESET}")
-    print(f"[*] Webhook destino: {CYAN}{webhook_url}{RESET}")
+    print(f"[*] Endpoint API Nativa destino: {CYAN}{api_url}{RESET}")
     print(f"[*] Filtro de contenido: {GREEN}Solo justificaciones HSE (incapacidad, citas, salud, etc.){RESET}")
     print(f"[*] Intervalo de sondeo: {poll_interval} segundos")
     print(f"{YELLOW}[*] Esperando correos de justificación... (Ctrl+C para salir){RESET}\n")
@@ -298,7 +311,7 @@ def listen_inbox(user: str, password: str, webhook_url: str, poll_interval: int 
                         st, fetch_data = mail.uid("fetch", uid_str, "(RFC822)")
                         if st == "OK" and fetch_data and fetch_data[0]:
                             raw_email = fetch_data[0][1]
-                            process_message(raw_email, webhook_url)
+                            process_message(raw_email, api_url)
                             # Marcar como visto
                             mail.uid("store", uid_str, "+FLAGS", "(\\Seen)")
                         last_uid = max(last_uid, uid_int)
@@ -320,10 +333,10 @@ def listen_inbox(user: str, password: str, webhook_url: str, poll_interval: int 
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Escuchador IMAP en vivo de Gmail para RIWI HSE")
+    parser = argparse.ArgumentParser(description="Escuchador IMAP en vivo de Gmail para RIWI HSE (CONN-04)")
     parser.add_argument("--email", "-e", default=os.getenv("GMAIL_USER"), help="Dirección de correo Gmail")
     parser.add_argument("--password", "-p", default=os.getenv("GMAIL_APP_PASSWORD"), help="Contraseña de aplicación de 16 caracteres")
-    parser.add_argument("--webhook", "-w", default="http://localhost:5678/webhook/riwi-email-incoming", help="URL del webhook en n8n")
+    parser.add_argument("--api-url", "-w", "--webhook", default=os.getenv("INBOUND_API_URL", "http://localhost:8001/api/v1/inbound-email"), help="URL del endpoint de ingesta nativa FastAPI")
     parser.add_argument("--interval", "-i", type=int, default=4, help="Segundos entre cada chequeo de bandeja")
 
     args = parser.parse_args()
@@ -332,7 +345,7 @@ def main():
         print(f"{RED}[✗] Error: Se requiere especificar --email y --password (o definir GMAIL_USER y GMAIL_APP_PASSWORD en .env){RESET}")
         sys.exit(1)
 
-    listen_inbox(args.email, args.password, args.webhook, args.interval)
+    listen_inbox(args.email, args.password, args.api_url, args.interval)
 
 
 if __name__ == "__main__":
