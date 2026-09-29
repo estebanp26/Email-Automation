@@ -6,7 +6,6 @@ import {
   Calendar, ShieldCheck, MessageSquare, AlertTriangle, RotateCw
 } from 'lucide-react';
 import { api } from '../services/api';
-import { getN8nConfig } from '../services/n8n';
 
 export default function Requests() {
   const [activeFolder, setActiveFolder] = useState<'inbox' | 'sent' | 'drafts'>('inbox');
@@ -22,7 +21,7 @@ export default function Requests() {
   const [showToast, setShowToast] = useState(false);
   const [toastMessage, setToastMessage] = useState('Mensaje enviado');
 
-  // n8n Manual Resolution State
+  // Manual Resolution State
   const [hseNotes, setHseNotes] = useState('');
   const [excuseType, setExcuseType] = useState('inasistencia_medica');
   const [startDate, setStartDate] = useState('');
@@ -153,7 +152,11 @@ export default function Requests() {
           modifiedAt: new Date().toISOString(),
         }
       } : r));
-      api.resolveRequestWithN8n(replyingId, 'REQUEST_CORRECTION', composeData.body).catch(() => {});
+      api.resolveJustification(replyingId, {
+        action: 'REQUEST_MORE_INFO',
+        notes: composeData.body,
+        reviewer_name: 'Paola Admin (HSE)'
+      }).catch(() => {});
     }
 
     setSentEmails(prev => [newSentEmail, ...prev]);
@@ -167,7 +170,7 @@ export default function Requests() {
     setTimeout(() => setShowToast(false), 3000);
   };
 
-  // Despacho de resolución manual a n8n
+  // Despacho de resolución manual al backend nativo
   const handleResolveAction = async (action: 'APPROVED' | 'DISAPPROVED' | 'REQUEST_CORRECTION') => {
     if (!selectedEmail) return;
 
@@ -181,21 +184,21 @@ export default function Requests() {
     );
 
     try {
-      const result = await api.resolveRequestWithN8n(
+      const result = await api.resolveJustification(
         selectedEmail.id,
-        action,
-        notesToSend,
         {
-          startDate,
-          excuseType,
-          reviewerName: 'Paola Admin (HSE)'
+          action,
+          notes: notesToSend,
+          reviewer_name: 'Paola Admin (HSE)',
+          override_start_date: startDate || undefined,
+          override_excuse_type: excuseType,
+          dispatch_notification: true
         }
       );
 
       const updatedReq = {
-        ...result.request,
-        hasHumanIntervention: true,
-        hseDecision: action,
+        ...selectedEmail,
+        ...result.updatedRequest,
         isResponded: true,
       };
 
@@ -210,20 +213,29 @@ export default function Requests() {
         setSelectedEmail(null);
       }
 
-      setToastMessage(`Caso ${action === 'APPROVED' ? 'Aprobado' : action === 'DISAPPROVED' ? 'Rechazado' : 'Notificado'} y movido a Enviados`);
+      const actionLabel = action === 'APPROVED' ? 'Aprobado' : action === 'DISAPPROVED' ? 'Rechazado' : 'Notificado';
+      setToastMessage(`Caso ${actionLabel} exitosamente y registrado en backend`);
       setShowToast(true);
       setTimeout(() => setShowToast(false), 3500);
+
+      setResolutionStatus({
+        type: 'success',
+        message: `Caso ${actionLabel.toLowerCase()} formalmente por el equipo HSE`,
+        details: 'Decisión persistida en base de datos y correo formal notificado al coder.'
+      });
     } catch (err: any) {
       setResolutionStatus({
         type: 'error',
-        message: 'Error al procesar la resolución',
-        details: err.message
+        message: 'Error al procesar la resolución en el servidor',
+        details: err?.message || 'Fallo de conexión'
       });
+      setToastMessage('Error al procesar la resolución');
+      setShowToast(true);
+      setTimeout(() => setShowToast(false), 3500);
     } finally {
       setIsResolving(false);
     }
   };
-  const n8nConfig = getN8nConfig();
 
   return (
     <div className="h-[calc(100vh-6rem)] flex gap-4 overflow-hidden">
@@ -262,18 +274,18 @@ export default function Requests() {
             />
           </div>
 
-          {/* n8n Status Badge */}
+          {/* Backend Status Badge */}
           <div className="mt-auto pt-4 border-t border-[#E8EAF2]">
             <div className="p-3 bg-[#F8F9FE] border border-[#E8EAF2] rounded-[16px] text-xs">
               <div className="flex items-center gap-2 mb-1">
                 <span className="w-2 h-2 rounded-full bg-[#20B486] animate-pulse" />
-                <span className="font-bold text-[#111827]">n8n Conectado</span>
+                <span className="font-bold text-[#111827]">Backend REST Nativo</span>
               </div>
               <p className="text-[11px] text-[#7C8499] truncate font-mono">
-                {n8nConfig.baseUrl}
+                /api/v1/justifications
               </p>
               <div className="mt-1 flex items-center gap-1 text-[10px] font-semibold text-[#5B3FF5]">
-                <Zap size={11} /> {n8nConfig.useTestWebhook ? 'Modo Test' : 'Modo Producción'}
+                <Zap size={11} /> Conexión Directa HSE
               </div>
             </div>
           </div>
@@ -561,7 +573,7 @@ export default function Requests() {
               )}
 
               {/* ============================================================== */}
-              {/* PANEL DE RESOLUCIÓN MANUAL Y DESPACHO A N8N                    */}
+              {/* PANEL DE RESOLUCIÓN MANUAL Y DESPACHO A BACKEND NATIVO        */}
               {/* ============================================================== */}
               {/* ============================================================== */}
               {/* PANEL DE DETALLE: ENVIADOS (NOTIFICADO) vs BANDEJA (POR RESOLVER) */}
@@ -618,7 +630,7 @@ export default function Requests() {
                       </div>
                       <div>
                         <h3 className="text-[15px] font-bold text-[#111827]">
-                          Resolución Manual HSE & Despacho a n8n
+                          Resolución Oficial HSE (Backend API Nativo)
                         </h3>
                         <p className="text-xs text-[#7C8499]">
                           Al confirmar la decisión, el mensaje se responderá formalmente y se moverá a <strong>Enviados</strong>.
@@ -626,7 +638,7 @@ export default function Requests() {
                       </div>
                     </div>
                     <span className="text-[11px] font-mono text-[#7C8499] hidden sm:block">
-                      POST {n8nConfig.dispatchWebhookPath}
+                      POST /api/v1/justifications/resolve
                     </span>
                   </div>
 
@@ -682,7 +694,7 @@ export default function Requests() {
 
                   <div>
                     <label className="block text-xs font-bold uppercase tracking-wider text-[#7C8499] mb-1.5 flex items-center gap-1.5">
-                      <MessageSquare size={13} /> Observaciones / Justificación de la Decisión (se incluirá en el correo n8n)
+                      <MessageSquare size={13} /> Observaciones / Justificación de la Decisión (se incluirá en la notificación oficial)
                     </label>
                     <textarea 
                       rows={3}
@@ -750,8 +762,8 @@ export default function Requests() {
 
               <div className="flex items-center gap-2 text-xs text-[#7C8499]">
                 <Zap size={14} className="text-[#5B3FF5]" />
-                <span>Workflow destino:</span>
-                <span className="font-mono text-[#111827]">{n8nConfig.baseUrl}</span>
+                <span>Servicio destino:</span>
+                <span className="font-mono text-[#111827]">API REST Nativa</span>
               </div>
             </div>
           </div>
@@ -760,7 +772,7 @@ export default function Requests() {
           <div className="flex-1 flex flex-col items-center justify-center text-[#A3AAC2] p-8 text-center">
             <Mail size={64} className="mb-4 opacity-20" />
             <h3 className="text-xl font-bold text-[#111827] mb-2">Ningún mensaje seleccionado</h3>
-            <p className="max-w-[300px]">Selecciona un correo de la lista a la izquierda para auditarlo, validarlo y despachar la resolución al workflow de n8n.</p>
+            <p className="max-w-[300px]">Selecciona un correo de la lista a la izquierda para auditarlo, validarlo y registrar la resolución oficial.</p>
           </div>
         )}
       </div>
