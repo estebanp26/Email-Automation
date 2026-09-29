@@ -11,7 +11,7 @@
 
 | ID | Tarea / Entregable | Squad | Responsable | Prioridad | ¿De quién depende? (Espera a) | Impacto Crítico (A quién desbloquea) | Rama Git | Estado |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| **DB-01** | Crear proyecto Supabase y ejecutar migraciones DDL iniciales | DB | **Eliam** | 🚨 P0 (Bloqueante) | **Ninguna (¡ARRANCAR YA!)** | Desbloquea a **TODO el equipo** (Esteban, Jesus, Kevin y Camilo necesitan DB) | `feature/db-supabase` | 🟡 Por Hacer |
+| **DB-01** | Implementación de RBAC, Roles, system_users, evidence_files y RLS | DB | **Eliam & Sergio** | 🚨 P0 (Bloqueante) | **Ninguna (Sprint 1)** | Desbloquea a **TODO el equipo** (Seguridad RBAC, autenticación y persistencia) | `feature/squad-database` | 🟢 Completado |
 | **DB-02** | Configurar bucket en Storage (`justification-attachments`) y políticas | DB | **Sergio** | 🚨 P0 (Bloqueante) | **Ninguna (¡ARRANCAR YA!)** | Desbloquea a **Esteban** (guardar adjuntos) y a **Camilo** (visor de evidencias) | `feature/db-supabase` | 🟡 Por Hacer |
 | **N8N-01** | Levantar n8n (Docker/Cloud) y variables de entorno | n8n | **Esteban** | 🚨 P0 (Bloqueante) | **Ninguna (¡ARRANCAR YA!)** | Desbloquea a **Samuel** (URL webhook) y **Jesus / Luis** (armar flujos) | `feature/n8n-core` | 🟡 Por Hacer |
 | **CONN-01** | Registro en Azure Portal y permisos Microsoft Graph para Outlook | Conexión | **Samuel** | 🚨 P0 (Bloqueante) | **Ninguna (¡ARRANCAR YA!)** | Desbloquea a **Luis** (envío de correos) y **Esteban** (ingesta) | `feature/email-connections` | 🟡 Por Hacer |
@@ -59,5 +59,5 @@
 ### 🟢 Squad Conexión (Samuel) — *Rama: `feature/email-connections`*
 * **Samuel:** Asegura que los correos de Outlook y Gmail extraigan tanto el cuerpo en texto plano como los archivos adjuntos (PDFs, fotos JPG/PNG) y los entregue listos para Strata Core.
 
-### 🟠 Squad Database (Eliam & Sergio) — *Rama: `feature/db-supabase`*
+### 🟠 Squad Database (Eliam & Sergio) — *Rama: `feature/squad-database`*
 * **Eliam & Sergio:** Mantienen la persistencia de los veredictos emitidos por Strata Core, las evidencias citadas y el almacenamiento de los archivos adjuntos.
