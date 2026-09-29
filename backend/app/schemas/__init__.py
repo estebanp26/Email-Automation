@@ -21,6 +21,11 @@ from .justification import (
     PipelineProcessRequest,
     PipelineExecutionResult,
 )
+from .notification import (
+    NotificationDispatchInput,
+    NotificationDispatchResult,
+    NotificationPreviewRequest,
+)
 
 __all__ = [
     "RawAttachmentInput",
@@ -38,4 +43,7 @@ __all__ = [
     "JustificationRecord",
     "PipelineProcessRequest",
     "PipelineExecutionResult",
+    "NotificationDispatchInput",
+    "NotificationDispatchResult",
+    "NotificationPreviewRequest",
 ]
