@@ -105,6 +105,8 @@ erDiagram
     HSE_USERS ||--o{ JUSTIFICATIONS : "revisa_manualmente (0..1:N)"
     JUSTIFICATIONS ||--o{ EVIDENCE_FILES : "contiene_evidencias (1:N)"
     SYSTEM_USERS ||--o{ JUSTIFICATIONS : "audita_o_posee (1:N)"
+    CODERS ||--o{ ATTENDANCE_RECORDS : "registra_asistencias (1:N)"
+    JUSTIFICATIONS ||--o{ ATTENDANCE_RECORDS : "justifica_inasistencias (0..1:N)"
 
     CODERS {
         UUID id PK "Clave primaria única"
@@ -140,6 +142,23 @@ erDiagram
         TIMESTAMPTZ created_at "Fecha de creación"
         TIMESTAMPTZ updated_at "Última actualización"
         TIMESTAMPTZ last_login_at "Último inicio de sesión"
+    }
+
+
+    ATTENDANCE_RECORDS {
+        VARCHAR id PK "Clave primaria de la asistencia"
+        VARCHAR coder_id FK "FK a coders.id (ON DELETE CASCADE)"
+        VARCHAR justification_id FK "FK a justifications.id (ON DELETE SET NULL)"
+        VARCHAR external_attendance_id "ID de sesión en plataforma hermana"
+        DATE attendance_date "Fecha de la clase o sesión"
+        VARCHAR session_name "Jornada o módulo formativo"
+        attendance_status status "PRESENT, ABSENT, LATE, EARLY_LEAVE, EXCUSED"
+        BOOLEAN is_justified "Indicador de inasistencia justificada"
+        VARCHAR source_platform "Plataforma de origen (ej: MOODLE)"
+        TIMESTAMPTZ synced_at "Momento de sincronización"
+        JSONB raw_data "Payload crudo del proveedor externo"
+        TIMESTAMPTZ created_at "Fecha de registro"
+        TIMESTAMPTZ updated_at "Última actualización"
     }
 
     EVIDENCE_FILES {
@@ -409,6 +428,34 @@ Almacena los soportes adjuntos (PDFs, imágenes de incapacidades médicas, certi
 | `spatial_boxes` | `JSONB` | SÍ | | Bounding boxes y coordenadas (`rects`) para resaltado visual. |
 | `created_at` | `TIMESTAMPTZ`| NO | Default `CURRENT_TIMESTAMP` | Momento de subida a la base de datos. |
 | `updated_at` | `TIMESTAMPTZ`| NO | Default `CURRENT_TIMESTAMP` | Momento de última modificación. |
+
+
+
+---
+
+### 4.6. Tabla: `attendance_records` (Sincronización de Asistencias Externas)
+Almacena los registros de asistencia sincronizados periódicamente desde la plataforma hermana (Moodle/LMS/Biométrico), estableciendo la correlación directa entre inasistencias y las justificaciones radicadas por el coder.
+
+| Nombre de Campo | Tipo de Dato | Nulo | Clave / Restricción | Descripción |
+| :--- | :--- | :---: | :--- | :--- |
+| `id` | `VARCHAR(100)` | NO | 🔑 **PK** (Default `gen_random_uuid()::text`) | Clave única del registro de asistencia. |
+| `coder_id` | `VARCHAR(100)` | NO | 🔗 **FK** (`coders.id` ON DELETE CASCADE) | Coder asociado al registro de asistencia. |
+| `justification_id` | `VARCHAR(100)` | SÍ | 🔗 **FK** (`justifications.id` ON DELETE SET NULL) | Solicitud de justificación vinculada (NULL si no justificada). |
+| `external_attendance_id` | `VARCHAR(255)` | SÍ | | Identificador original en la plataforma externa. |
+| `attendance_date` | `DATE` | NO | | Fecha en que se llevó a cabo la sesión. |
+| `session_name` | `VARCHAR(150)` | NO | Default `'Jornada Principal'` | Nombre de la sesión o cohorte de entrenamiento. |
+| `status` | `attendance_status` | NO | Default `'ABSENT'` | Estado: `'PRESENT'`, `'ABSENT'`, `'LATE'`, `'EARLY_LEAVE'`, `'EXCUSED'`. |
+| `is_justified` | `BOOLEAN` | NO | Default `FALSE` | Bandera booleana rápida de estado justificado. |
+| `source_platform` | `VARCHAR(100)` | NO | Default `'PLATAFORMA_HERMANA'` | Fuente de datos (ej. `MOODLE`, `LMS_RIWI`). |
+| `synced_at` | `TIMESTAMPTZ`| NO | Default `CURRENT_TIMESTAMP` | Momento de sincronización desde el origen externo. |
+| `raw_data` | `JSONB` | SÍ | | Objeto JSON crudo para auditoría de interoperabilidad. |
+| `created_at` | `TIMESTAMPTZ`| NO | Default `CURRENT_TIMESTAMP` | Fecha de creación del registro. |
+| `updated_at` | `TIMESTAMPTZ`| NO | Default `CURRENT_TIMESTAMP` | Fecha de última modificación. |
+
+---
+
+### 4.7. Vista: `v_unjustified_absences` (Detección de Ausencias No Justificadas)
+Vista de inteligencia operativa que cruza las asistencias marcadas como `ABSENT`, `LATE` o `EARLY_LEAVE` que no poseen justificación aprobada, alertando si el coder ya radicó una solicitud que se encuentra en trámite (`has_pending_justification = TRUE`).
 
 
 ## 5. Script DDL Completo para PostgreSQL (`database/migrations/001_initial_schema.sql`)

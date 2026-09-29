@@ -24,7 +24,9 @@ EXCEPTION
 END $$;
 
 -- Limpieza previa en orden de dependencia
+DROP VIEW IF EXISTS v_unjustified_absences CASCADE;
 DROP VIEW IF EXISTS v_justifications_dashboard CASCADE;
+DROP TABLE IF EXISTS attendance_records CASCADE;
 DROP TABLE IF EXISTS evidence_files CASCADE;
 DROP TABLE IF EXISTS justifications CASCADE;
 DROP TABLE IF EXISTS system_users CASCADE;
