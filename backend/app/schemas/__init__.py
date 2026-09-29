@@ -6,6 +6,11 @@ from .email import (
     NormalizedEmail,
     EmailIngestResponse,
 )
+from .coder import (
+    CoderBase,
+    CoderIdentificationQuery,
+    CoderIdentificationResult,
+)
 
 __all__ = [
     "RawAttachmentInput",
@@ -14,4 +19,7 @@ __all__ = [
     "PreliminaryExtraction",
     "NormalizedEmail",
     "EmailIngestResponse",
+    "CoderBase",
+    "CoderIdentificationQuery",
+    "CoderIdentificationResult",
 ]
