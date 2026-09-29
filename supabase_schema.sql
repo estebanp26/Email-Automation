@@ -142,6 +142,7 @@ CREATE TABLE justifications (
     
     -- Adjuntos y Auditoría
     attachments JSONB,
+    ocr_spatial_data JSONB,
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     
@@ -171,6 +172,7 @@ COMMENT ON COLUMN justifications.resolution_mode IS 'Diferenciador de origen de 
 COMMENT ON COLUMN justifications.has_human_intervention IS 'Indica si un usuario de HSE realizó modificaciones o validaciones';
 COMMENT ON COLUMN justifications.email_url IS 'Enlace directo para visualización del correo en el cliente web';
 COMMENT ON COLUMN justifications.ai_response IS 'JSON completo devuelto por Strata Core para auditoría avanzada';
+COMMENT ON COLUMN justifications.ocr_spatial_data IS 'Caché consolidado de coordenadas espaciales OCR de los documentos evaluados';
 
 -- =============================================================================
 -- 5. TABLA evidence_files (Archivos de Evidencia y Soportes Adjuntos)
@@ -185,6 +187,7 @@ CREATE TABLE evidence_files (
     file_size_bytes BIGINT,
     extracted_text TEXT,
     spatial_boxes JSONB,
+    ocr_spatial_data JSONB,
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
@@ -192,6 +195,7 @@ CREATE TABLE evidence_files (
 COMMENT ON TABLE evidence_files IS 'Archivos de soporte/evidencia documental asociados a justificaciones con coordenadas de Strata Core';
 COMMENT ON COLUMN evidence_files.justification_id IS 'FK a justifications.id';
 COMMENT ON COLUMN evidence_files.spatial_boxes IS 'Coordenadas espaciales (rects) de OCR/PyMuPDF para resaltado en visor web';
+COMMENT ON COLUMN evidence_files.ocr_spatial_data IS 'Metadatos y coordenadas espaciales OCR generados por Strata Core';
 
 -- =============================================================================
 -- 5.1. TABLA attendance_records (Sincronización de Asistencias Externas)
@@ -223,7 +227,7 @@ COMMENT ON COLUMN attendance_records.justification_id IS 'FK opcional a justific
 COMMENT ON COLUMN attendance_records.status IS 'Estado del registro: PRESENTE, AUSENTE, TARDANZA o EXCUSADO.';
 
 -- =============================================================================
--- 6. ÍNDICES DE RENDIMIENTO (Performance Tuning)
+-- 6. ÍNDICES DE RENDIMIENTO (Performance Tuning — DB-04)
 -- =============================================================================
 CREATE INDEX idx_coders_email ON coders(email);
 CREATE INDEX idx_coders_cedula ON coders(cedula);
@@ -242,17 +246,37 @@ CREATE INDEX idx_justifications_hse_user_id ON justifications(hse_user_id);
 CREATE INDEX idx_justifications_sender_email ON justifications(sender_email);
 CREATE INDEX idx_justifications_received_at ON justifications(received_at DESC);
 CREATE INDEX idx_justifications_message_id ON justifications(message_id);
+
+-- DB-04: Índices B-Tree compuestos para optimización de consultas dashboard (< 50ms)
+CREATE INDEX idx_justifications_coder_created_desc ON justifications(coder_id, created_at DESC);
+CREATE INDEX idx_justifications_status_start_date ON justifications(validation_status, start_date DESC);
+CREATE INDEX idx_justifications_coder_dates ON justifications(coder_id, start_date, end_date);
+CREATE INDEX idx_justifications_ai_rec_status ON justifications(ai_recommendation, validation_status);
+
+-- DB-04: Índices parciales para triaje rápido y bandeja de entrada
+CREATE INDEX idx_justifications_pending_triage ON justifications(created_at DESC)
+    WHERE validation_status IN ('REVISION_MANUAL', 'POSIBLEMENTE_VALIDO', 'POSIBLEMENTE_INVALIDO', 'PENDIENTE_DECISION_TL', 'MANUAL_INTERACTION');
+
+CREATE INDEX idx_justifications_unreviewed ON justifications(received_at DESC)
+    WHERE has_human_intervention = FALSE;
+
+-- DB-04: Índices especializados GIN sobre JSONB (ai_response, attachments y coordenadas espaciales OCR)
 CREATE INDEX idx_justifications_ai_response ON justifications USING GIN (ai_response);
 CREATE INDEX idx_justifications_attachments ON justifications USING GIN (attachments);
+CREATE INDEX idx_justifications_ocr_spatial_data_gin ON justifications USING GIN (ocr_spatial_data);
 
 CREATE INDEX idx_evidence_files_justification_id ON evidence_files(justification_id);
 CREATE INDEX idx_evidence_files_created_at ON evidence_files(created_at DESC);
+CREATE INDEX idx_evidence_files_spatial_boxes_gin ON evidence_files USING GIN (spatial_boxes);
+CREATE INDEX idx_evidence_files_ocr_spatial_data_gin ON evidence_files USING GIN (ocr_spatial_data);
 
 CREATE INDEX idx_attendance_coder_id ON attendance_records(coder_id);
 CREATE INDEX idx_attendance_date ON attendance_records(attendance_date DESC);
 CREATE INDEX idx_attendance_status ON attendance_records(status);
 CREATE INDEX idx_attendance_justification_id ON attendance_records(justification_id);
 CREATE INDEX idx_attendance_synced_at ON attendance_records(synced_at DESC);
+CREATE INDEX idx_attendance_unjustified_active ON attendance_records(attendance_date DESC, coder_id)
+    WHERE status = 'AUSENTE' AND justification_id IS NULL;
 
 -- =============================================================================
 -- 7. FUNCIONES DE CONVENIENCIA Y GESTIÓN DE ROLES / SESIÓN (RBAC)
@@ -593,7 +617,8 @@ BEGIN
             'file_url', NEW.file_url,
             'mime_type', NEW.mime_type,
             'file_size', NEW.file_size_bytes,
-            'spatial_boxes', NEW.spatial_boxes
+            'spatial_boxes', NEW.spatial_boxes,
+            'ocr_spatial_data', NEW.ocr_spatial_data
         );
 
         UPDATE justifications
