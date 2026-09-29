@@ -1,6 +1,7 @@
 import asyncio
 import json
 import os
+import sys
 import re
 import shutil
 import tempfile
@@ -55,6 +56,12 @@ app.add_middleware(
 )
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+if BASE_DIR not in sys.path:
+    sys.path.insert(0, BASE_DIR)
+
+from routers.inbound_email import router as inbound_email_router
+app.include_router(inbound_email_router)
+
 TEMP_DIR = os.path.join(BASE_DIR, "temp_processing")
 os.makedirs(TEMP_DIR, exist_ok=True)
 
@@ -657,6 +664,9 @@ def get_db_connection():
         password=password,
         connect_timeout=3
     )
+
+from services.inbound_service import inbound_service
+inbound_service._db_conn_func = get_db_connection
 
 @app.get("/api/kpis")
 async def get_dashboard_kpis():

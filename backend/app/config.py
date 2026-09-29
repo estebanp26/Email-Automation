@@ -29,6 +29,11 @@ class Settings(BaseSettings):
     # Database
     DATABASE_URL: str = os.getenv("DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/email_automation")
 
+    # Plataforma Hermana (CONN-03 / EPIC-06)
+    SISTER_PLATFORM_API_URL: str = os.getenv("SISTER_PLATFORM_API_URL", "https://api.plataforma-hermana.riwi.io/v1")
+    SISTER_PLATFORM_API_KEY: str = os.getenv("SISTER_PLATFORM_API_KEY", "")
+    SISTER_PLATFORM_USE_MOCK: bool = os.getenv("SISTER_PLATFORM_USE_MOCK", "true").lower() == "true"
+
     model_config = ConfigDict(env_file=".env", extra="ignore")
 
 settings = Settings()

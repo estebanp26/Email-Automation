@@ -11,8 +11,10 @@ class PolicyEvaluationInput(BaseModel):
     has_attachment: bool = Field(default=False, description="Indica si adjuntó soporte documental")
     attachment_is_eps_official: bool = Field(default=False, description="Indica si el soporte es una incapacidad médica oficial de EPS/IPS")
     is_sensitive: bool = Field(default=False, description="Indica si contiene datos sensibles de salud mental o calamidad íntima")
+    kinship_degree: Optional[str] = Field(default=None, description="Grado de consanguinidad para luto/calamidad: G1 (padre/madre/hijo/cónyuge), G2 (hermano/abuelo/nieto), G3 (otros). Solo aplica a fuerza mayor (QA-04)")
     unjustified_history_week: int = Field(default=0, description="Inasistencias injustificadas acumuladas esta semana")
     unjustified_history_month: int = Field(default=0, description="Inasistencias injustificadas acumuladas este mes")
+    verify_external_attendance: bool = Field(default=True, description="Indica si debe consultar el adaptador de la plataforma hermana")
 
 class PolicyEvaluationResult(BaseModel):
     decision: str = Field(..., description="POSIBLEMENTE_VALIDO | POSIBLEMENTE_INVALIDO | REVISION_MANUAL")
@@ -27,6 +29,10 @@ class PolicyEvaluationResult(BaseModel):
     requires_human_review: bool
     policy_rule_triggered: str
     recommendation_summary: str
+    # Integración Plataforma Hermana (CONN-03 / EPIC-06)
+    absence_verified: bool = Field(default=False, description="True si la inasistencia (ABSENT) fue confirmada en la plataforma hermana")
+    external_absence_status: Optional[str] = Field(default=None, description="Estado reportado por la plataforma hermana: ABSENT, PRESENT, NO_RECORDS")
+    sister_platform_notes: Optional[str] = Field(default=None, description="Detalles del cotejo realizado con el adaptador de asistencia")
 
 class AttendanceThresholdSummary(BaseModel):
     coder_id: str
