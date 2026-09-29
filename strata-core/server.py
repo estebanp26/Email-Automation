@@ -383,7 +383,21 @@ async def evaluate_excuse(
             if tipo_novedad not in valid_types:
                 tipo_novedad = "no_identificado"
                 
-            fecha_afectada = str(ai_verdict.get("fecha_afectada") or "No identificada")
+            raw_fecha = str(ai_verdict.get("fecha_afectada") or "")
+            try:
+                if re.match(r"^\d{4}-\d{2}-\d{2}$", raw_fecha):
+                    y, m, d = [int(p) for p in raw_fecha.split("-")]
+                    if 1 <= m <= 12:
+                        import calendar
+                        max_days = calendar.monthrange(y, m)[1]
+                        adj_d = min(max(1, d), max_days)
+                        fecha_afectada = f"{y:04d}-{m:02d}-{adj_d:02d}"
+                    else:
+                        fecha_afectada = today_str
+                else:
+                    fecha_afectada = today_str
+            except Exception:
+                fecha_afectada = today_str
             motivo_decision = str(ai_verdict.get("motivo_decision") or "Evaluación completada.")
             
             try:

@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Mail, Send, FileEdit, Trash, Reply, Inbox, Paperclip, User, 
   CheckCircle2, XCircle, AlertCircle, Zap,
-  Calendar, ShieldCheck, MessageSquare, AlertTriangle
+  Calendar, ShieldCheck, MessageSquare, AlertTriangle, RotateCw
 } from 'lucide-react';
 import { api } from '../services/api';
 import { getN8nConfig } from '../services/n8n';
@@ -13,6 +13,7 @@ export default function Requests() {
   const [requests, setRequests] = useState<any[]>([]);
   const [sentEmails, setSentEmails] = useState<any[]>([]);
   const [selectedEmail, setSelectedEmail] = useState<any | null>(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   
   // Composing state
   const [isComposing, setIsComposing] = useState(false);
@@ -38,16 +39,32 @@ export default function Requests() {
   const sentList = [...resolvedRequests, ...sentEmails];
   const activeList = activeFolder === 'inbox' ? inboxList : activeFolder === 'sent' ? sentList : [];
 
-  useEffect(() => {
-    api.getRequests().then(data => {
+  const fetchRequests = async (showSpinner = false) => {
+    if (showSpinner) setIsRefreshing(true);
+    try {
+      const data = await api.getRequests();
       setRequests(data);
-      const pending = data.filter((r: any) => !r.hasHumanIntervention && !r.hseDecision && !r.isResponded);
-      if (pending.length > 0) {
-        handleSelectEmail(pending[0]);
-      } else if (data.length > 0) {
-        handleSelectEmail(data[0]);
-      }
-    });
+      setSelectedEmail((prev: any) => {
+        if (!prev) {
+          const pending = data.filter((r: any) => !r.hasHumanIntervention && !r.hseDecision && !r.isResponded);
+          return pending.length > 0 ? pending[0] : (data.length > 0 ? data[0] : null);
+        }
+        const updated = data.find((r: any) => r.id === prev.id);
+        return updated || prev;
+      });
+    } catch (e) {
+      console.warn('Error al sincronizar solicitudes:', e);
+    } finally {
+      if (showSpinner) setIsRefreshing(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchRequests();
+    const interval = setInterval(() => {
+      fetchRequests(false);
+    }, 3500);
+    return () => clearInterval(interval);
   }, []);
 
   const handleFolderChange = (folder: 'inbox' | 'sent' | 'drafts') => {
@@ -265,11 +282,20 @@ export default function Requests() {
 
       {/* 2. LISTA DE CORREOS (Panel Central) */}
       <div className="w-[380px] flex-shrink-0 bg-white border border-[#E2E8F0] rounded-[24px] shadow-sm flex flex-col overflow-hidden">
-        <div className="p-5 border-b border-[#E2E8F0] bg-gray-50/50">
-          <h2 className="text-[18px] font-bold text-[#111827] capitalize">
-            {activeFolder === 'inbox' ? 'Bandeja de Entrada' : activeFolder === 'sent' ? 'Enviados' : 'Borradores'}
-          </h2>
-          <p className="text-sm text-[#7C8499]">{activeList.length} correos</p>
+        <div className="p-5 border-b border-[#E2E8F0] bg-gray-50/50 flex items-center justify-between">
+          <div>
+            <h2 className="text-[18px] font-bold text-[#111827] capitalize">
+              {activeFolder === 'inbox' ? 'Bandeja de Entrada' : activeFolder === 'sent' ? 'Enviados' : 'Borradores'}
+            </h2>
+            <p className="text-sm text-[#7C8499]">{activeList.length} correos</p>
+          </div>
+          <button
+            onClick={() => fetchRequests(true)}
+            title="Sincronizar correos ahora"
+            className="p-2 text-[#7C8499] hover:text-[#5B3FF5] hover:bg-white rounded-full transition-colors cursor-pointer border border-transparent hover:border-[#E2E8F0]"
+          >
+            <RotateCw size={16} className={isRefreshing ? 'animate-spin text-[#5B3FF5]' : ''} />
+          </button>
         </div>
         
         <div className="flex-1 overflow-y-auto custom-scrollbar">
@@ -319,9 +345,24 @@ export default function Requests() {
             );
           })}
           {activeList.length === 0 && (
-            <div className="p-8 text-center text-[#A3AAC2]">
-              <Mail size={40} className="mx-auto mb-3 opacity-20" />
-              <p>No hay correos aquí.</p>
+            <div className="h-full flex flex-col items-center justify-center p-6 text-center text-[#7C8499]">
+              <Inbox size={42} className="stroke-[1.5] text-[#A3AAC2] mb-3" />
+              <p className="text-sm font-semibold text-[#111827]">
+                {activeFolder === 'inbox' ? 'Bandeja de entrada al día' : 'No hay correos en esta sección'}
+              </p>
+              <p className="text-xs text-[#7C8499] mt-1 max-w-[220px]">
+                {activeFolder === 'inbox' 
+                  ? 'No hay justificaciones pendientes. Los correos resueltos se encuentran en "Enviados".' 
+                  : 'Los mensajes aparecerán aquí cuando sean procesados.'}
+              </p>
+              {activeFolder === 'inbox' && sentList.length > 0 && (
+                <button
+                  onClick={() => handleFolderChange('sent')}
+                  className="mt-4 text-xs font-bold text-[#5B3FF5] hover:underline cursor-pointer"
+                >
+                  Ver {sentList.length} correos en Enviados →
+                </button>
+              )}
             </div>
           )}
         </div>
