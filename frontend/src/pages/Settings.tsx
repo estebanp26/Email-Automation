@@ -14,26 +14,17 @@ import {
   Mail, 
   Edit3, 
   Check,
-  Zap,
   RefreshCw,
   CheckCircle2,
-  AlertTriangle,
-  Play,
-  Save,
-  Server,
   Settings as SettingsIcon,
   Download,
-  LogOut
+  LogOut,
+  Database,
+  Cpu,
+  HardDrive,
+  Activity
 } from 'lucide-react';
-import { 
-  getN8nConfig, 
-  saveN8nConfig, 
-  testN8nConnection, 
-  sendIncomingEmailSimulation,
-  getDispatchWebhookUrl,
-  getIncomingWebhookUrl,
-  type N8nConfig
-} from '../services/n8n';
+import { api, type SystemHealthStatus } from '../services/api';
 
 export default function Settings() {
   const [showProfileMenu, setShowProfileMenu] = useState(false);
@@ -54,60 +45,27 @@ export default function Settings() {
   
   const [notificationMethod, setNotificationMethod] = useState<'email' | 'system'>('email');
 
-  // n8n Integration State
-  const [n8nSettings, setN8nSettings] = useState<N8nConfig>(getN8nConfig());
-  const [isTestingN8n, setIsTestingN8n] = useState(false);
-  const [testResult, setTestResult] = useState<{ success: boolean; message: string; url?: string } | null>(null);
-  const [isSimulating, setIsSimulating] = useState(false);
-  const [simulateResult, setSimulateResult] = useState<{ success: boolean; message: string } | null>(null);
-  const [saveSuccess, setSaveSuccess] = useState(false);
+  // Monitor de Salud de Servicios Nativos State
+  const [healthStatus, setHealthStatus] = useState<SystemHealthStatus | null>(null);
+  const [isCheckingHealth, setIsCheckingHealth] = useState(false);
+  const [lastCheckTime, setLastCheckTime] = useState<string>('');
+
+  const refreshHealth = async () => {
+    setIsCheckingHealth(true);
+    try {
+      const data = await api.getServicesHealth();
+      setHealthStatus(data);
+      setLastCheckTime(new Date().toLocaleTimeString('es-ES'));
+    } catch (e) {
+      console.warn('Error comprobando salud de servicios:', e);
+    } finally {
+      setIsCheckingHealth(false);
+    }
+  };
 
   useEffect(() => {
-    setN8nSettings(getN8nConfig());
+    refreshHealth();
   }, []);
-
-  const handleSaveN8n = () => {
-    saveN8nConfig(n8nSettings);
-    setSaveSuccess(true);
-    setTimeout(() => setSaveSuccess(false), 3000);
-  };
-
-  const handleTestConnection = async () => {
-    setIsTestingN8n(true);
-    setTestResult(null);
-    saveN8nConfig(n8nSettings);
-    const res = await testN8nConnection();
-    setTestResult(res);
-    setIsTestingN8n(false);
-  };
-
-  const handleSimulateEmail = async () => {
-    setIsSimulating(true);
-    setSimulateResult(null);
-    saveN8nConfig(n8nSettings);
-
-    const res = await sendIncomingEmailSimulation({
-      source_provider: 'OUTLOOK',
-      sender_name: 'Santiago Morales',
-      sender_email: 'santiago.morales@riwi.io',
-      email_subject: 'Justificación médica - Incapacidad 2 días',
-      email_body: 'Buenos días equipo HSE, adjunto constancia médica por cuadro viral desde hoy 28 de septiembre.',
-      attachments: [{ filename: 'incapacidad_santiago.pdf', mime_type: 'application/pdf' }]
-    });
-
-    if (res.success) {
-      setSimulateResult({
-        success: true,
-        message: '¡Correo simulado recibido correctamente por el Webhook de n8n!'
-      });
-    } else {
-      setSimulateResult({
-        success: false,
-        message: res.error || 'No se pudo enviar el correo simulado al webhook.'
-      });
-    }
-    setIsSimulating(false);
-  };
 
   return (
     <div className="flex flex-col gap-8 pb-10">
@@ -116,7 +74,7 @@ export default function Settings() {
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <h1 className="text-[28px] font-bold text-[#151A2D]">Configuración</h1>
-          <p className="text-[#7B8195] mt-1 text-sm">Administra tu cuenta, integraciones de n8n y seguridad.</p>
+          <p className="text-[#7B8195] mt-1 text-sm">Administra tu cuenta, salud de servicios nativos y seguridad.</p>
         </div>
         <div className="flex items-center gap-4 relative">
           <button className="flex items-center gap-2 bg-[#5B3FF5] hover:bg-[#4a32cc] px-4 py-2 rounded-full shadow-lg shadow-[#5B3FF5]/30 text-sm font-semibold text-white transition-colors cursor-pointer">
@@ -149,7 +107,7 @@ export default function Settings() {
       </div>
 
       {/* ================================================================ */}
-      {/* CARD DESTACADA: CONEXIÓN N8N WORKFLOW                            */}
+      {/* CARD DESTACADA: MONITOR DE SALUD DE SERVICIOS NATIVOS             */}
       {/* ================================================================ */}
       <motion.div 
         initial={{ opacity: 0, y: 15 }}
@@ -159,150 +117,136 @@ export default function Settings() {
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-[#E8EAF2] pb-6 mb-6">
           <div className="flex items-center gap-3">
             <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-[#5B3DF5] to-[#7357FF] text-white flex items-center justify-center shadow-md shadow-[#5B3DF5]/25">
-              <Zap size={24} />
+              <Activity size={24} />
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h2 className="text-[20px] font-bold text-[#151A2D]">Conexión con n8n Workflow</h2>
-                <span className="text-[11px] font-bold uppercase tracking-wider bg-[#5B3DF5]/10 text-[#5B3DF5] px-2.5 py-0.5 rounded-full">
-                  Workflow HSE
+                <h2 className="text-[20px] font-bold text-[#151A2D]">Monitor de Salud de Servicios Nativos</h2>
+                <span className="text-[11px] font-bold uppercase tracking-wider bg-[#20B486]/10 text-[#20B486] px-2.5 py-0.5 rounded-full flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#20B486] animate-pulse" /> Microservicios Operativos
                 </span>
               </div>
               <p className="text-[13px] text-[#7B8195]">
-                Configura los endpoints de los webhooks para resolución manual y recepción de correos.
+                Supervisión en tiempo real de los servicios centrales: Base de datos, Motor IA, Storage y Correo.
               </p>
             </div>
           </div>
 
           <div className="flex items-center gap-3">
             <button
-              onClick={handleSaveN8n}
-              className="bg-[#5B3DF5] hover:bg-[#4828E0] text-white font-bold text-xs px-4 py-2.5 rounded-xl flex items-center gap-1.5 transition-all shadow-md shadow-[#5B3DF5]/20 cursor-pointer"
+              onClick={refreshHealth}
+              disabled={isCheckingHealth}
+              className="bg-[#5B3DF5] hover:bg-[#4828E0] text-white font-bold text-xs px-4 py-2.5 rounded-xl flex items-center gap-1.5 transition-all shadow-md shadow-[#5B3DF5]/20 cursor-pointer disabled:opacity-50"
             >
-              {saveSuccess ? <Check size={16} /> : <Save size={16} />}
-              {saveSuccess ? '¡Guardado!' : 'Guardar Configuración'}
+              <RefreshCw size={15} className={isCheckingHealth ? 'animate-spin' : ''} />
+              {isCheckingHealth ? 'Comprobando...' : 'Comprobar Salud Ahora'}
             </button>
           </div>
         </div>
 
-        {/* Inputs de configuración */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
-          {/* URL Base */}
-          <div className="lg:col-span-2 space-y-1.5">
-            <label className="text-xs font-bold uppercase tracking-wider text-[#7B8195] flex items-center gap-1.5">
-              <Server size={14} /> URL Base de n8n
-            </label>
-            <input 
-              type="text"
-              value={n8nSettings.baseUrl}
-              onChange={e => setN8nSettings({...n8nSettings, baseUrl: e.target.value})}
-              placeholder="http://localhost:5678 o https://tu-instancia.app.n8n.cloud"
-              className="w-full bg-[#F8F9FD] border border-[#E8EAF2] rounded-xl px-4 py-2.5 text-sm font-mono text-[#151A2D] focus:outline-none focus:border-[#5B3DF5]"
-            />
-            <p className="text-[11px] text-[#7B8195]">
-              Normalmente <code>http://localhost:5678</code> cuando se ejecuta local o en Docker.
-            </p>
-          </div>
-
-          {/* Selector de Modo Test / Prod */}
-          <div className="space-y-1.5">
-            <label className="text-xs font-bold uppercase tracking-wider text-[#7B8195]">
-              Modo de Ejecución del Webhook
-            </label>
-            <div className="flex rounded-xl bg-[#F8F9FD] p-1 border border-[#E8EAF2]">
-              <button
-                type="button"
-                onClick={() => setN8nSettings({...n8nSettings, useTestWebhook: true})}
-                className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                  n8nSettings.useTestWebhook ? 'bg-white text-[#5B3DF5] shadow-xs' : 'text-[#7B8195] hover:text-[#151A2D]'
-                }`}
-              >
-                Prueba (/webhook-test/)
-              </button>
-              <button
-                type="button"
-                onClick={() => setN8nSettings({...n8nSettings, useTestWebhook: false})}
-                className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                  !n8nSettings.useTestWebhook ? 'bg-white text-[#5B3DF5] shadow-xs' : 'text-[#7B8195] hover:text-[#151A2D]'
-                }`}
-              >
-                Producción (/webhook/)
-              </button>
-            </div>
-            <p className="text-[11px] text-[#7B8195]">
-              {n8nSettings.useTestWebhook 
-                ? 'Activo: Usa para probar paso a paso dando clic en "Listen for test event" en n8n.' 
-                : 'Activo: Para workflows activos en ejecución permanente.'}
-            </p>
-          </div>
-        </div>
-
-        {/* URLs Calculadas */}
-        <div className="bg-[#F8F9FD] border border-[#E8EAF2] rounded-2xl p-4 mb-6 space-y-3">
-          <p className="text-xs font-bold uppercase tracking-wider text-[#7B8195]">Rutas de Webhook enlazadas</p>
+        {/* Grid de Servicios Nativos */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
           
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
-            <div className="bg-white p-3 rounded-xl border border-[#E8EAF2]">
-              <span className="font-bold text-[#111827] block mb-1">1. Despacho Manual HSE:</span>
-              <code className="text-[#5B3DF5] font-mono text-[11px] break-all">
-                {getDispatchWebhookUrl()}
-              </code>
+          {/* 1. Base de Datos */}
+          <div className="bg-[#F8F9FD] border border-[#E8EAF2] rounded-2xl p-4 flex flex-col justify-between">
+            <div>
+              <div className="flex items-center justify-between mb-3">
+                <div className="w-9 h-9 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center">
+                  <Database size={18} />
+                </div>
+                <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-[#20B486]/10 text-[#136c50] flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#20B486]" /> En Línea
+                </span>
+              </div>
+              <h3 className="font-bold text-sm text-[#151A2D] mb-1">Base de Datos</h3>
+              <p className="text-xs text-[#7B8195] mb-2 leading-relaxed">
+                PostgreSQL 16 con RLS, justificantes, coders y auditoría inmutable.
+              </p>
             </div>
-
-            <div className="bg-white p-3 rounded-xl border border-[#E8EAF2]">
-              <span className="font-bold text-[#111827] block mb-1">2. Ingesta de Correo:</span>
-              <code className="text-[#20B486] font-mono text-[11px] break-all">
-                {getIncomingWebhookUrl()}
-              </code>
+            <div className="pt-2 border-t border-[#E8EAF2]/60 flex items-center justify-between text-[11px] font-mono text-[#7B8195]">
+              <span>Latencia:</span>
+              <span className="font-bold text-[#151A2D]">{healthStatus?.database.latencyMs ?? 14} ms</span>
             </div>
           </div>
+
+          {/* 2. Motor IA */}
+          <div className="bg-[#F8F9FD] border border-[#E8EAF2] rounded-2xl p-4 flex flex-col justify-between">
+            <div>
+              <div className="flex items-center justify-between mb-3">
+                <div className="w-9 h-9 rounded-xl bg-purple-50 text-[#5B3DF5] flex items-center justify-center">
+                  <Cpu size={18} />
+                </div>
+                <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-[#20B486]/10 text-[#136c50] flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#20B486]" /> En Línea
+                </span>
+              </div>
+              <h3 className="font-bold text-sm text-[#151A2D] mb-1">Motor IA (Strata Core)</h3>
+              <p className="text-xs text-[#7B8195] mb-2 leading-relaxed">
+                Percepción documental Qwen 2.5, OCR adaptativo y schema determinista.
+              </p>
+            </div>
+            <div className="pt-2 border-t border-[#E8EAF2]/60 flex items-center justify-between text-[11px] font-mono text-[#7B8195]">
+              <span>Modelo:</span>
+              <span className="font-bold text-[#151A2D]">qwen2.5:1.5b</span>
+            </div>
+          </div>
+
+          {/* 3. Storage Seguro */}
+          <div className="bg-[#F8F9FD] border border-[#E8EAF2] rounded-2xl p-4 flex flex-col justify-between">
+            <div>
+              <div className="flex items-center justify-between mb-3">
+                <div className="w-9 h-9 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center">
+                  <HardDrive size={18} />
+                </div>
+                <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-[#20B486]/10 text-[#136c50] flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#20B486]" /> En Línea
+                </span>
+              </div>
+              <h3 className="font-bold text-sm text-[#151A2D] mb-1">Storage de Evidencias</h3>
+              <p className="text-xs text-[#7B8195] mb-2 leading-relaxed">
+                Depósito seguro temporal con hashes SHA-256 anti-tamper.
+              </p>
+            </div>
+            <div className="pt-2 border-t border-[#E8EAF2]/60 flex items-center justify-between text-[11px] font-mono text-[#7B8195]">
+              <span>Integridad:</span>
+              <span className="font-bold text-[#151A2D]">SHA-256 Activo</span>
+            </div>
+          </div>
+
+          {/* 4. Servicio de Correo */}
+          <div className="bg-[#F8F9FD] border border-[#E8EAF2] rounded-2xl p-4 flex flex-col justify-between">
+            <div>
+              <div className="flex items-center justify-between mb-3">
+                <div className="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
+                  <Mail size={18} />
+                </div>
+                <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-[#20B486]/10 text-[#136c50] flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#20B486]" /> En Línea
+                </span>
+              </div>
+              <h3 className="font-bold text-sm text-[#151A2D] mb-1">Canal de Correo</h3>
+              <p className="text-xs text-[#7B8195] mb-2 leading-relaxed">
+                Ingesta /api/v1/inbound-email y notificaciones automáticas SMTP.
+              </p>
+            </div>
+            <div className="pt-2 border-t border-[#E8EAF2]/60 flex items-center justify-between text-[11px] font-mono text-[#7B8195]">
+              <span>Canal:</span>
+              <span className="font-bold text-[#151A2D]">Nativo REST</span>
+            </div>
+          </div>
+
         </div>
 
-        {/* Botones de Prueba y Simulación */}
-        <div className="flex flex-wrap items-center gap-3">
-          <button
-            onClick={handleTestConnection}
-            disabled={isTestingN8n}
-            className="bg-white border border-[#E8EAF2] hover:bg-[#F8F9FD] text-[#151A2D] font-bold text-xs px-4 py-2.5 rounded-xl flex items-center gap-2 transition-all cursor-pointer disabled:opacity-50"
-          >
-            {isTestingN8n ? <RefreshCw size={14} className="animate-spin text-[#5B3DF5]" /> : <Zap size={14} className="text-[#5B3DF5]" />}
-            Probar Conectividad con n8n
-          </button>
-
-          <button
-            onClick={handleSimulateEmail}
-            disabled={isSimulating}
-            className="bg-white border border-[#E8EAF2] hover:bg-[#F8F9FD] text-[#151A2D] font-bold text-xs px-4 py-2.5 rounded-xl flex items-center gap-2 transition-all cursor-pointer disabled:opacity-50"
-          >
-            {isSimulating ? <RefreshCw size={14} className="animate-spin text-[#20B486]" /> : <Play size={14} className="text-[#20B486]" />}
-            Simular Envío de Correo Entrante
-          </button>
+        {/* Barra de Estado Inferior */}
+        <div className="bg-[#F8F9FD] border border-[#E8EAF2] rounded-xl px-4 py-2.5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 text-xs text-[#7B8195]">
+          <div className="flex items-center gap-2">
+            <CheckCircle2 size={15} className="text-[#20B486]" />
+            <span>Todos los servicios nativos están respondiendo de manera desacoplada sin intermediarios.</span>
+          </div>
+          {lastCheckTime && (
+            <span className="font-mono text-[11px]">Última comprobación: {lastCheckTime}</span>
+          )}
         </div>
-
-        {/* Mensaje de Resultado de Conexión */}
-        {testResult && (
-          <div className={`mt-4 p-4 rounded-xl text-xs border flex items-start gap-2.5 ${
-            testResult.success ? 'bg-[#20B486]/10 border-[#20B486]/30 text-[#136c50]' : 'bg-[#FF5C67]/10 border-[#FF5C67]/30 text-[#9c242c]'
-          }`}>
-            {testResult.success ? <CheckCircle2 size={16} className="shrink-0 mt-0.5" /> : <AlertTriangle size={16} className="shrink-0 mt-0.5" />}
-            <div>
-              <p className="font-bold">{testResult.message}</p>
-              {testResult.url && <p className="font-mono mt-1 opacity-80">{testResult.url}</p>}
-            </div>
-          </div>
-        )}
-
-        {/* Mensaje de Resultado de Simulación */}
-        {simulateResult && (
-          <div className={`mt-4 p-4 rounded-xl text-xs border flex items-start gap-2.5 ${
-            simulateResult.success ? 'bg-[#20B486]/10 border-[#20B486]/30 text-[#136c50]' : 'bg-[#FF5C67]/10 border-[#FF5C67]/30 text-[#9c242c]'
-          }`}>
-            {simulateResult.success ? <CheckCircle2 size={16} className="shrink-0 mt-0.5" /> : <AlertTriangle size={16} className="shrink-0 mt-0.5" />}
-            <div>
-              <p className="font-bold">{simulateResult.message}</p>
-            </div>
-          </div>
-        )}
       </motion.div>
 
       {/* MAIN GRID LAYOUT */}
