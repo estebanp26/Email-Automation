@@ -7,6 +7,7 @@ from ...schemas.policy import (
     AttendanceThresholdSummary,
 )
 from ...services.hse_engine import hse_engine
+from ...services.hse_rules import hse_rules as hse_rules_facade
 
 router = APIRouter(prefix="/policy", tags=["Políticas HSE & Umbrales (BE-05)"])
 
@@ -21,11 +22,12 @@ async def evaluate_policy(payload: PolicyEvaluationInput):
     """
     Evalúa una justificación contra las reglas de la Presentación de Asistencias de Riwi:
     - 10 motivos oficiales
-    - Ventana temporal (máx 3 días para fuerza mayor/incapacidades, previo para previsibles)
+    - Ventana temporal en horas hábiles (48h general / 72h fuerza mayor, QA-04)
     - Límite de 2 días para malestar sin incapacidad
     - Detección de casos confidenciales sensibles
+    - Calamidad/luto como FUERZA_MAYOR (nunca inválido directo por falta de soporte)
     """
-    return hse_engine.evaluate_excuse(payload)
+    return hse_rules_facade.evaluate_excuse(payload)
 
 
 @router.get(
