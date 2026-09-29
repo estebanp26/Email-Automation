@@ -26,6 +26,12 @@ from .notification import (
     NotificationDispatchResult,
     NotificationPreviewRequest,
 )
+from .resolution import (
+    ManualResolutionInput,
+    ReconsiderationInput,
+    ResolutionAuditEntry,
+    ResolutionResponse,
+)
 
 __all__ = [
     "RawAttachmentInput",
@@ -46,4 +52,8 @@ __all__ = [
     "NotificationDispatchInput",
     "NotificationDispatchResult",
     "NotificationPreviewRequest",
+    "ManualResolutionInput",
+    "ReconsiderationInput",
+    "ResolutionAuditEntry",
+    "ResolutionResponse",
 ]
