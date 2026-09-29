@@ -51,6 +51,33 @@ COMMENT ON COLUMN hse_users.password_hash IS 'Hash seguro de contraseña (bcrypt
 COMMENT ON COLUMN hse_users.role IS 'Rol administrativo con permisos en el dashboard web';
 
 -- =============================================================================
+-- 2.5. TABLA inbound_emails (Registro Transaccional de Ingesta Desacoplada)
+-- =============================================================================
+CREATE TABLE IF NOT EXISTS inbound_emails (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    message_id VARCHAR(255) NOT NULL UNIQUE,
+    conversation_id VARCHAR(255),
+    source_provider VARCHAR(50) NOT NULL DEFAULT 'OUTLOOK',
+    sender_email VARCHAR(255) NOT NULL,
+    sender_name VARCHAR(150),
+    email_subject TEXT NOT NULL,
+    email_body TEXT NOT NULL,
+    received_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    status VARCHAR(50) NOT NULL DEFAULT 'PENDING_IDENTIFICATION',
+    attachments JSONB DEFAULT '[]'::jsonb,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT chk_inbound_status CHECK (
+        status IN ('PENDING_IDENTIFICATION', 'IDENTIFIED', 'PROCESSING', 'PROCESSED', 'FAILED', 'DISCARDED')
+    )
+);
+
+COMMENT ON TABLE inbound_emails IS 'Registro transaccional inmutable para eventos de correo entrante desde Outlook y Gmail';
+COMMENT ON COLUMN inbound_emails.message_id IS 'ID inmutable del mensaje en el servidor de correo (Garantía de idempotencia)';
+COMMENT ON COLUMN inbound_emails.status IS 'Estado del flujo: PENDING_IDENTIFICATION, IDENTIFIED, etc.';
+
+-- =============================================================================
 -- 3. TABLA justifications (Con diferenciador de intervención humana)
 -- =============================================================================
 CREATE TABLE justifications (
@@ -151,6 +178,10 @@ CREATE INDEX idx_justifications_message_id ON justifications(message_id);
 CREATE INDEX idx_justifications_ai_response ON justifications USING GIN (ai_response);
 CREATE INDEX idx_justifications_attachments ON justifications USING GIN (attachments);
 
+CREATE INDEX IF NOT EXISTS idx_inbound_emails_message_id ON inbound_emails(message_id);
+CREATE INDEX IF NOT EXISTS idx_inbound_emails_status ON inbound_emails(status);
+CREATE INDEX IF NOT EXISTS idx_inbound_emails_received_at ON inbound_emails(received_at DESC);
+
 -- =============================================================================
 -- TRIGGERS PARA AUDITORÍA AUTOMÁTICA (updated_at)
 -- =============================================================================
@@ -169,6 +200,11 @@ EXECUTE FUNCTION update_updated_at_column();
 
 CREATE TRIGGER trg_justifications_updated_at
 BEFORE UPDATE ON justifications
+FOR EACH ROW
+EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER trg_inbound_emails_updated_at
+BEFORE UPDATE ON inbound_emails
 FOR EACH ROW
 EXECUTE FUNCTION update_updated_at_column();
 
