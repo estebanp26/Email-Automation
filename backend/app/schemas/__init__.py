@@ -16,6 +16,11 @@ from .policy import (
     PolicyEvaluationResult,
     AttendanceThresholdSummary,
 )
+from .justification import (
+    JustificationRecord,
+    PipelineProcessRequest,
+    PipelineExecutionResult,
+)
 
 __all__ = [
     "RawAttachmentInput",
@@ -30,4 +35,7 @@ __all__ = [
     "PolicyEvaluationInput",
     "PolicyEvaluationResult",
     "AttendanceThresholdSummary",
+    "JustificationRecord",
+    "PipelineProcessRequest",
+    "PipelineExecutionResult",
 ]

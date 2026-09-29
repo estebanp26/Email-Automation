@@ -1,6 +1,7 @@
 from .ingestion import EmailNormalizationService, email_normalizer
 from .coder_resolver import CoderResolutionService, coder_resolver
 from .hse_engine import HSEPolicyEngine, hse_engine
+from .orchestrator import JustificationOrchestrator, orchestrator
 
 __all__ = [
     "EmailNormalizationService",
@@ -9,4 +10,6 @@ __all__ = [
     "coder_resolver",
     "HSEPolicyEngine",
     "hse_engine",
+    "JustificationOrchestrator",
+    "orchestrator",
 ]
