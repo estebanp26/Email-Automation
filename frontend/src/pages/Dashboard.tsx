@@ -275,6 +275,7 @@ export default function Dashboard() {
             </div>
             <h3 className="font-bold text-[#11132C] text-lg">Correos recientes recibidos ({recentEmails.length})</h3>
           </div>
+                    <button onClick={() => navigate('/requests')} className="bg-[#5B3FF5] text-white px-5 py-2.5 rounded-full text-sm font-semibold flex items-center gap-2 hover:bg-[#4a32cc] transition-colors shadow-lg shadow-[#5B3FF5]/30 cursor-pointer">
           <button 
             onClick={() => navigate('/requests')}
             className="bg-[#5B3FF5] text-white px-5 py-2.5 rounded-full text-sm font-semibold flex items-center gap-2 hover:bg-[#4a32cc] transition-colors shadow-lg shadow-[#5B3FF5]/30 cursor-pointer"

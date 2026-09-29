@@ -4,7 +4,7 @@ import { motion } from 'framer-motion';
 import { Lock, User, Eye, Check } from 'lucide-react';
 import logoLogin from '../assets/logo-login.png';
 import logoWhite from '../assets/logo-white.png';
-import zorro from '../assets/zorro.png';
+import zorroFull from '../assets/zorro_full.png';
 import bgCode from '../assets/bg-code.png';
 
 export default function Login() {
@@ -74,7 +74,7 @@ export default function Login() {
           initial={{ opacity: 0, y: 30 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6, delay: 0.1 }}
-          className="w-full max-w-[480px] bg-white rounded-[28px] p-8 lg:p-10 relative overflow-hidden shadow-[0_20px_60px_-15px_rgba(0,0,0,0.6)] justify-self-center flex-shrink-0"
+          className="w-full max-w-[480px] bg-white rounded-[28px] p-8 lg:p-10 relative overflow-hidden shadow-[0_20px_60px_-15px_rgba(0,0,0,0.6)] justify-self-center flex-shrink-0 transform lg:translate-x-8 xl:translate-x-12"
         >
           {/* CARD BOTTOM DECORATION */}
           <div className="absolute bottom-0 left-0 right-0 h-28 pointer-events-none overflow-hidden">
@@ -168,7 +168,7 @@ export default function Login() {
           transition={{ duration: 0.6, delay: 0.2 }}
           className="flex justify-end items-center"
         >
-          <div className="relative transform translate-x-8 xl:translate-x-16">
+          <div className="relative transform translate-x-12 xl:translate-x-20">
             {/* Sparkles around the raised hand */}
             <div className="absolute top-[18%] right-[12%] text-white animate-pulse z-20"><StarSvg size={20} /></div>
             <div className="absolute top-[26%] right-[5%] text-white animate-pulse z-20" style={{animationDelay: '0.5s'}}><StarSvg size={14} /></div>
@@ -177,11 +177,11 @@ export default function Login() {
             <div className="absolute top-[43%] right-[9%] text-white opacity-80 z-20"><StarSvg size={12} /></div>
             <div className="absolute top-[23%] right-[-3%] text-white opacity-70 z-20"><StarSvg size={14} /></div>
 
+            <div className="absolute -bottom-2 right-[20%] w-[35%] h-[20px] bg-[#050614]/90 blur-[12px] rounded-[100%] z-0" />
             <img 
-              src={zorro} 
+              src={zorroFull} 
               alt="Riwi Fox Astronaut" 
-              className="h-[480px] xl:h-[540px] w-auto object-contain max-w-none relative z-10" 
-              style={{ WebkitMaskImage: 'radial-gradient(ellipse 85% 85% at 50% 50%, black 75%, transparent 100%)' }}
+              className="h-[380px] xl:h-[440px] w-auto object-contain max-w-none relative z-10" 
             />
           </div>
         </motion.div>
