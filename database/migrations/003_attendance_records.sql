@@ -66,6 +66,66 @@ BEFORE UPDATE ON public.attendance_records
 FOR EACH ROW
 EXECUTE FUNCTION public.update_updated_at_column();
 
+-- Triggers de sincronización automática bidireccional
+CREATE OR REPLACE FUNCTION public.fn_auto_link_attendance_to_justification()
+RETURNS TRIGGER AS $$
+DECLARE
+    v_just_id VARCHAR(100);
+BEGIN
+    IF NEW.justification_id IS NOT NULL THEN
+        IF NEW.status = 'AUSENTE' THEN
+            NEW.status := 'EXCUSADO';
+        END IF;
+        RETURN NEW;
+    END IF;
+
+    IF NEW.status = 'AUSENTE' THEN
+        SELECT j.id INTO v_just_id
+        FROM public.justifications j
+        WHERE j.coder_id = NEW.coder_id
+          AND NEW.attendance_date BETWEEN j.start_date AND j.end_date
+          AND j.validation_status = 'APPROVED'
+        ORDER BY j.created_at DESC
+        LIMIT 1;
+
+        IF v_just_id IS NOT NULL THEN
+            NEW.justification_id := v_just_id;
+            NEW.status := 'EXCUSADO';
+        END IF;
+    END IF;
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_attendance_records_auto_link ON public.attendance_records;
+CREATE TRIGGER trg_attendance_records_auto_link
+BEFORE INSERT OR UPDATE OF coder_id, attendance_date, status ON public.attendance_records
+FOR EACH ROW
+EXECUTE FUNCTION public.fn_auto_link_attendance_to_justification();
+
+CREATE OR REPLACE FUNCTION public.fn_sync_approved_justification_to_attendance()
+RETURNS TRIGGER AS $$
+BEGIN
+    IF NEW.validation_status = 'APPROVED' AND (OLD.validation_status IS NULL OR OLD.validation_status != 'APPROVED') THEN
+        UPDATE public.attendance_records
+        SET justification_id = NEW.id,
+            status = 'EXCUSADO',
+            updated_at = CURRENT_TIMESTAMP
+        WHERE coder_id = NEW.coder_id
+          AND attendance_date BETWEEN NEW.start_date AND NEW.end_date
+          AND status = 'AUSENTE';
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_sync_justification_approved_attendance ON public.justifications;
+CREATE TRIGGER trg_sync_justification_approved_attendance
+AFTER UPDATE OF validation_status ON public.justifications
+FOR EACH ROW
+EXECUTE FUNCTION public.fn_sync_approved_justification_to_attendance();
+
 -- Índices de rendimiento
 CREATE INDEX IF NOT EXISTS idx_attendance_coder_id
     ON public.attendance_records(coder_id);
@@ -109,10 +169,27 @@ SELECT
     c.is_active                                         AS coder_is_active,
 
     -- Días transcurridos sin justificación
-    CURRENT_DATE - ar.attendance_date                   AS days_without_justification
+    CURRENT_DATE - ar.attendance_date                   AS days_without_justification,
+
+    -- Alerta si existe una justificación en trámite (revisión manual o pendiente)
+    CASE 
+        WHEN pj.id IS NOT NULL THEN TRUE 
+        ELSE FALSE 
+    END                                                 AS has_pending_justification,
+    pj.id                                               AS pending_justification_id,
+    pj.validation_status                                AS pending_justification_status
 
 FROM public.attendance_records ar
 INNER JOIN public.coders c ON ar.coder_id = c.id
+LEFT JOIN LATERAL (
+    SELECT j.id, j.validation_status
+    FROM public.justifications j
+    WHERE j.coder_id = ar.coder_id
+      AND ar.attendance_date BETWEEN j.start_date AND j.end_date
+      AND j.validation_status NOT IN ('APPROVED', 'DISAPPROVED')
+    ORDER BY j.created_at DESC
+    LIMIT 1
+) pj ON TRUE
 WHERE
     ar.status = 'AUSENTE'
     AND ar.justification_id IS NULL
@@ -141,3 +218,4 @@ ON public.attendance_records FOR UPDATE TO authenticated USING (true);
 
 CREATE POLICY "Permitir eliminar attendance_records a usuarios autenticados"
 ON public.attendance_records FOR DELETE TO authenticated USING (true);
+
