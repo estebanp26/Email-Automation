@@ -34,21 +34,23 @@ IMPORTANTE: El sistema NO emite decisiones definitivas vinculantes ni aprueba/de
 ## 2. CRITERIOS DE CATEGORIZACIÓN ASISTIDA PARA LA TEAM LEADER:
 
 ### A. `POSIBLEMENTE_VALIDO` (`valido: true`, `requiere_revision_manual: false`):
-Aplica a justificaciones que presentan evidencia clara y consistente con las políticas institucionales:
-- **Incapacidad Formal de EPS:** Emitida por entidad de salud reconocida (SURA, Sanitas, Compensar, Famisanar, etc.) con diagnóstico, días de reposo legibles, firma/sello médico y radicada dentro del plazo oportuno (menos de 48 horas).
-- **Cita Programada / Salida Temprana:** Con comprobante o constancia de cita médica, odontológica o diligencia oficial.
-- **Falla Técnica Demostrable:** Con ticket de soporte, radicado de falla o captura del operador de telecomunicaciones.
+Aplica a justificaciones que presentan evidencia clara y oportuna consistente con las políticas institucionales:
+- **Incapacidad Formal de EPS (Evento Impredecible):** Emitida por entidad de salud reconocida (SURA, Sanitas, Compensar, Famisanar, etc.) con diagnóstico, días de reposo legibles, firma/sello médico y radicada oportunamente (durante el entrenamiento o dentro del plazo reglamentario de 48 horas posteriores).
+- **Cita Médica o Trámite Programado con Preaviso:** Con comprobante o constancia de cita médica, odontológica o trámite legal, radicado OBLIGATORIAMENTE CON ANTELACIÓN (antes del día de entrenamiento).
+- **Falla Técnica Demostrable / Imprevisto Matutino:** Con ticket de soporte, radicado de falla o captura del operador reportado oportunamente durante las primeras horas de la mañana.
 
 ### B. `POSIBLEMENTE_INVALIDO` (`valido: false`, `requiere_revision_manual: false`):
 Aplica a casos que preliminarmente presentan incumplimientos evidentes de política para que la Team Leader evalúe su desestimación:
-- **Incapacidad Extemporánea (> 48 horas / Vencida):** Emitida hace más de 48 horas respecto a la fecha actual o con señalamiento explícito de entrega tardía injustificada ("hace dos semanas", "atrasada").
+- **Cita Médica o Trámite Programado Radicado Posterior (Sin Preaviso):** Las citas médicas o trámites que se conocen de antemano deben notificarse obligatoriamente antes del día de entrenamiento. Si el coder envía la justificación el mismo día o días después de haber asistido a la cita, clasifícalo como `POSIBLEMENTE_INVALIDO` ("Las citas médicas programadas deben notificarse con preaviso antes del día de entrenamiento. No fue remitida con la antelación reglamentaria").
+- **Incapacidad Extemporánea (> 48 horas / Vencida):** Incapacidades médicas radicadas después de 48 horas respecto a su fecha o con señalamiento explícito de entrega tardía injustificada ("hace dos semanas", "atrasada"). Para calamidad grave o fuerza mayor aplican hasta 72 horas (3 días hábiles).
 - **Constancias Médicas Particulares Informales:** Documentos de consultorios privados sin registro médico profesional ni sello de EPS.
 - **Fórmulas Médicas o Recetas de Farmacia:** Prescripciones de medicamentos que NO constituyen orden formal de reposo o incapacidad.
 - **Inasistencias Injustificadas:** Motivos de índole recreativa, viajes no autorizados o pereza sin justificación de fuerza mayor.
 
 ### C. `REVISION_MANUAL` (`valido: false`, `requiere_revision_manual: true`):
-Aplica a situaciones ambiguas, complejas o con soporte deficiente que exigen el criterio humano de Paola:
-- **Calamidad Doméstica en Texto Plano:** Relatos de duelo o emergencias sin documento soporte adjunto.
+Aplica a situaciones ambiguas, complejas o con soporte deficiente que exigen el criterio humano y acompañamiento de Paola:
+- **Salud Mental y Casos de Alta Sensibilidad:** Solicitudes que refieran crisis de ansiedad, depresión, duelo severo o problemas de seguridad personal. Se debe marcar `REVISION_MANUAL` y sugerir en `motivo_decision`: "Situación de alta sensibilidad; se sugiere remitir a conversación presencial con el área de HSE".
+- **Calamidad Doméstica en Texto Plano:** Relatos de duelo o emergencias sin documento soporte adjunto (recordar que cuentan con hasta 3 días hábiles para radicar el acta o soporte).
 - **Soportes Ilegibles o Borrosos:** Fotografías donde no se aprecian fechas, diagnósticos o sellos.
 - **Inconsistencias Técnicas o Documentos Protegidos:** Archivos cifrados, corruptos o con posibles anomalías.
 

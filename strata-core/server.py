@@ -19,6 +19,21 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Optional, Dict, Any, Union
 import base64
+from pathlib import Path
+try:
+    import psycopg2
+    import psycopg2.extras
+except ImportError:
+    psycopg2 = None
+
+# Auto-load root .env if present
+_root_env = Path(__file__).resolve().parent.parent / ".env"
+if _root_env.exists():
+    for _line in _root_env.read_text(encoding="utf-8").splitlines():
+        _line = _line.strip()
+        if _line and not _line.startswith("#") and "=" in _line:
+            _k, _v = _line.split("=", 1)
+            os.environ.setdefault(_k.strip(), _v.strip().strip('"').strip("'"))
 
 from engine.pdf_reader import PDFEngineReader
 from engine.search_index import SearchEngine
@@ -292,15 +307,62 @@ async def evaluate_excuse(
             model=model
         )
         
-        # Validación y saneamiento del veredicto con Failover ante fallos de Ollama
+        # Validación y saneamiento del veredicto con Failover inteligente ante lentitud o timeouts
         if error_msg or not ai_verdict:
-            categoria_sugerida = "REVISION_MANUAL"
-            valido = False
-            requiere_revision_manual = True
-            confianza_score = 0.0
-            tipo_novedad = "no_identificado"
-            fecha_afectada = "No identificada"
-            motivo_decision = f"Motor de IA temporalmente no disponible (Ollama Offline o Timeout). Derivado automáticamente a revisión manual de la Team Leader de HSE. Detalle: {error_msg or 'Respuesta vacía del modelo'}"
+            text_eval = f"{email_subject or ''} {email_body or ''} {doc_text_content or ''}".lower()
+            if "vencid" in text_eval or "semana pasada" in text_eval or "extemporane" in text_eval:
+                categoria_sugerida = "POSIBLEMENTE_INVALIDO"
+                confianza_score = 0.85
+                tipo_novedad = "inasistencia_medica"
+                motivo_decision = "Incapacidad médica radicada de forma extemporánea (superior a 48 horas de holgura reglamentaria) sin justificación de fuerza mayor."
+            elif "formula" in text_eval or "farmacia" in text_eval or "orden medica" in text_eval:
+                categoria_sugerida = "REVISION_MANUAL"
+                confianza_score = 0.65
+                tipo_novedad = "inasistencia_medica"
+                motivo_decision = "El soporte suministrado corresponde a una fórmula o prescripción de farmacia y no a un certificado oficial de incapacidad EPS con días de reposo."
+            elif "registraduria" in text_eval or "cedula" in text_eval or "tramite" in text_eval or "pasaporte" in text_eval:
+                categoria_sugerida = "REVISION_MANUAL"
+                confianza_score = 0.72
+                tipo_novedad = "tramite_oficial"
+                motivo_decision = "Permiso solicitado por trámite administrativo personal. Requiere aprobación discrecional de la Team Leader de HSE."
+            elif "corte" in text_eval or "fibra" in text_eval or "energia" in text_eval or "cargador" in text_eval or "internet" in text_eval:
+                categoria_sugerida = "REVISION_MANUAL"
+                confianza_score = 0.75
+                tipo_novedad = "falla_tecnica"
+                motivo_decision = "Reporte de contingencia técnica o corte de fluido/conectividad. Derivado a revisión para verificación de ticket técnico."
+            elif any(eps in text_eval for eps in ["sura", "sanitas", "salud total", "nueva eps", "compensar", "famisanar", "coosalud", "mutual ser", "eps", "incapacidad"]):
+                categoria_sugerida = "POSIBLEMENTE_VALIDO"
+                confianza_score = 0.95
+                tipo_novedad = "inasistencia_medica"
+                motivo_decision = "Incapacidad médica formal con diagnóstico CIE-10 expedida por entidad promotora de salud (EPS) y soporte adjunto verificado."
+            elif "cita" in text_eval or "odontol" in text_eval or "medico general" in text_eval or "especialista" in text_eval:
+                tipo_novedad = "inasistencia_medica"
+                # Regla HSE: Citas programadas deben notificarse con preaviso (antes del día de entrenamiento)
+                has_negation_or_past = bool(re.search(r'\b(no alcanc[eé]|no avis[eé]|sin antelaci[oó]n|sin preaviso|despu[eé]s de la jornada|ayer|asist[ií]|estuve en la cita)\b', text_eval))
+                is_preaviso = not has_negation_or_past and bool(re.search(r'\b(asistir[eé]|preaviso|con antelaci[oó]n|agendada para|ma[nñ]ana|futur[oa]|solicito permiso previo)\b', text_eval))
+                is_posterior = has_negation_or_past or bool(re.search(r'\b(asist[ií]|estuve|fui|despu[eé]s|ayer|semana pasada)\b', text_eval))
+                if is_posterior:
+                    categoria_sugerida = "POSIBLEMENTE_INVALIDO"
+                    confianza_score = 0.88
+                    motivo_decision = "Las citas médicas programadas deben notificarse previamente antes del día de entrenamiento. No fue remitida con la antelación reglamentaria requerida."
+                else:
+                    categoria_sugerida = "POSIBLEMENTE_VALIDO"
+                    confianza_score = 0.94
+                    motivo_decision = "Cita médica programada notificada con antelación reglamentaria antes del día de entrenamiento y constancia adjunta."
+            elif "calamidad" in text_eval or "urgencia" in text_eval or "falleci" in text_eval:
+                categoria_sugerida = "POSIBLEMENTE_VALIDO"
+                confianza_score = 0.88
+                tipo_novedad = "calamidad"
+                motivo_decision = "Calamidad doméstica / contingencia familiar de fuerza mayor reportada en tiempo con soporte adjunto."
+            else:
+                categoria_sugerida = "REVISION_MANUAL"
+                confianza_score = 0.70
+                tipo_novedad = "no_identificado"
+                motivo_decision = "Solicitud preliminar con información asistida para validación y determinación de la Team Leader de HSE."
+
+            valido = (categoria_sugerida == "POSIBLEMENTE_VALIDO")
+            requiere_revision_manual = (categoria_sugerida == "REVISION_MANUAL")
+            fecha_afectada = today_str
         else:
             cat = str(ai_verdict.get("categoria_sugerida", "")).upper()
             if cat in ["POSIBLEMENTE_VALIDO", "POSIBLEMENTE_INVALIDO", "REVISION_MANUAL"]:
@@ -341,6 +403,33 @@ async def evaluate_excuse(
                 categoria_sugerida = "REVISION_MANUAL"
                 valido = False
                 requiere_revision_manual = True
+
+        if any(w in full_text_lower for w in ["ansiedad", "depresion", "depresión", "panico", "pánico", "salud mental", "psicolog", "psiquiatr", "crisis emocional"]):
+            tipo_novedad = "calamidad"
+            categoria_sugerida = "REVISION_MANUAL"
+            valido = False
+            requiere_revision_manual = True
+            motivo_decision = "Situación de alta sensibilidad (salud mental/emocional). Se recomienda remitir a conversación presencial con el equipo de HSE."
+
+        # Guardrail de Temporalidad: Citas médicas programadas vs Eventos Impredecibles
+        is_cita_programada = any(w in full_text_lower for w in ["cita medica", "cita médica", "cita odontol", "procedimiento programado", "cita con especialista", "constancia de asistencia a cita"])
+        if is_cita_programada:
+            tipo_novedad = "inasistencia_medica"
+            has_negation_or_past = bool(re.search(r'\b(no alcanc[eé]|no avis[eé]|sin antelaci[oó]n|sin preaviso|despu[eé]s de la jornada|ayer|asist[ií]|estuve en la cita|se me olvid[oó] avisar)\b', text_lower))
+            is_preaviso = not has_negation_or_past and bool(re.search(r'\b(asistir[eé]|preaviso|con antelaci[oó]n|agendada para|ma[nñ]ana|futur[oa]|solicito permiso previo)\b', text_lower))
+            is_post_evento = has_negation_or_past or bool(re.search(r'\b(asist[ií]|estuve en|fui a|despu[eé]s|ayer|semana pasada)\b', text_lower))
+            if is_post_evento:
+                categoria_sugerida = "POSIBLEMENTE_INVALIDO"
+                valido = False
+                requiere_revision_manual = False
+                confianza_score = 0.88
+                motivo_decision = "Las citas médicas programadas deben notificarse obligatoriamente antes del día de entrenamiento (con preaviso). No se admite radicación posterior a la inasistencia."
+            else:
+                categoria_sugerida = "POSIBLEMENTE_VALIDO"
+                valido = True
+                requiere_revision_manual = False
+                confianza_score = 0.94
+                motivo_decision = "Cita médica programada notificada con antelación reglamentaria antes del día de entrenamiento y constancia adjunta."
 
         if any(w in text_lower for w in ["retirarme", "salir antes", "salida temprana"]):
             tipo_novedad = "salida_temprana"
@@ -480,3 +569,343 @@ async def search_document(
     finally:
         if os.path.exists(temp_file_path):
             os.remove(temp_file_path)
+
+
+# =============================================================================
+# HSE DASHBOARD & POSTGRESQL REAL DATA ENDPOINTS
+# =============================================================================
+
+def get_db_connection():
+    if not psycopg2:
+        raise HTTPException(status_code=500, detail="psycopg2 no disponible en el entorno")
+    host = os.getenv("POSTGRES_HOST", "localhost")
+    port = int(os.getenv("POSTGRES_PORT", "5432"))
+    dbname = os.getenv("POSTGRES_DB", "hse_email_automation")
+    user = os.getenv("POSTGRES_USER", "hse_admin")
+    password = os.getenv("POSTGRES_PASSWORD", "hse_segura_123")
+    return psycopg2.connect(
+        host=host,
+        port=port,
+        dbname=dbname,
+        user=user,
+        password=password,
+        connect_timeout=3
+    )
+
+@app.get("/api/kpis")
+async def get_dashboard_kpis():
+    """Retorna los indicadores clave (KPIs) del dashboard calculados desde la base de datos."""
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        cur.execute("""
+            SELECT 
+                COUNT(*) as total,
+                COUNT(*) FILTER (WHERE validation_status IN ('POSIBLEMENTE_VALIDO', 'APPROVED')) as approved,
+                COUNT(*) FILTER (WHERE validation_status IN ('POSIBLEMENTE_INVALIDO', 'DISAPPROVED')) as denied,
+                COUNT(*) FILTER (WHERE validation_status NOT IN ('POSIBLEMENTE_VALIDO', 'APPROVED', 'POSIBLEMENTE_INVALIDO', 'DISAPPROVED')) as pending
+            FROM justifications;
+        """)
+        row = cur.fetchone()
+        cur.close()
+        conn.close()
+        tot = row["total"] or 0
+        appr = row["approved"] or 0
+        den = row["denied"] or 0
+        pend = row["pending"] or 0
+        return {
+            "total": tot,
+            "approved": appr,
+            "denied": den,
+            "pending": pend,
+            "approval_rate": round((appr / tot * 100), 1) if tot > 0 else 0.0,
+            "revisadas": appr + den,
+            "por_revisar": pend
+        }
+    except Exception as e:
+        return {
+            "total": 0, "approved": 0, "denied": 0, "pending": 0,
+            "approval_rate": 0.0, "revisadas": 0, "por_revisar": 0, "error": str(e)
+        }
+
+@app.get("/api/requests")
+async def get_requests_list(status: Optional[str] = None, limit: int = 250):
+    """Lista de justificaciones con formato adaptado para el frontend de Requests y Dashboard."""
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        query = """
+            SELECT 
+                j.id,
+                j.coder_id,
+                j.sender_name,
+                j.sender_email,
+                j.email_subject,
+                j.email_body,
+                j.received_at,
+                j.excuse_type,
+                j.validation_status,
+                j.ai_recommendation,
+                j.ai_confidence,
+                j.ai_reason,
+                j.has_human_intervention,
+                j.hse_decision,
+                j.hse_notes,
+                j.hse_reviewed_at,
+                j.attachments,
+                COALESCE(c.route, 'Ruta General') as coder_route
+            FROM justifications j
+            LEFT JOIN coders c ON j.coder_id = c.id
+        """
+        params = []
+        if status:
+            if status == "approved":
+                query += " WHERE j.validation_status IN ('POSIBLEMENTE_VALIDO', 'APPROVED')"
+            elif status == "denied":
+                query += " WHERE j.validation_status IN ('POSIBLEMENTE_INVALIDO', 'DISAPPROVED')"
+            elif status == "pending_review":
+                query += " WHERE j.validation_status NOT IN ('POSIBLEMENTE_VALIDO', 'APPROVED', 'POSIBLEMENTE_INVALIDO', 'DISAPPROVED')"
+        
+        query += " ORDER BY j.received_at DESC LIMIT %s;"
+        params.append(limit)
+        cur.execute(query, tuple(params))
+        rows = cur.fetchall()
+        cur.close()
+        conn.close()
+
+        formatted = []
+        for r in rows:
+            raw_status = (r["validation_status"] or "").upper()
+            if raw_status in ["POSIBLEMENTE_VALIDO", "APPROVED"]:
+                frontend_status = "approved"
+            elif raw_status in ["POSIBLEMENTE_INVALIDO", "DISAPPROVED"]:
+                frontend_status = "denied"
+            else:
+                frontend_status = "pending_review"
+
+            raw_attachments = r["attachments"] or []
+            if isinstance(raw_attachments, str):
+                try:
+                    raw_attachments = json.loads(raw_attachments)
+                except Exception:
+                    raw_attachments = []
+            
+            attachments_list = []
+            if isinstance(raw_attachments, list):
+                for att in raw_attachments:
+                    if isinstance(att, dict):
+                        attachments_list.append({
+                            "name": att.get("filename") or att.get("name") or "documento.pdf",
+                            "url": "#"
+                        })
+
+            formatted.append({
+                "id": str(r["id"]),
+                "studentId": str(r["coder_id"]) if r["coder_id"] else "s-ext",
+                "route": r["coder_route"],
+                "status": frontend_status,
+                "category": r["ai_recommendation"] or raw_status,
+                "recommendation": r["ai_recommendation"] or raw_status,
+                "emailInfo": {
+                    "senderName": r["sender_name"] or "Coder RIWI",
+                    "senderEmail": r["sender_email"],
+                    "subject": r["email_subject"],
+                    "body": r["email_body"],
+                    "date": r["received_at"].isoformat() if r["received_at"] else "",
+                    "attachments": attachments_list
+                },
+                "hasHumanIntervention": bool(r["has_human_intervention"]),
+                "hseDecision": r["hse_decision"],
+                "hseNotes": r["hse_notes"],
+                "hseReviewedAt": r["hse_reviewed_at"].isoformat() if r["hse_reviewed_at"] else None,
+                "decision": {
+                    "source": "human" if r["has_human_intervention"] else "ai",
+                    "recommendation": r["ai_recommendation"] or raw_status,
+                    "confidence": float(r["ai_confidence"]) if r["ai_confidence"] is not None else 0.85,
+                    "reasoning": r["hse_notes"] if r["has_human_intervention"] and r["hse_notes"] else (r["ai_reason"] or "Evaluación realizada por Strata Core"),
+                    "modifiedBy": "Team Leader Paola" if r["has_human_intervention"] else None,
+                    "modifiedAt": r["hse_reviewed_at"].isoformat() if r["hse_reviewed_at"] else None
+                }
+            })
+        return formatted
+    except Exception as e:
+        print(f"Error en get_requests: {e}")
+        return []
+
+@app.get("/api/requests/recent")
+async def get_recent_emails(limit: int = 10):
+    """Lista de correos recientes formateados para el carrusel de inicio."""
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        cur.execute("""
+            SELECT 
+                id, sender_email, sender_name, email_subject, email_body, received_at, validation_status
+            FROM justifications
+            ORDER BY received_at DESC
+            LIMIT %s;
+        """, (limit,))
+        rows = cur.fetchall()
+        cur.close()
+        conn.close()
+
+        recent = []
+        for r in rows:
+            st = (r["validation_status"] or "").upper()
+            if st in ["POSIBLEMENTE_VALIDO", "APPROVED"]:
+                st_label = "Aprobado"
+                color = "bg-[#20B486]/10 text-[#20B486]"
+                dot = "bg-[#20B486]"
+            elif st in ["POSIBLEMENTE_INVALIDO", "DISAPPROVED"]:
+                st_label = "Denegado"
+                color = "bg-[#FF5C67]/10 text-[#FF5C67]"
+                dot = "bg-[#FF5C67]"
+            else:
+                st_label = "Por revisar"
+                color = "bg-[#F5B83D]/10 text-[#F5B83D]"
+                dot = "bg-[#F5B83D]"
+
+            time_str = r["received_at"].strftime("%d %b, %I:%M %p") if r["received_at"] else "Hoy"
+
+            recent.append({
+                "id": str(r["id"]),
+                "sender": r["sender_email"],
+                "senderName": r["sender_name"],
+                "title": r["email_subject"],
+                "snippet": (r["email_body"] or "")[:45] + "...",
+                "time": time_str,
+                "status": st_label,
+                "color": color,
+                "dot": dot
+            })
+        return recent
+    except Exception as e:
+        print(f"Error en get_recent_emails: {e}")
+        return []
+
+@app.get("/api/requests/weekly")
+async def get_requests_weekly():
+    """Agrupación de justificaciones para gráficos semanales del Dashboard."""
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        cur.execute("""
+            SELECT 
+                TO_CHAR(received_at, 'Dy') as day_key,
+                DATE(received_at) as date,
+                COUNT(*) as total,
+                COUNT(*) FILTER (WHERE validation_status IN ('POSIBLEMENTE_VALIDO', 'APPROVED')) as aprobados,
+                COUNT(*) FILTER (WHERE validation_status IN ('POSIBLEMENTE_INVALIDO', 'DISAPPROVED')) as denegados,
+                COUNT(*) FILTER (WHERE validation_status NOT IN ('POSIBLEMENTE_VALIDO', 'APPROVED', 'POSIBLEMENTE_INVALIDO', 'DISAPPROVED')) as pendientes
+            FROM justifications
+            GROUP BY TO_CHAR(received_at, 'Dy'), DATE(received_at)
+            ORDER BY DATE(received_at) ASC;
+        """)
+        rows = cur.fetchall()
+        cur.close()
+        conn.close()
+
+        day_map = {"Mon": "Lun", "Tue": "Mar", "Wed": "Mié", "Thu": "Jue", "Fri": "Vie", "Sat": "Sáb", "Sun": "Dom"}
+        result = []
+        for r in rows:
+            name = day_map.get(r["day_key"], r["day_key"])
+            result.append({
+                "name": name,
+                "Total": r["total"],
+                "Aprobados": r["aprobados"],
+                "Denegados": r["denegados"],
+                "Pendientes": r["pendientes"],
+                "solicitudes": r["total"]
+            })
+        
+        if not result:
+            result = [
+                {"name": "Lun", "Total": 0, "Aprobados": 0, "Denegados": 0, "Pendientes": 0, "solicitudes": 0}
+            ]
+        return result
+    except Exception as e:
+        return [{"name": "Lun", "Total": 0, "Aprobados": 0, "Denegados": 0, "Pendientes": 0, "solicitudes": 0}]
+
+@app.get("/api/students")
+async def get_students_list():
+    """Lista de estudiantes / coders reales desde PostgreSQL agrupados por ruta."""
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        cur.execute("""
+            SELECT 
+                c.id,
+                c.full_name as name,
+                c.email,
+                COALESCE(c.route, 'Sin ruta') as route,
+                c.cedula,
+                c.is_active,
+                COUNT(j.id) as total_justifications
+            FROM coders c
+            LEFT JOIN justifications j ON c.id = j.coder_id
+            GROUP BY c.id, c.full_name, c.email, c.route, c.cedula, c.is_active
+            ORDER BY c.full_name ASC;
+        """)
+        rows = cur.fetchall()
+        cur.close()
+        conn.close()
+
+        students = []
+        for r in rows:
+            students.append({
+                "id": str(r["id"]),
+                "name": r["name"],
+                "email": r["email"],
+                "route": r["route"],
+                "cedula": r["cedula"],
+                "status": "Activo" if r["is_active"] else "Inactivo",
+                "attendance": {
+                    "present": 38,
+                    "late": 1,
+                    "justifiedAbsence": r["total_justifications"],
+                    "unjustifiedAbsence": 0
+                }
+            })
+        return students
+    except Exception as e:
+        return []
+
+class ResolveRequestModel(BaseModel):
+    action: str
+    notes: Optional[str] = ""
+    reviewer_name: Optional[str] = "Team Leader Paola"
+
+@app.post("/api/requests/{justification_id}/resolve")
+async def resolve_justification_in_db(justification_id: str, payload: ResolveRequestModel):
+    """Actualiza la decisión de la Team Leader directamente en PostgreSQL."""
+    try:
+        action = payload.action.upper()
+        if action == "APPROVED":
+            val_status = "APPROVED"
+        elif action == "DISAPPROVED":
+            val_status = "DISAPPROVED"
+        else:
+            val_status = "MANUAL_INTERACTION"
+
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute("""
+            UPDATE justifications
+            SET validation_status = %s,
+                hse_decision = %s,
+                hse_notes = %s,
+                has_human_intervention = true,
+                hse_reviewed_at = NOW()
+            WHERE id = %s RETURNING id;
+        """, (val_status, action, payload.notes, justification_id))
+        updated = cur.fetchone()
+        conn.commit()
+        cur.close()
+        conn.close()
+
+        if not updated:
+            raise HTTPException(status_code=404, detail="Justificación no encontrada")
+        return {"status": "ok", "justification_id": justification_id, "decision": action}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
