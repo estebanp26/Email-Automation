@@ -67,6 +67,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     try {
       const savedToken = localStorage.getItem('hse_token');
+      const savedRole = localStorage.getItem('hse_role');
 
       if (!savedToken) {
         logout();
@@ -90,7 +91,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return;
       }
 
-      const normalizedRole = normalizeRole(payload.role);
+      const normalizedRole = normalizeRole(savedRole || payload.role);
       
       // Intentar recuperar datos adicionales si es coder
       let coderData: any = {};
@@ -114,7 +115,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       setToken(savedToken);
       setUser(recoveredUser);
-      localStorage.setItem('hse_role', normalizedRole);
+      if (!savedRole) {
+        localStorage.setItem('hse_role', normalizedRole === 'HSE_ANALYST' ? 'hse' : normalizedRole.toLowerCase());
+      }
     } catch (e) {
       console.error('Error restaurando sesión:', e);
       logout();

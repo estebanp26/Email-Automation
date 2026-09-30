@@ -25,9 +25,9 @@ export default function Login() {
   useEffect(() => {
     if (isAuthenticated && user) {
       if (user.role === 'CODER') {
-        navigate('/coder/history', { replace: true });
+        navigate('/coder/new-excuse', { replace: true });
       } else {
-        navigate('/dashboard', { replace: true });
+        navigate('/', { replace: true });
       }
     }
   }, [isAuthenticated, user, navigate]);
@@ -75,7 +75,7 @@ export default function Login() {
           role: normalized,
         });
 
-        navigate('/dashboard', { replace: true });
+        navigate('/', { replace: true });
         return;
       }
 
@@ -109,7 +109,7 @@ export default function Login() {
           role: 'CODER',
         });
 
-        navigate('/coder/history', { replace: true });
+        navigate('/coder/new-excuse', { replace: true });
         return;
       }
 
@@ -133,7 +133,7 @@ export default function Login() {
           role: 'CODER',
         });
 
-        navigate('/coder/history', { replace: true });
+        navigate('/coder/new-excuse', { replace: true });
         return;
       }
 
@@ -160,7 +160,7 @@ export default function Login() {
           role: 'CODER',
         });
 
-        navigate('/coder/history', { replace: true });
+        navigate('/coder/new-excuse', { replace: true });
         return;
       }
       setError('No se pudo validar las credenciales con el servidor.');

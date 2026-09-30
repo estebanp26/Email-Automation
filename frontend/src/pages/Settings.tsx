@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { 
@@ -14,17 +14,10 @@ import {
   Mail, 
   Edit3, 
   Check,
-  RefreshCw,
-  CheckCircle2,
   Settings as SettingsIcon,
   Download,
-  LogOut,
-  Database,
-  Cpu,
-  HardDrive,
-  Activity
+  LogOut
 } from 'lucide-react';
-import { api, type SystemHealthStatus } from '../services/api';
 
 export default function Settings() {
   const [showProfileMenu, setShowProfileMenu] = useState(false);
@@ -45,27 +38,7 @@ export default function Settings() {
   
   const [notificationMethod, setNotificationMethod] = useState<'email' | 'system'>('email');
 
-  // Monitor de Salud de Servicios Nativos State
-  const [healthStatus, setHealthStatus] = useState<SystemHealthStatus | null>(null);
-  const [isCheckingHealth, setIsCheckingHealth] = useState(false);
-  const [lastCheckTime, setLastCheckTime] = useState<string>('');
 
-  const refreshHealth = async () => {
-    setIsCheckingHealth(true);
-    try {
-      const data = await api.getServicesHealth();
-      setHealthStatus(data);
-      setLastCheckTime(new Date().toLocaleTimeString('es-ES'));
-    } catch (e) {
-      console.warn('Error comprobando salud de servicios:', e);
-    } finally {
-      setIsCheckingHealth(false);
-    }
-  };
-
-  useEffect(() => {
-    refreshHealth();
-  }, []);
 
   return (
     <div className="flex flex-col gap-8 pb-10">
@@ -74,7 +47,7 @@ export default function Settings() {
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <h1 className="text-[28px] font-bold text-[#151A2D]">Configuración</h1>
-          <p className="text-[#7B8195] mt-1 text-sm">Administra tu cuenta, salud de servicios nativos y seguridad.</p>
+          <p className="text-[#7B8195] mt-1 text-sm">Administra tu cuenta, preferencias y seguridad del sistema.</p>
         </div>
         <div className="flex items-center gap-4 relative">
           <button className="flex items-center gap-2 bg-[#5B3FF5] hover:bg-[#4a32cc] px-4 py-2 rounded-full shadow-lg shadow-[#5B3FF5]/30 text-sm font-semibold text-white transition-colors cursor-pointer">
@@ -106,148 +79,7 @@ export default function Settings() {
         </div>
       </div>
 
-      {/* ================================================================ */}
-      {/* CARD DESTACADA: MONITOR DE SALUD DE SERVICIOS NATIVOS             */}
-      {/* ================================================================ */}
-      <motion.div 
-        initial={{ opacity: 0, y: 15 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="bg-white rounded-[24px] border-2 border-[#5B3DF5]/30 shadow-[0_4px_25px_rgba(91,61,245,0.06)] p-6 md:p-8"
-      >
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-[#E8EAF2] pb-6 mb-6">
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-[#5B3DF5] to-[#7357FF] text-white flex items-center justify-center shadow-md shadow-[#5B3DF5]/25">
-              <Activity size={24} />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h2 className="text-[20px] font-bold text-[#151A2D]">Monitor de Salud de Servicios Nativos</h2>
-                <span className="text-[11px] font-bold uppercase tracking-wider bg-[#20B486]/10 text-[#20B486] px-2.5 py-0.5 rounded-full flex items-center gap-1">
-                  <span className="w-1.5 h-1.5 rounded-full bg-[#20B486] animate-pulse" /> Microservicios Operativos
-                </span>
-              </div>
-              <p className="text-[13px] text-[#7B8195]">
-                Supervisión en tiempo real de los servicios centrales: Base de datos, Motor IA, Storage y Correo.
-              </p>
-            </div>
-          </div>
 
-          <div className="flex items-center gap-3">
-            <button
-              onClick={refreshHealth}
-              disabled={isCheckingHealth}
-              className="bg-[#5B3DF5] hover:bg-[#4828E0] text-white font-bold text-xs px-4 py-2.5 rounded-xl flex items-center gap-1.5 transition-all shadow-md shadow-[#5B3DF5]/20 cursor-pointer disabled:opacity-50"
-            >
-              <RefreshCw size={15} className={isCheckingHealth ? 'animate-spin' : ''} />
-              {isCheckingHealth ? 'Comprobando...' : 'Comprobar Salud Ahora'}
-            </button>
-          </div>
-        </div>
-
-        {/* Grid de Servicios Nativos */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
-          
-          {/* 1. Base de Datos */}
-          <div className="bg-[#F8F9FD] border border-[#E8EAF2] rounded-2xl p-4 flex flex-col justify-between">
-            <div>
-              <div className="flex items-center justify-between mb-3">
-                <div className="w-9 h-9 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center">
-                  <Database size={18} />
-                </div>
-                <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-[#20B486]/10 text-[#136c50] flex items-center gap-1">
-                  <span className="w-1.5 h-1.5 rounded-full bg-[#20B486]" /> En Línea
-                </span>
-              </div>
-              <h3 className="font-bold text-sm text-[#151A2D] mb-1">Base de Datos</h3>
-              <p className="text-xs text-[#7B8195] mb-2 leading-relaxed">
-                PostgreSQL 16 con RLS, justificantes, coders y auditoría inmutable.
-              </p>
-            </div>
-            <div className="pt-2 border-t border-[#E8EAF2]/60 flex items-center justify-between text-[11px] font-mono text-[#7B8195]">
-              <span>Latencia:</span>
-              <span className="font-bold text-[#151A2D]">{healthStatus?.database.latencyMs ?? 14} ms</span>
-            </div>
-          </div>
-
-          {/* 2. Motor IA */}
-          <div className="bg-[#F8F9FD] border border-[#E8EAF2] rounded-2xl p-4 flex flex-col justify-between">
-            <div>
-              <div className="flex items-center justify-between mb-3">
-                <div className="w-9 h-9 rounded-xl bg-purple-50 text-[#5B3DF5] flex items-center justify-center">
-                  <Cpu size={18} />
-                </div>
-                <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-[#20B486]/10 text-[#136c50] flex items-center gap-1">
-                  <span className="w-1.5 h-1.5 rounded-full bg-[#20B486]" /> En Línea
-                </span>
-              </div>
-              <h3 className="font-bold text-sm text-[#151A2D] mb-1">Motor IA (Strata Core)</h3>
-              <p className="text-xs text-[#7B8195] mb-2 leading-relaxed">
-                Percepción documental Qwen 2.5, OCR adaptativo y schema determinista.
-              </p>
-            </div>
-            <div className="pt-2 border-t border-[#E8EAF2]/60 flex items-center justify-between text-[11px] font-mono text-[#7B8195]">
-              <span>Modelo:</span>
-              <span className="font-bold text-[#151A2D]">qwen2.5:1.5b</span>
-            </div>
-          </div>
-
-          {/* 3. Storage Seguro */}
-          <div className="bg-[#F8F9FD] border border-[#E8EAF2] rounded-2xl p-4 flex flex-col justify-between">
-            <div>
-              <div className="flex items-center justify-between mb-3">
-                <div className="w-9 h-9 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center">
-                  <HardDrive size={18} />
-                </div>
-                <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-[#20B486]/10 text-[#136c50] flex items-center gap-1">
-                  <span className="w-1.5 h-1.5 rounded-full bg-[#20B486]" /> En Línea
-                </span>
-              </div>
-              <h3 className="font-bold text-sm text-[#151A2D] mb-1">Storage de Evidencias</h3>
-              <p className="text-xs text-[#7B8195] mb-2 leading-relaxed">
-                Depósito seguro temporal con hashes SHA-256 anti-tamper.
-              </p>
-            </div>
-            <div className="pt-2 border-t border-[#E8EAF2]/60 flex items-center justify-between text-[11px] font-mono text-[#7B8195]">
-              <span>Integridad:</span>
-              <span className="font-bold text-[#151A2D]">SHA-256 Activo</span>
-            </div>
-          </div>
-
-          {/* 4. Servicio de Correo */}
-          <div className="bg-[#F8F9FD] border border-[#E8EAF2] rounded-2xl p-4 flex flex-col justify-between">
-            <div>
-              <div className="flex items-center justify-between mb-3">
-                <div className="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
-                  <Mail size={18} />
-                </div>
-                <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-[#20B486]/10 text-[#136c50] flex items-center gap-1">
-                  <span className="w-1.5 h-1.5 rounded-full bg-[#20B486]" /> En Línea
-                </span>
-              </div>
-              <h3 className="font-bold text-sm text-[#151A2D] mb-1">Canal de Correo</h3>
-              <p className="text-xs text-[#7B8195] mb-2 leading-relaxed">
-                Ingesta /api/v1/inbound-email y notificaciones automáticas SMTP.
-              </p>
-            </div>
-            <div className="pt-2 border-t border-[#E8EAF2]/60 flex items-center justify-between text-[11px] font-mono text-[#7B8195]">
-              <span>Canal:</span>
-              <span className="font-bold text-[#151A2D]">Nativo REST</span>
-            </div>
-          </div>
-
-        </div>
-
-        {/* Barra de Estado Inferior */}
-        <div className="bg-[#F8F9FD] border border-[#E8EAF2] rounded-xl px-4 py-2.5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 text-xs text-[#7B8195]">
-          <div className="flex items-center gap-2">
-            <CheckCircle2 size={15} className="text-[#20B486]" />
-            <span>Todos los servicios nativos están respondiendo de manera desacoplada sin intermediarios.</span>
-          </div>
-          {lastCheckTime && (
-            <span className="font-mono text-[11px]">Última comprobación: {lastCheckTime}</span>
-          )}
-        </div>
-      </motion.div>
 
       {/* MAIN GRID LAYOUT */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

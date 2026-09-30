@@ -41,6 +41,9 @@ export function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) 
     const hasRole = allowedRoles.includes(user.role);
 
     if (!hasRole) {
+      if (user.role === 'CODER') {
+        return <Navigate to="/coder/new-excuse" replace />;
+      }
       // Redirección obligatoria a /403 cuando el rol no tiene permisos
       return <Navigate to="/403" replace />;
     }

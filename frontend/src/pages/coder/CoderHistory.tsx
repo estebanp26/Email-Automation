@@ -27,9 +27,11 @@ import {
 } from '../../utils/coderJustifications';
 import { RequestCorrectionModal } from '../../components/coder/RequestCorrectionModal';
 import { matchesNormalized } from '../../utils/textUtils';
+import { useAuth } from '../../context/AuthContext';
 
 export default function CoderHistory() {
   const navigate = useNavigate();
+  const { logout } = useAuth();
   const session = useMemo(() => getCoderSession(), []);
 
   const [justifications, setJustifications] = useState<CoderJustification[]>([]);
@@ -182,9 +184,7 @@ export default function CoderHistory() {
   }, [session.name]);
 
   const handleLogout = () => {
-    localStorage.removeItem('hse_token');
-    localStorage.removeItem('hse_role');
-    localStorage.removeItem('hse_coder_session');
+    logout();
     navigate('/login', { replace: true });
   };
 

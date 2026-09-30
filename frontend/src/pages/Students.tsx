@@ -3,11 +3,13 @@ import { motion } from 'framer-motion';
 import { Search, Mail, ChevronRight, Users, BookOpen } from 'lucide-react';
 import { api } from '../services/api';
 import { matchesNormalized } from '../utils/textUtils';
+import { CoderAttendanceHistory } from '../components/students/CoderAttendanceHistory';
 
 export default function Students() {
   const [students, setStudents] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeRouteName, setActiveRouteName] = useState<string>('');
+  const [selectedCoder, setSelectedCoder] = useState<any | null>(null);
 
   useEffect(() => {
     api.getStudents().then((data: any) => {
@@ -62,6 +64,17 @@ export default function Students() {
       return matchesRoute && matchesSearch;
     });
   }, [students, activeRouteName, searchQuery]);
+
+  if (selectedCoder) {
+    return (
+      <div className="h-[calc(100vh-6rem)] overflow-y-auto custom-scrollbar pr-1 pb-10">
+        <CoderAttendanceHistory
+          coder={selectedCoder}
+          onBack={() => setSelectedCoder(null)}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="h-[calc(100vh-6rem)] flex flex-col gap-6">
@@ -169,6 +182,7 @@ export default function Students() {
                     initial={{ opacity: 0, y: 15 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.25, delay: Math.min(index * 0.02, 0.3) }}
+                    onClick={() => setSelectedCoder(coder)}
                     className="bg-white border border-[#E2E8F0] p-4 lg:px-6 lg:py-5 rounded-[20px] flex items-center justify-between hover:shadow-[0_8px_30px_rgba(0,0,0,0.04)] hover:border-[#5B3FF5]/30 transition-all group cursor-pointer"
                   >
                     {/* INFO IZQUIERDA: AVATAR Y NOMBRE */}

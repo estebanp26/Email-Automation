@@ -3,11 +3,12 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Mail, Send, FileEdit, Trash, Reply, Inbox, Paperclip, User, 
   CheckCircle2, XCircle, AlertCircle, Zap,
-  Calendar, ShieldCheck, MessageSquare, AlertTriangle, RotateCw,
+  Calendar, ShieldCheck, MessageSquare, AlertTriangle, RotateCw, Search,
   ArrowLeft
 } from 'lucide-react';
 import clsx from 'clsx';
 import { api } from '../services/api';
+import { matchesNormalized } from '../utils/textUtils';
 
 export default function Requests() {
   const [activeFolder, setActiveFolder] = useState<'inbox' | 'sent' | 'drafts'>('inbox');
@@ -15,6 +16,7 @@ export default function Requests() {
   const [sentEmails, setSentEmails] = useState<any[]>([]);
   const [selectedEmail, setSelectedEmail] = useState<any | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
   const [showMobileDetail, setShowMobileDetail] = useState(false);
   
   // Composing state
@@ -357,12 +359,32 @@ export default function Requests() {
         "w-full lg:w-[380px] flex-shrink-0 bg-white border border-[#E2E8F0] rounded-[24px] shadow-sm flex flex-col overflow-hidden",
         showMobileDetail ? "hidden lg:flex" : "flex flex-1 lg:flex-initial"
       )}>
-        <div className="p-4 sm:p-5 border-b border-[#E2E8F0] bg-gray-50/50 flex items-center justify-between">
-          <div>
-            <h2 className="text-[16px] sm:text-[18px] font-bold text-[#111827] capitalize">
-              {activeFolder === 'inbox' ? 'Bandeja de Entrada' : activeFolder === 'sent' ? 'Enviados' : 'Borradores'}
-            </h2>
-            <p className="text-xs sm:text-sm text-[#7C8499]">{activeList.length} correos</p>
+        <div className="p-4 border-b border-[#E2E8F0] bg-gray-50/50 space-y-3">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-[16px] sm:text-[18px] font-bold text-[#111827] capitalize">
+                {activeFolder === 'inbox' ? 'Bandeja de Entrada' : activeFolder === 'sent' ? 'Enviados' : 'Borradores'}
+              </h2>
+              <p className="text-xs text-[#7C8499]">{filteredActiveList.length} correos</p>
+            </div>
+            <button
+              onClick={() => fetchRequests(true)}
+              title="Sincronizar correos ahora"
+              className="p-2 text-[#7C8499] hover:text-[#5B3FF5] hover:bg-white rounded-full transition-colors cursor-pointer border border-transparent hover:border-[#E2E8F0]"
+            >
+              <RotateCw size={16} className={isRefreshing ? 'animate-spin text-[#5B3FF5]' : ''} />
+            </button>
+          </div>
+
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-[#7C8499]" size={14} />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Buscar por asunto, remitente o texto..."
+              className="pl-9 pr-3 py-1.5 w-full bg-white border border-[#E2E8F0] rounded-xl text-xs focus:outline-none focus:border-[#5B3FF5] transition-all text-[#111827] placeholder:text-[#A3AAC2]"
+            />
           </div>
         </div>
         

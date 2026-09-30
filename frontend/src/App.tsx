@@ -40,8 +40,8 @@ function App() {
               </ProtectedRoute>
             }
           >
-            {/* Redirección desde la raíz hacia /dashboard */}
-            <Route path="/" element={<Navigate to="/dashboard" replace />} />
+            {/* Panel Dashboard accesible tanto en raíz / como en /dashboard */}
+            <Route path="/" element={<Dashboard />} />
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/requests" element={<Requests />} />
             <Route path="/reports" element={<Reports />} />
@@ -58,7 +58,7 @@ function App() {
               </ProtectedRoute>
             }
           >
-            <Route index element={<Navigate to="history" replace />} />
+            <Route index element={<Navigate to="new-excuse" replace />} />
             <Route path="history" element={<CoderHistory />} />
             <Route path="new-excuse" element={<ExcuseSubmissionForm />} />
           </Route>

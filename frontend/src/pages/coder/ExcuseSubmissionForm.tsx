@@ -32,9 +32,11 @@ import {
 import { EvidenceDropzone, type SelectedFile } from '../../components/coder/EvidenceDropzone';
 import { getCoderSession } from '../../utils/coderSession';
 import { saveNewCoderJustification } from '../../utils/coderJustifications';
+import { useAuth } from '../../context/AuthContext';
 
 export default function ExcuseSubmissionForm() {
   const navigate = useNavigate();
+  const { logout } = useAuth();
   const [currentStep, setCurrentStep] = useState<1 | 2>(1);
   const [selectedFiles, setSelectedFiles] = useState<SelectedFile[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -56,9 +58,7 @@ export default function ExcuseSubmissionForm() {
   }, [session.name]);
 
   const handleLogout = () => {
-    localStorage.removeItem('hse_token');
-    localStorage.removeItem('hse_role');
-    localStorage.removeItem('hse_coder_session');
+    logout();
     navigate('/login', { replace: true });
   };
 
@@ -292,7 +292,7 @@ export default function ExcuseSubmissionForm() {
         <div className="space-y-1">
           <div className="flex items-center gap-2">
             <span className="text-xs font-bold uppercase tracking-wider text-[#5B3FF5]">
-              Reporte de Justificaciones
+              Portal del Coder · Reporte de Justificaciones
             </span>
           </div>
           <h1 className="text-xl sm:text-2xl font-bold text-[#111827] tracking-tight">

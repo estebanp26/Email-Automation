@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { LayoutDashboard, Inbox, Settings, Users, X } from 'lucide-react';
+import { LayoutDashboard, Inbox, Settings, Users, X, Menu } from 'lucide-react';
 import clsx from 'clsx';
 
 const navItems = [
@@ -69,12 +69,13 @@ export function Sidebar({ mobileOpen = false, onCloseMobile }: SidebarProps) {
           title={isOpen ? "Colapsar menú" : "Expandir menú"}
         >
           <button
+            type="button"
             onClick={() => setIsOpen(!isOpen)}
             className={clsx(
               "hover:opacity-80 transition-opacity flex items-center justify-center cursor-pointer",
-              !isOpen && "w-8 h-8 rounded-full bg-white/10 overflow-hidden"
+              !isOpen && "w-10 h-10 rounded-xl bg-white/10 hover:bg-white/20 transition-colors"
             )}
-            title="Alternar ancho de barra"
+            title={isOpen ? "Colapsar menú lateral" : "Expandir menú lateral"}
           >
             {isOpen ? (
               <motion.div
@@ -90,11 +91,7 @@ export function Sidebar({ mobileOpen = false, onCloseMobile }: SidebarProps) {
                 />
               </motion.div>
             ) : (
-              <img
-                src="https://riwi.io/wp-content/uploads/2023/07/favicon.png"
-                alt="Toggle Menu"
-                className="w-6 h-6 object-contain"
-              />
+              <Menu className="w-6 h-6 text-white" />
             )}
           </button>
 

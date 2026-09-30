@@ -1,17 +1,10 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures/auth';
 
 test.describe('Subtask 1: Responsive Layout & Mobile Navigation Drawer', () => {
   test.use({ viewport: { width: 375, height: 667 } }); // iPhone SE viewport
 
   test('debe mostrar barra superior móvil, alternar drawer con botón hamburguesa y cerrar al navegar', async ({ page }) => {
-    // 1. Simular sesión activa de admin
-    await page.goto('/login');
-    await page.evaluate(() => {
-      localStorage.setItem('hse_token', 'jwt_hse_admin_12345');
-      localStorage.setItem('hse_role', 'hse');
-    });
-
-    // 2. Navegar al dashboard
+    // 1. Navegar al dashboard (autenticación HSE inyectada previamente por fixture)
     await page.goto('/');
 
     // 3. Verificar que el header móvil superior es visible
