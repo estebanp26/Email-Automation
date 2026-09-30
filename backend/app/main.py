@@ -10,6 +10,7 @@ from .api.v1.notifications import router as notifications_router
 from .api.v1.justifications import router as justifications_router
 from .api.v1.stats import router as stats_router
 from .api.v1.attendance import router as attendance_router
+from .api.v1.reports import router as reports_router
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
@@ -42,6 +43,8 @@ app.include_router(notifications_router, prefix=settings.API_V1_PREFIX)
 app.include_router(justifications_router, prefix=settings.API_V1_PREFIX)
 app.include_router(stats_router, prefix=settings.API_V1_PREFIX)
 app.include_router(attendance_router, prefix=settings.API_V1_PREFIX)
+app.include_router(reports_router, prefix=settings.API_V1_PREFIX)
+app.include_router(reports_router, prefix="/api")
 
 
 @app.get("/", tags=["Root"])

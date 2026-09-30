@@ -293,5 +293,21 @@ export const api = {
     }
 
     return health;
+  },
+
+  /**
+   * Exporta y descarga el Reporte Consolidado de Ausentismo HSE (DB-EXT-01).
+   * @param format 'csv' | 'excel'
+   */
+  exportHseReport: (format: 'csv' | 'excel' = 'csv') => {
+    const endpoint = format === 'excel' ? '/api/v1/reports/export-excel' : '/api/v1/reports/export-csv';
+    const url = `${API_BASE}${endpoint}`;
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', format === 'excel' ? 'reporte_hse_barranquilla.xlsx' : 'reporte_hse_barranquilla.csv');
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   }
 };
+

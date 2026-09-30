@@ -24,6 +24,7 @@ EXCEPTION
 END $$;
 
 -- Limpieza previa en orden de dependencia
+DROP VIEW IF EXISTS v_hse_weekly_summary CASCADE;
 DROP VIEW IF EXISTS v_unjustified_absences CASCADE;
 DROP VIEW IF EXISTS v_justifications_dashboard CASCADE;
 DROP TABLE IF EXISTS attendance_records CASCADE;
@@ -991,6 +992,72 @@ ORDER BY
     c.full_name ASC;
 
 COMMENT ON VIEW v_unjustified_absences IS 'Vista unificada de inasistencias sin justificación radicada. Filtra registros AUSENTE sin justification_id asignado para coders activos.';
+ 
+-- =============================================================================
+-- VISTA ANALÍTICA: v_hse_weekly_summary [DB-EXT-01]
+-- Resumen semanal de novedades e inasistencias agrupadas por ruta formativa
+-- =============================================================================
+CREATE OR REPLACE VIEW v_hse_weekly_summary
+WITH (security_invoker = true) AS
+SELECT 
+    COALESCE(c.route, 'Sin Ruta Asignada')                                              AS route,
+    COALESCE(c.route, 'Sin Ruta Asignada')                                              AS ruta_formativa,
+    DATE_TRUNC('week', j.start_date)::DATE                                             AS week_start,
+    DATE_TRUNC('week', j.start_date)::DATE                                             AS semana_inicio,
+    EXTRACT(WEEK FROM j.start_date)::INTEGER                                            AS week_number,
+    EXTRACT(WEEK FROM j.start_date)::INTEGER                                            AS numero_semana,
+    EXTRACT(YEAR FROM j.start_date)::INTEGER                                            AS year,
+    EXTRACT(YEAR FROM j.start_date)::INTEGER                                            AS anio,
+    COUNT(j.id)                                                                         AS total_requests,
+    COUNT(j.id)                                                                         AS total_solicitudes,
+    COUNT(CASE 
+        WHEN j.validation_status = 'APPROVED' OR j.hse_decision = 'APPROVED' 
+        THEN 1 
+    END)                                                                                AS total_approved,
+    COUNT(CASE 
+        WHEN j.validation_status = 'APPROVED' OR j.hse_decision = 'APPROVED' 
+        THEN 1 
+    END)                                                                                AS total_aprobadas,
+    COUNT(CASE 
+        WHEN j.validation_status = 'DISAPPROVED' OR j.hse_decision = 'DISAPPROVED' 
+        THEN 1 
+    END)                                                                                AS total_disapproved,
+    COUNT(CASE 
+        WHEN j.validation_status = 'DISAPPROVED' OR j.hse_decision = 'DISAPPROVED' 
+        THEN 1 
+    END)                                                                                AS total_rechazadas,
+    COUNT(CASE 
+        WHEN (j.validation_status NOT IN ('APPROVED', 'DISAPPROVED') OR j.validation_status IS NULL)
+         AND (j.hse_decision IS NULL OR j.hse_decision NOT IN ('APPROVED', 'DISAPPROVED'))
+        THEN 1 
+    END)                                                                                AS total_pending,
+    COUNT(CASE 
+        WHEN (j.validation_status NOT IN ('APPROVED', 'DISAPPROVED') OR j.validation_status IS NULL)
+         AND (j.hse_decision IS NULL OR j.hse_decision NOT IN ('APPROVED', 'DISAPPROVED'))
+        THEN 1 
+    END)                                                                                AS total_pendientes,
+    COALESCE(SUM(j.end_date - j.start_date + 1), 0)::INTEGER                            AS total_absence_days,
+    COALESCE(SUM(j.end_date - j.start_date + 1), 0)::INTEGER                            AS total_dias_ausente,
+    COUNT(DISTINCT j.coder_id)                                                          AS unique_coders_count,
+    COUNT(DISTINCT j.coder_id)                                                          AS total_coders
+FROM justifications j
+LEFT JOIN coders c ON j.coder_id = c.id
+GROUP BY 
+    COALESCE(c.route, 'Sin Ruta Asignada'),
+    DATE_TRUNC('week', j.start_date)::DATE,
+    EXTRACT(WEEK FROM j.start_date)::INTEGER,
+    EXTRACT(YEAR FROM j.start_date)::INTEGER
+ORDER BY 
+    year DESC,
+    week_number DESC,
+    route ASC;
+
+COMMENT ON VIEW v_hse_weekly_summary IS 
+'Vista analítica consolidada de novedades e inasistencias agrupadas por ruta formativa y semana académica para el Comité Semanal de HSE y Permanencia [DB-EXT-01].';
+
+CREATE INDEX IF NOT EXISTS idx_justifications_start_date_coder
+    ON justifications (start_date, coder_id);
+
 
 
 -- =============================================================================
