@@ -5,6 +5,8 @@ from .orchestrator import JustificationOrchestrator, orchestrator
 from .notification import NotificationService, notification_service
 from .resolution_service import ResolutionService, resolution_service
 from .portal_service import CoderPortalService, portal_service
+from .discord_alerts import send_team_lead_alert
+from .report_service import HSEReportService, report_service
 
 __all__ = [
     "EmailNormalizationService",
@@ -21,4 +23,8 @@ __all__ = [
     "resolution_service",
     "CoderPortalService",
     "portal_service",
+    "send_team_lead_alert",
+    "HSEReportService",
+    "report_service",
 ]
+

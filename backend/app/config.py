@@ -34,6 +34,9 @@ class Settings(BaseSettings):
     SISTER_PLATFORM_API_KEY: str = os.getenv("SISTER_PLATFORM_API_KEY", "")
     SISTER_PLATFORM_USE_MOCK: bool = os.getenv("SISTER_PLATFORM_USE_MOCK", "true").lower() == "true"
 
+    # Alertas Discord / Slack (CONN-EXT-01)
+    HSE_DISCORD_WEBHOOK_URL: str = os.getenv("HSE_DISCORD_WEBHOOK_URL", "")
+
     model_config = ConfigDict(env_file=".env", extra="ignore")
 
 settings = Settings()

@@ -12,6 +12,7 @@ from ..schemas.justification import JustificationRecord, PipelineExecutionResult
 from .ingestion import email_normalizer
 from .coder_resolver import coder_resolver
 from .hse_engine import hse_engine
+from .discord_alerts import send_team_lead_alert
 
 
 class JustificationOrchestrator:
@@ -115,6 +116,21 @@ class JustificationOrchestrator:
                 created_at=datetime.now(timezone.utc)
             )
             self._justifications_db[record.id] = record
+
+            # Despacho en tiempo real a Discord / Slack (CONN-EXT-01)
+            try:
+                send_team_lead_alert(
+                    coder_name=record.coder_full_name,
+                    route=record.coder_route,
+                    novelty_type=record.excuse_type,
+                    radicado_id=record.id,
+                    status=record.status,
+                    details=record.ai_reasoning,
+                    is_sensitive=record.is_sensitive
+                )
+            except Exception:
+                pass
+
             elapsed_ms = (time.time() - start_time) * 1000
 
             return PipelineExecutionResult(
@@ -203,6 +219,22 @@ class JustificationOrchestrator:
         )
 
         self._justifications_db[record.id] = record
+
+        # Despacho en tiempo real a Discord / Slack (CONN-EXT-01)
+        try:
+            send_team_lead_alert(
+                coder_name=record.coder_full_name,
+                route=record.coder_route,
+                novelty_type=record.excuse_type,
+                radicado_id=record.id,
+                status=record.status,
+                details=record.ai_reasoning,
+                is_sensitive=record.is_sensitive
+            )
+            notes.append("Alerta HSE despachada al canal de Team Leaders (CONN-EXT-01).")
+        except Exception as e:
+            notes.append(f"Alerta HSE omitida por error no bloqueante: {str(e)}")
+
         elapsed_ms = (time.time() - start_time) * 1000
 
         return PipelineExecutionResult(

@@ -14,7 +14,7 @@
     },
     "tipo_novedad": {
       "type": "string",
-      "enum": ["inasistencia_medica", "calamidad", "tramite_oficial", "falla_tecnica", "tardanza", "salida_temprana", "no_identificado"],
+      "enum": ["inasistencia_medica", "enfermedad_sin_soporte", "calamidad", "tramite_oficial", "falla_tecnica", "tardanza", "salida_temprana", "no_identificado"],
       "description": "Categoría de la justificación."
     },
     "fecha_afectada": {
