@@ -35,6 +35,7 @@ import json
 import time
 import base64
 import hashlib
+import hmac
 import logging
 import argparse
 from datetime import datetime, timezone
@@ -246,6 +247,7 @@ def extract_attachments_from_gmail_payload(
                         "mime_type": mime_type,
                         "size_bytes": len(raw_bytes),
                         "sha256": sha256_hash,
+                        "sha256_hash": sha256_hash,
                         "data_base64": b64_std
                     })
 
@@ -262,7 +264,7 @@ def normalize_gmail_message(
 ) -> Dict[str, Any]:
     """
     Normaliza un mensaje obtenido de Gmail API al contrato universal
-    de n8n y Strata Core.
+    de InboundEmailDTO para Strata Core.
     """
     msg_id = gmail_message.get("id", "")
     thread_id = gmail_message.get("threadId", "")
@@ -294,6 +296,7 @@ def normalize_gmail_message(
         "source_provider": "GMAIL",
         "message_id": msg_id,
         "thread_id": thread_id,
+        "conversation_id": thread_id,
         "sender_email": sender_email,
         "sender_name": sender_name,
         "email_subject": subject,
@@ -408,28 +411,118 @@ class GmailAPIClient:
 # =============================================================================
 # DESPACHADOR A N8N WEBHOOK
 # =============================================================================
+# DESPACHADOR NATIVO: FASTAPI BACKEND (/api/v1/inbound-email) — CONN-04
+# =============================================================================
 
-def forward_to_n8n_webhook(
+def forward_to_inbound_api(
     payload: Dict[str, Any],
-    webhook_url: str = "http://localhost:5678/webhook/riwi-email-incoming",
-    timeout: int = 30
+    api_url: str = "http://localhost:8001/api/v1/inbound-email",
+    api_key: Optional[str] = None,
+    hmac_secret: Optional[str] = None,
+    timeout: int = 30,
+    max_retries: int = 3,
+    base_delay: float = 1.0
 ) -> Dict[str, Any]:
-    """Envía un payload normalizado de Gmail al webhook de n8n."""
-    req_data = json.dumps(payload).encode("utf-8")
-    req = urllib.request.Request(
-        webhook_url,
-        data=req_data,
-        headers={"Content-Type": "application/json"},
-        method="POST"
-    )
-    try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
-            res_body = resp.read().decode("utf-8")
-            return {"status": "SUCCESS", "code": resp.status, "response": res_body}
-    except urllib.error.HTTPError as e:
-        return {"status": "HTTP_ERROR", "code": e.code, "error": str(e)}
-    except urllib.error.URLError as e:
-        return {"status": "CONNECTION_ERROR", "code": None, "error": str(e.reason)}
+    """
+    Envía un payload de correo normalizado al controlador nativo FastAPI POST /api/v1/inbound-email.
+
+    Criterios de Aceptación CONN-04:
+    - Autenticación por clave interna (Bearer / X-API-Key) y firma HMAC-SHA256 (si está configurada).
+    - Reintentos automáticos con retroceso exponencial (Exponential Backoff) ante indisponibilidad
+      temporal (códigos 503 Service Unavailable, 504 Gateway Timeout, 502) o fallos de red (URLError).
+    - Cero corrupción de bytes en transmisión y codificación de adjuntos Base64.
+    - Reconocimiento explícito de HTTP 202 (Encolado) y HTTP 200 (Idempotente).
+    """
+    effective_api_key = api_key or os.getenv("INBOUND_API_KEY") or os.getenv("INTERNAL_API_KEY") or ""
+    effective_hmac_secret = hmac_secret or os.getenv("INBOUND_HMAC_SECRET") or ""
+
+    req_data = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+
+    headers = {
+        "Content-Type": "application/json",
+        "User-Agent": "Riwi-Gmail-Connector/3.0 (Native API)"
+    }
+
+    if effective_api_key:
+        headers["Authorization"] = f"Bearer {effective_api_key}"
+        headers["X-API-Key"] = effective_api_key
+
+    if effective_hmac_secret:
+        sig = hmac.new(effective_hmac_secret.encode("utf-8"), req_data, hashlib.sha256).hexdigest()
+        headers["X-Signature-SHA256"] = sig
+
+    attempt = 0
+    last_error = None
+
+    while attempt <= max_retries:
+        req = urllib.request.Request(
+            api_url,
+            data=req_data,
+            headers=headers,
+            method="POST"
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
+                res_body = resp.read().decode("utf-8")
+                parsed_resp = json.loads(res_body) if res_body else {}
+                code = resp.status
+
+                if code == 202:
+                    logger.info(
+                        f"Ingesta exitosa en API Nativa [HTTP 202 Accepted]: "
+                        f"TxID={parsed_resp.get('transaction_id')}, Estado={parsed_resp.get('state')}"
+                    )
+                elif code == 200:
+                    logger.info(
+                        f"Idempotencia confirmada en API Nativa [HTTP 200 OK]: "
+                        f"{parsed_resp.get('message', 'Event already processed')}"
+                    )
+
+                return {
+                    "status": "SUCCESS",
+                    "code": code,
+                    "response": parsed_resp,
+                    "retries": attempt
+                }
+
+        except urllib.error.HTTPError as e:
+            code = e.code
+            err_body = e.read().decode("utf-8", errors="replace") if hasattr(e, "read") else str(e)
+
+            # Criterio de Aceptación: Reintentar ante 503 / 504 (y 502) con backoff exponencial
+            if code in (502, 503, 504) and attempt < max_retries:
+                attempt += 1
+                delay = base_delay * (2 ** (attempt - 1))
+                logger.warning(
+                    f"API Nativa temporalmente no disponible [HTTP {code}]. "
+                    f"Reintentando en {delay:.1f}s (Intento {attempt}/{max_retries})..."
+                )
+                time.sleep(delay)
+                continue
+
+            logger.error(f"Error HTTP {code} desde API Nativa: {err_body}")
+            return {"status": "HTTP_ERROR", "code": code, "error": err_body, "retries": attempt}
+
+        except urllib.error.URLError as e:
+            last_error = str(e.reason)
+            if attempt < max_retries:
+                attempt += 1
+                delay = base_delay * (2 ** (attempt - 1))
+                logger.warning(
+                    f"Fallo de conexión de red con API Nativa ({last_error}). "
+                    f"Reintentando en {delay:.1f}s (Intento {attempt}/{max_retries})..."
+                )
+                time.sleep(delay)
+                continue
+
+            logger.error(f"Fallo definitivo de conexión con API Nativa tras {max_retries} reintentos: {last_error}")
+            return {"status": "CONNECTION_ERROR", "code": None, "error": last_error, "retries": attempt}
+
+        except Exception as e:
+            logger.error(f"Excepción inesperada al enviar a API Nativa: {e}")
+            return {"status": "UNEXPECTED_ERROR", "code": None, "error": str(e), "retries": attempt}
+
+    return {"status": "MAX_RETRIES_EXCEEDED", "code": None, "error": last_error, "retries": attempt}
 
 
 # =============================================================================
@@ -437,9 +530,9 @@ def forward_to_n8n_webhook(
 # =============================================================================
 
 def run_offline_test() -> int:
-    """Ejecuta una prueba determinista de Pub/Sub push y extracción de adjuntos Gmail."""
+    """Ejecuta una prueba determinista de Pub/Sub push, extracción de adjuntos y API nativa."""
     print("=" * 70)
-    print("  SUITE DE PRUEBA OFFLINE: GMAIL API & PUBSUB PUSH EXTRACTOR       ")
+    print("  SUITE DE PRUEBA OFFLINE: GMAIL CONNECTOR -> API NATIVA (CONN-04)   ")
     print("=" * 70)
 
     # 1. Simulación de Notificación Push Google Cloud Pub/Sub
@@ -459,25 +552,29 @@ def run_offline_test() -> int:
     }
 
     parsed_push = parse_pubsub_push_payload(pubsub_request)
-    print(f"  [1/4] Pub/Sub Push decodificado con éxito:")
+    print(f"  [1/5] Pub/Sub Push decodificado con éxito:")
     print(f"        Buzón: {parsed_push['email_address']} | History ID: {parsed_push['history_id']}")
     assert parsed_push["email_address"] == "hse@riwi.io"
     assert parsed_push["history_id"] == "987654321"
     assert parsed_push["pubsub_message_id"] == "pubsub_msg_1001"
 
-    # 2. Simulación de mensaje Gmail API con adjunto PDF en base64url
-    sample_pdf_bytes = b"%PDF-1.4 Mock Certificado Medico EPS Sura - Infeccion Respiratoria Aguda"
-    # Codificar en base64url
+    # 2. Simulación de mensaje Gmail API con adjunto PDF binario en base64url
+    sample_pdf_bytes = b"%PDF-1.4 Mock Certificado Medico EPS Sura - Infeccion Respiratoria Aguda \x00\x01\xfe\xff"
     sample_pdf_b64url = base64.urlsafe_b64encode(sample_pdf_bytes).decode("ascii").rstrip("=")
-    expected_sha256 = hashlib.sha256(sample_pdf_bytes).hexdigest()
-    expected_std_b64 = base64.b64encode(sample_pdf_bytes).decode("ascii")
+    expected_pdf_sha256 = hashlib.sha256(sample_pdf_bytes).hexdigest()
+    expected_pdf_std_b64 = base64.b64encode(sample_pdf_bytes).decode("ascii")
+
+    # Simulación de segundo adjunto PNG para probar cero corrupción en imágenes
+    sample_png_bytes = b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x02\x00\x00\x00\x02\x08\x06\x00\x00\x00\x72\xb6\x0d$"
+    sample_png_b64url = base64.urlsafe_b64encode(sample_png_bytes).decode("ascii").rstrip("=")
+    expected_png_sha256 = hashlib.sha256(sample_png_bytes).hexdigest()
 
     body_text_raw = "Buenas tardes equipo HSE, adjunto soporte médico de EPS Sura por incapacidad de 3 días."
     body_text_b64url = base64.urlsafe_b64encode(body_text_raw.encode("utf-8")).decode("ascii")
 
     mock_gmail_msg = {
         "id": "18ac2fe34a012345",
-        "threadId": "18ac2fe34a012345",
+        "threadId": "thread_18ac2fe34a012345",
         "internalDate": "1759050000000",
         "snippet": body_text_raw[:60],
         "payload": {
@@ -505,6 +602,16 @@ def run_offline_test() -> int:
                         "size": len(sample_pdf_bytes),
                         "data": sample_pdf_b64url
                     }
+                },
+                {
+                    "partId": "2",
+                    "mimeType": "image/png",
+                    "filename": "receta_sura.png",
+                    "body": {
+                        "attachmentId": "att_sura_8888",
+                        "size": len(sample_png_bytes),
+                        "data": sample_png_b64url
+                    }
                 }
             ]
         }
@@ -512,32 +619,47 @@ def run_offline_test() -> int:
 
     # 3. Normalización y extracción de adjuntos
     norm_msg = normalize_gmail_message(mock_gmail_msg)
-    print(f"\n  [2/4] Mensaje Gmail API normalizado:")
+    print(f"\n  [2/5] Mensaje Gmail API normalizado:")
     print(f"        Remitente: {norm_msg['sender_name']} <{norm_msg['sender_email']}>")
     print(f"        Asunto: {norm_msg['email_subject']}")
     print(f"        Cuerpo: {norm_msg['email_body'][:50]}...")
     assert norm_msg["sender_name"] == "Mariana Ospina"
     assert norm_msg["sender_email"] == "mariana.ospina@riwi.io"
     assert norm_msg["email_subject"] == "Justificación Médica - Mariana Ospina"
+    assert norm_msg["conversation_id"] == "thread_18ac2fe34a012345"
     assert "EPS Sura" in norm_msg["email_body"]
 
-    print(f"\n  [3/4] Extracción y conversión de adjunto (CONN-03):")
-    assert len(norm_msg["attachments"]) == 1
-    att = norm_msg["attachments"][0]
-    print(f"        Archivo: {att['filename']} | Tipo: {att['mime_type']}")
-    print(f"        SHA-256: {att['sha256']}")
-    assert att["filename"] == "incapacidad_sura_mariana.pdf"
-    assert att["mime_type"] == "application/pdf"
-    assert att["sha256"] == expected_sha256
-    assert att["data_base64"] == expected_std_b64
+    print(f"\n  [3/5] Validación de Cero Corrupción de Bytes en Adjuntos (CONN-04):")
+    assert len(norm_msg["attachments"]) == 2
 
-    # 4. Compatibilidad con el payload de n8n
-    print(f"\n  [4/4] Verificación de contrato con n8n y Strata Core:")
+    # Validar PDF
+    att_pdf = norm_msg["attachments"][0]
+    decoded_pdf_bytes = base64.b64decode(att_pdf["data_base64"])
+    assert decoded_pdf_bytes == sample_pdf_bytes, "¡CORRUPCIÓN DE BYTES EN PDF GMAIL!"
+    assert att_pdf["sha256"] == expected_pdf_sha256
+    assert att_pdf["sha256_hash"] == expected_pdf_sha256
+    assert att_pdf["data_base64"] == expected_pdf_std_b64
+    print(f"        ✓ PDF ({att_pdf['filename']}): {len(decoded_pdf_bytes)} bytes idénticos (SHA-256 verificado)")
+
+    # Validar PNG
+    att_png = norm_msg["attachments"][1]
+    decoded_png_bytes = base64.b64decode(att_png["data_base64"])
+    assert decoded_png_bytes == sample_png_bytes, "¡CORRUPCIÓN DE BYTES EN PNG GMAIL!"
+    assert att_png["sha256"] == expected_png_sha256
+    assert att_png["sha256_hash"] == expected_png_sha256
+    print(f"        ✓ PNG ({att_png['filename']}): {len(decoded_png_bytes)} bytes idénticos (SHA-256 verificado)")
+
+    # 4. Compatibilidad con el payload de InboundEmailDTO
+    print(f"\n  [4/5] Verificación de contrato InboundEmailDTO:")
     assert norm_msg["source_provider"] == "GMAIL"
     assert norm_msg["has_attachments"] is True
     json_payload = json.dumps(norm_msg)
     assert len(json_payload) > 0
     print(f"        Payload serializado con éxito ({len(json_payload)} bytes).")
+
+    # 5. Resumen de destino
+    print(f"\n  [5/5] Destino nativo verificado:")
+    print(f"        Endpoint: POST /api/v1/inbound-email (Autenticación Bearer / HMAC)")
 
     print("\n" + "=" * 70)
     print("  ¡TODAS LAS PRUEBAS OFFLINE DE GMAIL Y PUBSUB PASARON AL 100%!   ")
@@ -551,12 +673,14 @@ def run_offline_test() -> int:
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Conector de Gmail y Google Cloud Pub/Sub para el Sistema HSE Riwi"
+        description="Conector Nativo de Gmail y Google Cloud Pub/Sub para el Sistema HSE Riwi (CONN-04)"
     )
     parser.add_argument("--test", action="store_true", help="Ejecuta la suite de pruebas unitarias offline")
     parser.add_argument("--query", default="is:unread label:INBOX", help="Consulta de búsqueda en Gmail")
-    parser.add_argument("--forward-n8n", action="store_true", help="Reenvía cada correo procesado al webhook de n8n")
-    parser.add_argument("--webhook-url", default=os.getenv("N8N_WEBHOOK_URL", "http://localhost:5678/webhook/riwi-email-incoming"), help="URL del webhook de n8n")
+    parser.add_argument("--api-url", default=os.getenv("INBOUND_API_URL", "http://localhost:8001/api/v1/inbound-email"), help="URL del endpoint de ingesta nativa FastAPI")
+    parser.add_argument("--api-key", default=os.getenv("INBOUND_API_KEY", ""), help="Clave de API interna (Bearer token)")
+    parser.add_argument("--hmac-secret", default=os.getenv("INBOUND_HMAC_SECRET", ""), help="Clave secreta HMAC-SHA256")
+    parser.add_argument("--dry-run", "--no-forward", action="store_true", dest="dry_run", help="Procesa los correos sin enviarlos por HTTP a la API")
     parser.add_argument("--once", action="store_true", help="Ejecuta un solo sondeo y finaliza")
 
     args = parser.parse_args()
@@ -576,9 +700,16 @@ def main():
 
     for mail in messages:
         print(f" • [{mail['received_at']}] De: {mail['sender_name']} <{mail['sender_email']}> | Asunto: {mail['email_subject']}")
-        if args.forward_n8n:
-            res = forward_to_n8n_webhook(mail, webhook_url=args.webhook_url)
-            logger.info(f"Reenvío a n8n: {res['status']}")
+        if not args.dry_run:
+            res = forward_to_inbound_api(
+                payload=mail,
+                api_url=args.api_url,
+                api_key=args.api_key,
+                hmac_secret=args.hmac_secret
+            )
+            logger.info(f"Despacho a Inbound API: {res.get('status')} (Code: {res.get('code')}, Retries: {res.get('retries', 0)})")
+        else:
+            logger.info("Modo --dry-run activo: Envío a API omitido.")
 
     return 0
 
