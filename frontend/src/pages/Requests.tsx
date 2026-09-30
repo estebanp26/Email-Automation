@@ -3,8 +3,10 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Mail, Send, FileEdit, Trash, Reply, Inbox, Paperclip, User, 
   CheckCircle2, XCircle, AlertCircle, Zap,
-  Calendar, ShieldCheck, MessageSquare, AlertTriangle, RotateCw
+  Calendar, ShieldCheck, MessageSquare, AlertTriangle, RotateCw,
+  ArrowLeft
 } from 'lucide-react';
+import clsx from 'clsx';
 import { api } from '../services/api';
 
 export default function Requests() {
@@ -13,6 +15,7 @@ export default function Requests() {
   const [sentEmails, setSentEmails] = useState<any[]>([]);
   const [selectedEmail, setSelectedEmail] = useState<any | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [showMobileDetail, setShowMobileDetail] = useState(false);
   
   // Composing state
   const [isComposing, setIsComposing] = useState(false);
@@ -70,9 +73,11 @@ export default function Requests() {
     setActiveFolder(folder);
     setIsComposing(false);
     setResolutionStatus(null);
+    setShowMobileDetail(false);
     const targetList = folder === 'inbox' ? inboxList : folder === 'sent' ? sentList : [];
     if (targetList.length > 0) {
       handleSelectEmail(targetList[0]);
+      setShowMobileDetail(false); // Mantener en lista en móvil al cambiar carpeta
     } else {
       setSelectedEmail(null);
     }
@@ -238,10 +243,53 @@ export default function Requests() {
   };
 
   return (
-    <div className="h-[calc(100vh-6rem)] flex gap-4 overflow-hidden">
+    <div className="h-[calc(100vh-5.5rem)] lg:h-[calc(100vh-6rem)] flex flex-col lg:flex-row gap-3 sm:gap-4 overflow-hidden">
       
-      {/* 1. SIDEBAR DE CARPETAS (Paneles Izquierdos) */}
-      <div className="w-[240px] flex-shrink-0 flex flex-col gap-4">
+      {/* Selector móvil de carpetas (solo visible en < 1024px) */}
+      <div className="lg:hidden flex items-center justify-between gap-2 overflow-x-auto pb-1 shrink-0">
+        <div className="flex items-center gap-1.5 overflow-x-auto py-1">
+          <button
+            type="button"
+            onClick={() => handleFolderChange('inbox')}
+            className={clsx(
+              "px-3 py-1.5 rounded-full text-xs font-bold transition-all shrink-0 flex items-center gap-1.5 cursor-pointer",
+              activeFolder === 'inbox' ? "bg-[#5B3FF5] text-white shadow-md shadow-[#5B3FF5]/30" : "bg-white text-[#7C8499] border border-[#E2E8F0]"
+            )}
+          >
+            <Inbox size={14} /> Bandeja ({inboxList.length})
+          </button>
+          <button
+            type="button"
+            onClick={() => handleFolderChange('sent')}
+            className={clsx(
+              "px-3 py-1.5 rounded-full text-xs font-bold transition-all shrink-0 flex items-center gap-1.5 cursor-pointer",
+              activeFolder === 'sent' ? "bg-[#5B3FF5] text-white shadow-md shadow-[#5B3FF5]/30" : "bg-white text-[#7C8499] border border-[#E2E8F0]"
+            )}
+          >
+            <Send size={14} /> Enviados ({sentList.length})
+          </button>
+          <button
+            type="button"
+            onClick={() => handleFolderChange('drafts')}
+            className={clsx(
+              "px-3 py-1.5 rounded-full text-xs font-bold transition-all shrink-0 flex items-center gap-1.5 cursor-pointer",
+              activeFolder === 'drafts' ? "bg-[#5B3FF5] text-white shadow-md shadow-[#5B3FF5]/30" : "bg-white text-[#7C8499] border border-[#E2E8F0]"
+            )}
+          >
+            <FileEdit size={14} /> Borradores
+          </button>
+        </div>
+        <button
+          type="button"
+          onClick={() => { handleComposeNew(); setShowMobileDetail(true); }}
+          className="bg-gradient-to-r from-[#5636F5] to-[#633BFF] text-white px-3 py-1.5 rounded-full text-xs font-bold flex items-center gap-1.5 shrink-0 shadow-sm cursor-pointer"
+        >
+          <FileEdit size={13} /> Redactar
+        </button>
+      </div>
+
+      {/* 1. SIDEBAR DE CARPETAS (Paneles Izquierdos en Desktop) */}
+      <div className="hidden lg:flex w-[240px] flex-shrink-0 flex-col gap-4">
         <button
           onClick={handleComposeNew}
           className="w-full bg-gradient-to-r from-[#5636F5] to-[#633BFF] hover:opacity-90 text-white rounded-[16px] py-4 px-4 flex items-center justify-center gap-2 font-bold shadow-[0_8px_20px_rgba(99,59,255,0.25)] transition-all cursor-pointer"
@@ -293,13 +341,16 @@ export default function Requests() {
       </div>
 
       {/* 2. LISTA DE CORREOS (Panel Central) */}
-      <div className="w-[380px] flex-shrink-0 bg-white border border-[#E2E8F0] rounded-[24px] shadow-sm flex flex-col overflow-hidden">
-        <div className="p-5 border-b border-[#E2E8F0] bg-gray-50/50 flex items-center justify-between">
+      <div className={clsx(
+        "w-full lg:w-[380px] flex-shrink-0 bg-white border border-[#E2E8F0] rounded-[24px] shadow-sm flex flex-col overflow-hidden",
+        showMobileDetail ? "hidden lg:flex" : "flex flex-1 lg:flex-initial"
+      )}>
+        <div className="p-4 sm:p-5 border-b border-[#E2E8F0] bg-gray-50/50 flex items-center justify-between">
           <div>
-            <h2 className="text-[18px] font-bold text-[#111827] capitalize">
+            <h2 className="text-[16px] sm:text-[18px] font-bold text-[#111827] capitalize">
               {activeFolder === 'inbox' ? 'Bandeja de Entrada' : activeFolder === 'sent' ? 'Enviados' : 'Borradores'}
             </h2>
-            <p className="text-sm text-[#7C8499]">{activeList.length} correos</p>
+            <p className="text-xs sm:text-sm text-[#7C8499]">{activeList.length} correos</p>
           </div>
           <button
             onClick={() => fetchRequests(true)}
@@ -322,7 +373,10 @@ export default function Requests() {
             return (
               <div 
                 key={item.id} 
-                onClick={() => handleSelectEmail(item)}
+                onClick={() => {
+                  handleSelectEmail(item);
+                  setShowMobileDetail(true);
+                }}
                 className={`p-4 border-b border-[#E2E8F0] cursor-pointer transition-colors ${
                   isSelected ? 'bg-[#F2F0FF] border-l-4 border-l-[#5B3FF5]' : 'bg-white hover:bg-gray-50 border-l-4 border-l-transparent'
                 }`}
@@ -381,7 +435,10 @@ export default function Requests() {
       </div>
 
       {/* 3. VISOR / EDITOR (Panel Derecho) */}
-      <div className="flex-1 bg-white border border-[#E2E8F0] rounded-[24px] shadow-sm flex flex-col overflow-hidden relative">
+      <div className={clsx(
+        "flex-1 bg-white border border-[#E2E8F0] rounded-[24px] shadow-sm flex flex-col overflow-hidden relative",
+        !showMobileDetail ? "hidden lg:flex" : "flex"
+      )}>
         
         {/* Notificación Toast */}
         <AnimatePresence>
@@ -400,9 +457,26 @@ export default function Requests() {
         {isComposing ? (
           /* VISTA DE REDACCION */
           <div className="flex flex-col h-full">
-            <div className="p-5 border-b border-[#E2E8F0] flex justify-between items-center bg-gray-50/50">
-              <h2 className="text-[18px] font-bold text-[#111827]">Nuevo Mensaje</h2>
-              <button onClick={() => setIsComposing(false)} className="text-[#A3AAC2] hover:text-red-500 transition-colors">
+            <div className="p-4 sm:p-5 border-b border-[#E2E8F0] flex justify-between items-center bg-gray-50/50">
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowMobileDetail(false)}
+                  className="lg:hidden p-1.5 rounded-lg text-[#7C8499] hover:bg-white hover:text-[#111827] transition-colors cursor-pointer"
+                  aria-label="Volver a la lista"
+                >
+                  <ArrowLeft size={18} />
+                </button>
+                <h2 className="text-[16px] sm:text-[18px] font-bold text-[#111827]">Nuevo Mensaje</h2>
+              </div>
+              <button 
+                onClick={() => {
+                  setIsComposing(false);
+                  setShowMobileDetail(false);
+                }} 
+                className="text-[#A3AAC2] hover:text-red-500 transition-colors p-1"
+                aria-label="Cerrar redacción"
+              >
                 <Trash size={18} />
               </button>
             </div>
@@ -460,14 +534,25 @@ export default function Requests() {
           /* VISTA DE LECTURA Y RESOLUCIÓN */
           <div className="flex flex-col h-full overflow-hidden">
             {/* Cabecera del correo */}
-            <div className="p-6 border-b border-[#E2E8F0] flex justify-between items-start bg-gray-50/30 shrink-0">
-              <div>
-                <div className="flex items-center gap-3 mb-2">
-                  <h2 className="text-[20px] font-bold text-[#111827]">
+            <div className="p-4 sm:p-6 border-b border-[#E2E8F0] flex flex-col sm:flex-row justify-between items-start gap-3 bg-gray-50/30 shrink-0">
+              <div className="w-full sm:w-auto">
+                <div className="flex items-center gap-2 mb-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowMobileDetail(false)}
+                    className="lg:hidden p-1.5 -ml-1 rounded-lg text-[#7C8499] hover:bg-white hover:text-[#111827] transition-colors shrink-0 cursor-pointer"
+                    aria-label="Volver a la lista"
+                  >
+                    <ArrowLeft size={18} />
+                  </button>
+                  <h2 className="text-[17px] sm:text-[20px] font-bold text-[#111827] line-clamp-1 sm:line-clamp-none">
                     {selectedEmail.emailInfo?.subject || selectedEmail.subject}
                   </h2>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2 mb-3">
                   {(selectedEmail.category || selectedEmail.status) && (
-                    <span className={`text-[11px] font-bold px-3 py-1 rounded-full flex items-center gap-1.5 ${
+                    <span className={`text-[10px] sm:text-[11px] font-bold px-2.5 sm:px-3 py-1 rounded-full flex items-center gap-1.5 ${
                       (selectedEmail.category === 'POSIBLEMENTE_VALIDO' || selectedEmail.status === 'approved') ? 'bg-[#20B486]/15 text-[#20B486]' :
                       (selectedEmail.category === 'POSIBLEMENTE_INVALIDO' || selectedEmail.status === 'denied') ? 'bg-[#FF5C67]/15 text-[#FF5C67]' :
                       'bg-[#F5B83D]/15 text-[#F5B83D]'
@@ -485,20 +570,20 @@ export default function Requests() {
                 </div>
 
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-[#5B3FF5] to-blue-400 flex items-center justify-center text-white font-bold">
+                  <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-gradient-to-tr from-[#5B3FF5] to-blue-400 flex items-center justify-center text-white font-bold shrink-0">
                     {(selectedEmail.emailInfo?.senderName || selectedEmail.to || 'A')[0]}
                   </div>
-                  <div>
-                    <p className="font-bold text-[14px] text-[#111827]">
+                  <div className="min-w-0">
+                    <p className="font-bold text-[13px] sm:text-[14px] text-[#111827] truncate">
                       {selectedEmail.emailInfo?.senderName || (activeFolder === 'sent' ? 'Yo (Admin)' : selectedEmail.to)}
                     </p>
-                    <p className="text-[12px] text-[#7C8499]">
+                    <p className="text-[11px] sm:text-[12px] text-[#7C8499] truncate">
                       {activeFolder === 'sent' ? `Para: ${selectedEmail.to}` : `<${selectedEmail.emailInfo?.senderEmail}>`}
                     </p>
                   </div>
                 </div>
               </div>
-              <p className="text-sm text-[#A3AAC2]">
+              <p className="text-xs sm:text-sm text-[#A3AAC2] self-end sm:self-auto">
                 {new Date(selectedEmail.emailInfo?.date || selectedEmail.date).toLocaleString('es-ES')}
               </p>
             </div>
