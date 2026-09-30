@@ -1,14 +1,9 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures/auth';
 
 test.describe('Subtask 4: Responsive Requests Page (Master-Detail)', () => {
   test('debe permitir navegar maestro-detalle y alternar carpetas en móvil sin overflow', async ({ page }) => {
-    // 1. Simular autenticación HSE
+    // 1. Configurar viewport móvil
     await page.setViewportSize({ width: 375, height: 667 });
-    await page.goto('/login');
-    await page.evaluate(() => {
-      localStorage.setItem('hse_token', 'jwt_hse_admin_12345');
-      localStorage.setItem('hse_role', 'hse');
-    });
 
     // 2. Ir a Solicitudes (/requests)
     await page.goto('/requests');

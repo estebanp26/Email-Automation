@@ -1,14 +1,9 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures/auth';
 
 test.describe('Subtask 3: Responsive HSE Dashboard', () => {
   test('debe renderizar KPIs y gráficos responsivos en móvil y tablet sin overflow', async ({ page }) => {
-    // 1. Simular autenticación HSE
+    // 1. Configurar viewport móvil
     await page.setViewportSize({ width: 375, height: 667 });
-    await page.goto('/login');
-    await page.evaluate(() => {
-      localStorage.setItem('hse_token', 'jwt_hse_admin_12345');
-      localStorage.setItem('hse_role', 'hse');
-    });
 
     // 2. Ir al dashboard en móvil
     await page.goto('/');

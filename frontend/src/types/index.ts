@@ -92,3 +92,40 @@ export interface CoderJustification {
   submitted_at: string;
   updated_at?: string;
 }
+
+// ==========================================
+// TIPOS DE AUTENTICACIÓN Y ROLES (RBAC FE-05)
+// ==========================================
+
+export type SystemRole = 'CODER' | 'HSE_ANALYST' | 'TEAM_LEADER' | 'ADMIN' | 'HSE';
+
+export type UserRole = 'CODER' | 'HSE_ANALYST' | 'TEAM_LEADER' | 'ADMIN';
+
+export interface AuthUser {
+  id: string;
+  email: string;
+  name: string;
+  role: UserRole;
+  cedula?: string;
+  route?: string;
+}
+
+export interface JWTPayload {
+  sub: string;
+  email: string;
+  name: string;
+  role: SystemRole | string;
+  exp: number;
+  iat: number;
+  cedula?: string;
+  route?: string;
+}
+
+export interface AuthContextType {
+  user: AuthUser | null;
+  token: string | null;
+  isAuthenticated: boolean;
+  isLoading: boolean;
+  login: (token: string, userData?: Partial<AuthUser>) => void;
+  logout: () => void;
+}
