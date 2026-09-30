@@ -49,4 +49,3 @@ export interface KPIStats {
   denied: number;
   pending: number;
 }
-
