@@ -154,6 +154,10 @@ async def run_suite():
     print("  STRATA CORE AI - SUITE DE PRUEBAS ADVERSARIALES Y FRONTERA (OLLAMA ENGINE)")
     print("================================================================================\n")
 
+    print("[INFO] Ejecutando warmup inicial del modelo Qwen 2.5 en Ollama...")
+    await server.ai_client.warmup()
+    print("[INFO] Warmup completado. Iniciando pruebas de inferencia rápida (< 10s)...\n")
+
     passed_count = 0
     total_count = len(CASES)
     results_table = []

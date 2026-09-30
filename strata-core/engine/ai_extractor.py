@@ -106,12 +106,30 @@ class AIExtractor:
 
         return "\n".join(selected_snippets)[:max_chars], pages_used
 
+    async def warmup(self, model: str = DEFAULT_MODEL) -> None:
+        """Preload model weights into RAM/VRAM with a 1-token prompt to eliminate first-request cold start."""
+        try:
+            async with httpx.AsyncClient(timeout=15.0) as client:
+                await client.post(
+                    f"{self.ollama_url}/api/generate",
+                    json={
+                        "model": model,
+                        "prompt": "{}",
+                        "stream": False,
+                        "format": "json",
+                        "keep_alive": "60m",
+                        "options": {"num_predict": 1, "num_thread": 8, "num_ctx": 1536},
+                    }
+                )
+        except Exception:
+            pass
+
     async def _generate(self, prompt: str, model: str = DEFAULT_MODEL) -> Tuple[Dict[str, Any], Optional[str]]:
         """Call Ollama /api/generate with JSON-only output. Returns (json, error)."""
         if not model:
             return {}, "No se especificó modelo."
         try:
-            async with httpx.AsyncClient(timeout=300.0) as client:
+            async with httpx.AsyncClient(timeout=120.0) as client:
                 res = await client.post(
                     f"{self.ollama_url}/api/generate",
                     json={
@@ -119,8 +137,13 @@ class AIExtractor:
                         "prompt": prompt,
                         "stream": False,
                         "format": "json",
-                        "keep_alive": "10m",
-                        "options": {"temperature": 0.1, "num_predict": 400},
+                        "keep_alive": "60m",
+                        "options": {
+                            "temperature": 0.0,
+                            "num_predict": 110,
+                            "num_thread": 8,
+                            "num_ctx": 1536
+                        },
                     },
                 )
                 if res.status_code == 200:
@@ -303,7 +326,7 @@ REGLAS:
             "firma", "calamidad", "tardanza", "salida", "permiso", "odontolog", "dental", 
             "ticket", "soporte", "falla", "internet", "cita", "constancia", "reposo"
         ]
-        context_text, pages_used = self.build_pruned_context(document_data, keywords, max_chars=3500)
+        context_text, pages_used = self.build_pruned_context(document_data, keywords, max_chars=1800)
         
         rules_str = json.dumps(rules, indent=2, ensure_ascii=False)
         rendered_prompt = system_prompt_template.replace("{{dynamic_rules}}", rules_str)
