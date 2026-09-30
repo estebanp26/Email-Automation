@@ -1,15 +1,41 @@
-import { useState, useEffect, useMemo } from 'react';
-import { motion } from 'framer-motion';
-import { Search, Mail, ChevronRight, Users, BookOpen } from 'lucide-react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { 
+  Search, 
+  Mail, 
+  ChevronRight, 
+  Users, 
+  BookOpen, 
+  Send, 
+  X, 
+  CheckCircle2, 
+  CheckSquare, 
+  Square
+} from 'lucide-react';
 import { api } from '../services/api';
 import { matchesNormalized } from '../utils/textUtils';
 import { CoderAttendanceHistory } from '../components/students/CoderAttendanceHistory';
+import { sendMassRouteMessage } from '../services/hseMessages';
 
 export default function Students() {
   const [students, setStudents] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeRouteName, setActiveRouteName] = useState<string>('');
   const [selectedCoder, setSelectedCoder] = useState<any | null>(null);
+
+  // Modal de Mensaje Masivo a la Ruta
+  const [showMassModal, setShowMassModal] = useState(false);
+  const [targetScope, setTargetScope] = useState<'CURRENT' | 'ALL' | 'CUSTOM'>('CURRENT');
+  const [customSelectedRoutes, setCustomSelectedRoutes] = useState<string[]>([]);
+  const [massSubject, setMassSubject] = useState('');
+  const [massBody, setMassBody] = useState('');
+  const [massPriority, setMassPriority] = useState<'NORMAL' | 'URGENT' | 'INFO'>('NORMAL');
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  const showToast = (msg: string) => {
+    setToastMessage(msg);
+    setTimeout(() => setToastMessage(null), 3500);
+  };
 
   useEffect(() => {
     api.getStudents().then((data: any) => {
@@ -65,6 +91,66 @@ export default function Students() {
     });
   }, [students, activeRouteName, searchQuery]);
 
+  // Calcular número de destinatarios en modal de mensaje masivo
+  const totalRecipientsInModal = useMemo(() => {
+    if (targetScope === 'CURRENT') {
+      return activeRoute.count;
+    }
+    if (targetScope === 'ALL') {
+      return students.length;
+    }
+    // CUSTOM
+    return routes
+      .filter(r => customSelectedRoutes.includes(r.name))
+      .reduce((acc, curr) => acc + curr.count, 0);
+  }, [targetScope, activeRoute, students, routes, customSelectedRoutes]);
+
+  const handleOpenMassModal = () => {
+    setTargetScope('CURRENT');
+    setCustomSelectedRoutes([activeRoute.name]);
+    setMassSubject('');
+    setMassBody('');
+    setMassPriority('NORMAL');
+    setShowMassModal(true);
+  };
+
+  const toggleCustomRoute = (routeName: string) => {
+    setCustomSelectedRoutes(prev => 
+      prev.includes(routeName) 
+        ? prev.filter(r => r !== routeName)
+        : [...prev, routeName]
+    );
+  };
+
+  const handleSendMassMessage = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!massSubject.trim() || !massBody.trim()) return;
+
+    let targetRoutesList: string[] = [];
+    if (targetScope === 'CURRENT') {
+      targetRoutesList = [activeRoute.name];
+    } else if (targetScope === 'ALL') {
+      targetRoutesList = ['ALL'];
+    } else {
+      if (customSelectedRoutes.length === 0) {
+        showToast('Selecciona al menos una ruta de destino');
+        return;
+      }
+      targetRoutesList = customSelectedRoutes;
+    }
+
+    sendMassRouteMessage({
+      routes: targetRoutesList,
+      subject: massSubject,
+      body: massBody,
+      priority: massPriority,
+      sender: 'Paola Admin (HSE Barranquilla)'
+    });
+
+    showToast(`Comunicado masivo despachado exitosamente a ${totalRecipientsInModal} coders`);
+    setShowMassModal(false);
+  };
+
   if (selectedCoder) {
     return (
       <div className="h-[calc(100vh-6rem)] overflow-y-auto custom-scrollbar pr-1 pb-10">
@@ -77,8 +163,23 @@ export default function Students() {
   }
 
   return (
-    <div className="h-[calc(100vh-6rem)] flex flex-col gap-6">
+    <div className="h-[calc(100vh-6rem)] flex flex-col gap-6 relative">
       
+      {/* Toast Flotante */}
+      <AnimatePresence>
+        {toastMessage && (
+          <motion.div
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            className="fixed top-8 right-8 z-50 bg-[#11132C] text-white px-5 py-3 rounded-2xl shadow-2xl flex items-center gap-3 border border-white/10 text-sm font-semibold"
+          >
+            <CheckCircle2 size={18} className="text-[#20B486]" />
+            <span>{toastMessage}</span>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* PAGE HEADER */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 flex-shrink-0">
         <div>
@@ -141,7 +242,7 @@ export default function Students() {
         {/* LISTA DE CODERS */}
         <div className="flex-1 bg-white rounded-[24px] border border-[#E2E8F0] shadow-sm flex flex-col overflow-hidden min-w-0">
           
-          {/* HEADER DE LA RUTA SELECCIONADA */}
+          {/* HEADER DE LA RUTA SELECCIONADA CON BOTÓN DE MENSAJE A LA RUTA */}
           <div className="p-6 lg:px-8 border-b border-[#E2E8F0] flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-gray-50/30">
             <div>
               <div className="flex items-center gap-3 mb-1">
@@ -155,7 +256,11 @@ export default function Students() {
               </p>
             </div>
             
-            <button className="flex items-center justify-center gap-2 text-sm text-[#5B3FF5] font-bold bg-[#F2F0FF] px-5 py-2.5 rounded-[12px] hover:bg-[#EDEBFF] transition-colors cursor-pointer">
+            {/* Botón funcional: Mensaje a la Ruta (Masivo) */}
+            <button 
+              onClick={handleOpenMassModal}
+              className="flex items-center justify-center gap-2 text-sm text-[#5B3FF5] font-bold bg-[#F2F0FF] px-5 py-2.5 rounded-[12px] hover:bg-[#EDEBFF] transition-colors cursor-pointer shadow-2xs"
+            >
               <Mail size={16} strokeWidth={2.5} /> 
               Mensaje a la Ruta
             </button>
@@ -183,6 +288,7 @@ export default function Students() {
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.25, delay: Math.min(index * 0.02, 0.3) }}
                     onClick={() => setSelectedCoder(coder)}
+                    data-testid="coder-card"
                     className="bg-white border border-[#E2E8F0] p-4 lg:px-6 lg:py-5 rounded-[20px] flex items-center justify-between hover:shadow-[0_8px_30px_rgba(0,0,0,0.04)] hover:border-[#5B3FF5]/30 transition-all group cursor-pointer"
                   >
                     {/* INFO IZQUIERDA: AVATAR Y NOMBRE */}
@@ -240,6 +346,202 @@ export default function Students() {
           </div>
         </div>
       </div>
+
+      {/* MODAL PARA MENSAJE MASIVO A LA RUTA */}
+      <AnimatePresence>
+        {showMassModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-white rounded-3xl p-6 sm:p-8 max-w-xl w-full shadow-2xl border border-gray-100 max-h-[90vh] overflow-y-auto custom-scrollbar"
+            >
+              <div className="flex justify-between items-start mb-5">
+                <div>
+                  <h3 className="text-xl font-bold text-[#11132C] flex items-center gap-2">
+                    <Mail size={20} className="text-[#5B3FF5]" />
+                    Comunicado Masivo a Rutas HSE
+                  </h3>
+                  <p className="text-xs text-[#7C8499] mt-1">
+                    Envía avisos de bienestar, recordatorios de asistencia y circulares a toda la cohorte.
+                  </p>
+                </div>
+                <button
+                  onClick={() => setShowMassModal(false)}
+                  className="p-1 text-gray-400 hover:text-gray-700 transition-colors cursor-pointer"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              <form onSubmit={handleSendMassMessage} className="space-y-4">
+                
+                {/* Cuadro de Destino / Selección de Rutas */}
+                <div className="bg-[#F8F9FE] border border-[#E8EAF2] rounded-2xl p-4 space-y-3">
+                  <label className="block text-xs font-bold text-[#7B8195] uppercase">
+                    Destinatarios de la Comunicación
+                  </label>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setTargetScope('CURRENT')}
+                      className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
+                        targetScope === 'CURRENT'
+                          ? 'bg-[#5B3FF5] text-white border-[#5B3FF5] shadow-xs'
+                          : 'bg-white text-[#11132C] border-[#E8EAF2] hover:border-[#5B3FF5]/40'
+                      }`}
+                    >
+                      <p className="font-bold text-xs">Ruta Actual</p>
+                      <p className={`text-[11px] truncate mt-0.5 ${targetScope === 'CURRENT' ? 'text-white/80' : 'text-[#7C8499]'}`}>
+                        {activeRoute.name}
+                      </p>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setTargetScope('ALL')}
+                      className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
+                        targetScope === 'ALL'
+                          ? 'bg-[#5B3FF5] text-white border-[#5B3FF5] shadow-xs'
+                          : 'bg-white text-[#11132C] border-[#E8EAF2] hover:border-[#5B3FF5]/40'
+                      }`}
+                    >
+                      <p className="font-bold text-xs">Todas las Rutas</p>
+                      <p className={`text-[11px] truncate mt-0.5 ${targetScope === 'ALL' ? 'text-white/80' : 'text-[#7C8499]'}`}>
+                        {students.length} Coders
+                      </p>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setTargetScope('CUSTOM')}
+                      className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
+                        targetScope === 'CUSTOM'
+                          ? 'bg-[#5B3FF5] text-white border-[#5B3FF5] shadow-xs'
+                          : 'bg-white text-[#11132C] border-[#E8EAF2] hover:border-[#5B3FF5]/40'
+                      }`}
+                    >
+                      <p className="font-bold text-xs">Seleccionar Rutas</p>
+                      <p className={`text-[11px] truncate mt-0.5 ${targetScope === 'CUSTOM' ? 'text-white/80' : 'text-[#7C8499]'}`}>
+                        Personalizado
+                      </p>
+                    </button>
+                  </div>
+
+                  {/* Selector de Rutas con Cuadros para Clic */}
+                  {targetScope === 'CUSTOM' && (
+                    <div className="pt-2 border-t border-[#E8EAF2] space-y-2">
+                      <p className="text-[11px] font-semibold text-[#7C8499]">
+                        Marca las rutas que recibirán el mensaje masivo:
+                      </p>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-40 overflow-y-auto custom-scrollbar p-1">
+                        {routes.map(r => {
+                          const isSelected = customSelectedRoutes.includes(r.name);
+                          return (
+                            <div
+                              key={r.id}
+                              onClick={() => toggleCustomRoute(r.name)}
+                              className={`p-2.5 rounded-xl border flex items-center justify-between cursor-pointer select-none text-xs transition-all ${
+                                isSelected 
+                                  ? 'bg-[#F2F0FF] border-[#5B3FF5] text-[#5B3FF5] font-bold'
+                                  : 'bg-white border-[#E8EAF2] text-[#11132C] hover:border-gray-300'
+                              }`}
+                            >
+                              <div className="flex items-center gap-2 truncate">
+                                {isSelected ? (
+                                  <CheckSquare size={16} className="text-[#5B3FF5] shrink-0" />
+                                ) : (
+                                  <Square size={16} className="text-[#7C8499] shrink-0" />
+                                )}
+                                <span className="truncate">{r.name}</span>
+                              </div>
+                              <span className="text-[10px] bg-gray-100 text-[#7C8499] px-1.5 py-0.5 rounded font-mono shrink-0">
+                                {r.count}
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="flex items-center justify-between text-xs font-semibold text-[#5B3FF5] pt-1">
+                    <span>Impacto del Comunicado:</span>
+                    <span className="font-bold">{totalRecipientsInModal} Coders Destinatarios</span>
+                  </div>
+                </div>
+
+                {/* Formulario Asunto y Prioridad */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div className="sm:col-span-2">
+                    <label className="block text-xs font-bold text-[#7B8195] uppercase mb-1">
+                      Asunto del Comunicado
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="Ej: Jornada Especial de Ergonomía y Asistencia"
+                      value={massSubject}
+                      onChange={e => setMassSubject(e.target.value)}
+                      className="w-full px-3.5 py-2.5 border border-[#E8EAF2] rounded-xl text-sm font-medium focus:border-[#5B3FF5] focus:outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-[#7B8195] uppercase mb-1">
+                      Prioridad
+                    </label>
+                    <select
+                      value={massPriority}
+                      onChange={e => setMassPriority(e.target.value as any)}
+                      className="w-full px-3 py-2.5 border border-[#E8EAF2] rounded-xl text-sm font-medium bg-white focus:border-[#5B3FF5] focus:outline-none"
+                    >
+                      <option value="NORMAL">Normal</option>
+                      <option value="URGENT">Urgente</option>
+                      <option value="INFO">Informativo</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* Contenido del Mensaje */}
+                <div>
+                  <label className="block text-xs font-bold text-[#7B8195] uppercase mb-1">
+                    Cuerpo del Mensaje / Anuncio
+                  </label>
+                  <textarea
+                    rows={4}
+                    required
+                    placeholder="Redacta las indicaciones oficiales para los coders..."
+                    value={massBody}
+                    onChange={e => setMassBody(e.target.value)}
+                    className="w-full px-3.5 py-2.5 border border-[#E8EAF2] rounded-xl text-sm font-normal focus:border-[#5B3FF5] focus:outline-none resize-none"
+                  />
+                </div>
+
+                {/* Footer Modal */}
+                <div className="flex items-center justify-end gap-3 pt-4 border-t border-gray-100">
+                  <button
+                    type="button"
+                    onClick={() => setShowMassModal(false)}
+                    className="px-4 py-2 text-sm font-semibold text-gray-500 hover:text-gray-800 cursor-pointer"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-6 py-2.5 bg-[#5B3FF5] hover:bg-[#4a32cc] text-white rounded-xl text-sm font-bold shadow-md shadow-[#5B3FF5]/20 flex items-center gap-2 cursor-pointer"
+                  >
+                    <Send size={15} />
+                    <span>Enviar a {totalRecipientsInModal} Coders</span>
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
     </div>
   );
 }

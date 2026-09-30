@@ -4,7 +4,7 @@ import {
   Mail, Send, FileEdit, Trash, Reply, Inbox, Paperclip, User, 
   CheckCircle2, XCircle, AlertCircle, Zap,
   Calendar, ShieldCheck, MessageSquare, AlertTriangle, RotateCw, Search,
-  ArrowLeft
+  ArrowLeft, Download
 } from 'lucide-react';
 import clsx from 'clsx';
 import { api } from '../services/api';
@@ -256,8 +256,47 @@ export default function Requests() {
     }
   };
 
+  const handleDownloadReport = () => {
+    const list = [...inboxList, ...sentList];
+    const headers = ['ID Radicado', 'Remitente', 'Asunto', 'Fecha', 'Estado'];
+    const rows = list.map((item) => [
+      `"${item.id || ''}"`,
+      `"${item.from_address || item.to_address || ''}"`,
+      `"${(item.subject || '').replace(/"/g, '""')}"`,
+      `"${item.received_at || item.sent_at || ''}"`,
+      `"${item.status || 'PROCESADO'}"`,
+    ]);
+    const csvContent = '\uFEFF' + [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `reporte_solicitudes_hse_${new Date().toISOString().slice(0, 10)}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   return (
-    <div className="h-[calc(100vh-5.5rem)] lg:h-[calc(100vh-6rem)] flex flex-col lg:flex-row gap-3 sm:gap-4 overflow-hidden">
+    <div className="h-[calc(100vh-5.5rem)] lg:h-[calc(100vh-6rem)] flex flex-col gap-3 overflow-hidden">
+      {/* Top Header con Título y Botón Descargar Reporte en la esquina superior derecha */}
+      <div className="flex items-center justify-between gap-3 shrink-0">
+        <div>
+          <h1 className="text-xl sm:text-2xl font-bold text-[#111827]">Bandeja de Solicitudes HSE</h1>
+          <p className="text-xs text-[#7C8499]">Gestión de justificaciones, incapacidades y radicados de bienestar.</p>
+        </div>
+        <button
+          type="button"
+          onClick={handleDownloadReport}
+          className="flex items-center gap-2 px-4 py-2 bg-white hover:bg-gray-50 border border-[#E2E8F0] rounded-xl text-xs sm:text-sm font-semibold text-[#111827] shadow-2xs transition-all cursor-pointer hover:border-[#5B3FF5]"
+          title="Descargar reporte consolidado en CSV"
+        >
+          <Download size={14} className="text-[#5B3FF5]" />
+          <span>Descargar reporte</span>
+        </button>
+      </div>
+
+      <div className="flex-1 flex flex-col lg:flex-row gap-3 sm:gap-4 overflow-hidden min-h-0">
       
       {/* Selector móvil de carpetas (solo visible en < 1024px) */}
       <div className="lg:hidden flex items-center justify-between gap-2 overflow-x-auto pb-1 shrink-0">
@@ -890,6 +929,7 @@ export default function Requests() {
       </div>
       
     </div>
+  </div>
   );
 }
 

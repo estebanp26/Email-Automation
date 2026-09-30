@@ -1,5 +1,5 @@
-import { useState, useMemo } from 'react';
-import { motion } from 'framer-motion';
+import React, { useState, useMemo, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { 
   ArrowLeft, 
   CheckCircle2, 
@@ -8,9 +8,17 @@ import {
   XCircle, 
   Calendar, 
   BookOpen, 
-  AlertTriangle
+  AlertTriangle,
+  Edit3,
+  Mail,
+  Send,
+  X,
+  MessageSquare
 } from 'lucide-react';
 import type { Student } from '../../types';
+import { 
+  sendPersonalizedCoderMessage
+} from '../../services/hseMessages';
 
 interface CoderAttendanceHistoryProps {
   coder: Student & { status?: string };
@@ -33,29 +41,27 @@ export interface DailyAttendanceRecord {
 /**
  * Genera un historial diario determinista y consistente basado en los datos del Coder.
  */
-function generateAttendanceRecords(coder: Student): DailyAttendanceRecord[] {
+export function generateInitialRecords(coder: any): DailyAttendanceRecord[] {
   const attendance = coder.attendance || {
-    present: 36,
-    late: 2,
+    present: 34,
+    late: 3,
     justifiedAbsence: 2,
     unjustifiedAbsence: 1,
   };
 
-  const justifiedCount = Math.max(0, attendance.justifiedAbsence ?? 1);
-  const lateCount = Math.max(0, attendance.late ?? 1);
-  const unjustifiedCount = Math.max(0, attendance.unjustifiedAbsence ?? 0);
-  const presentCount = Math.max(10, attendance.present ?? 35);
+  const justifiedCount = Math.max(0, attendance.justifiedAbsence ?? 2);
+  const lateCount = Math.max(0, attendance.late ?? 3);
+  const unjustifiedCount = Math.max(0, attendance.unjustifiedAbsence ?? 1);
+  const presentCount = Math.max(10, attendance.present ?? 34);
 
   const totalDays = justifiedCount + lateCount + unjustifiedCount + presentCount;
   
-  // Lista de tipos a asignar
   const typesQueue: AttendanceRecordType[] = [];
   for (let i = 0; i < justifiedCount; i++) typesQueue.push('JUSTIFIED_ABSENCE');
   for (let i = 0; i < lateCount; i++) typesQueue.push('LATE');
   for (let i = 0; i < unjustifiedCount; i++) typesQueue.push('UNJUSTIFIED_ABSENCE');
   for (let i = 0; i < presentCount; i++) typesQueue.push('PRESENT');
 
-  // Mezclar determinísticamente según el id o cédula del coder
   const seedStr = coder.id + (coder.cedula || '100');
   let seed = 0;
   for (let i = 0; i < seedStr.length; i++) {
@@ -67,13 +73,11 @@ function generateAttendanceRecords(coder: Student): DailyAttendanceRecord[] {
     return (seed >>> 0) / 4294967296;
   };
 
-  // Fisher-Yates shuffle con seed
   for (let i = typesQueue.length - 1; i > 0; i--) {
     const j = Math.floor(seededRandom() * (i + 1));
     [typesQueue[i], typesQueue[j]] = [typesQueue[j], typesQueue[i]];
   }
 
-  // Generar días laborables (Lunes a Viernes) hacia atrás desde el 30 de Septiembre 2026
   const records: DailyAttendanceRecord[] = [];
   const currentDate = new Date(2026, 8, 30); // 30 Septiembre 2026
 
@@ -110,11 +114,8 @@ function generateAttendanceRecords(coder: Student): DailyAttendanceRecord[] {
     d.setDate(currentDate.getDate() - dayOffset);
     dayOffset++;
 
-    // Omitir fines de semana
     const dayOfWeek = d.getDay();
-    if (dayOfWeek === 0 || dayOfWeek === 6) {
-      continue;
-    }
+    if (dayOfWeek === 0 || dayOfWeek === 6) continue;
 
     const type = typesQueue[assignedIndex] || 'PRESENT';
     assignedIndex++;
@@ -165,9 +166,47 @@ function generateAttendanceRecords(coder: Student): DailyAttendanceRecord[] {
 export function CoderAttendanceHistory({ coder, onBack }: CoderAttendanceHistoryProps) {
   const [activeFilter, setActiveFilter] = useState<'ALL' | AttendanceRecordType>('ALL');
 
-  const records = useMemo(() => generateAttendanceRecords(coder), [coder]);
+  // Registros en estado local con persistencia en localStorage por coder
+  const storageKey = `hse_coder_records_${coder.id || coder.cedula}`;
+  const [records, setRecords] = useState<DailyAttendanceRecord[]>(() => {
+    try {
+      const saved = localStorage.getItem(storageKey);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch (e) {}
+    return generateInitialRecords(coder);
+  });
 
-  // Contadores dinámicos calculados directamente de los registros generados
+  useEffect(() => {
+    try {
+      localStorage.setItem(storageKey, JSON.stringify(records));
+    } catch (e) {}
+  }, [records, storageKey]);
+
+  // Modal para Modificar Asistencia del Día
+  const [editingRecord, setEditingRecord] = useState<DailyAttendanceRecord | null>(null);
+  const [selectedType, setSelectedType] = useState<AttendanceRecordType>('PRESENT');
+  const [editReason, setEditReason] = useState('');
+  const [editArrivalTime, setEditArrivalTime] = useState('');
+
+  // Modal para Enviar Mensaje Personalizado
+  const [showMessageModal, setShowMessageModal] = useState(false);
+  const [messageForm, setMessageForm] = useState({
+    subject: '',
+    body: '',
+    priority: 'NORMAL' as 'NORMAL' | 'URGENT' | 'INFO'
+  });
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  const showToast = (msg: string) => {
+    setToastMessage(msg);
+    setTimeout(() => setToastMessage(null), 3500);
+  };
+
+  // Cálculo de estadísticas rigurosas y coherentes:
+  // Un estudiante NO puede tener 100% si ha tenido retrasos o faltas.
   const stats = useMemo(() => {
     let present = 0;
     let late = 0;
@@ -182,8 +221,19 @@ export function CoderAttendanceHistory({ coder, onBack }: CoderAttendanceHistory
     });
 
     const total = records.length;
-    const effectivePresent = present + late;
-    const attendancePct = total > 0 ? Math.round((effectivePresent / total) * 100) : 100;
+    
+    // Ponderación de presencialidad efectiva:
+    // Presente a tiempo: 100%
+    // Retraso: 75% de cumplimiento
+    // Justificada: 40% (no cuenta como jornada presencial completa)
+    // Injustificada: 0%
+    const weightedPoints = (present * 1.0) + (late * 0.75) + (justified * 0.40);
+    let attendancePct = total > 0 ? Math.round((weightedPoints / total) * 100) : 100;
+
+    // Si ha tenido retrasos o faltas, la asistencia NO puede ser 100%
+    if ((late > 0 || justified > 0 || unjustified > 0) && attendancePct >= 100) {
+      attendancePct = 99;
+    }
 
     return {
       present,
@@ -208,61 +258,147 @@ export function CoderAttendanceHistory({ coder, onBack }: CoderAttendanceHistory
         .join('')
     : 'CO';
 
-  // 4 Cuadros Dinámicos (KPI Cards) con el diseño estandarizado
+  // 4 Cuadros Dinámicos (KPI Cards)
   const dynamicKpiCards = [
     {
       label: 'Asistencia',
       value: `${stats.present} días`,
-      rate: `${stats.attendancePct}%`,
-      subtitle: 'jornadas presenciales cumplidas',
+      rate: `${stats.total > 0 ? Math.round((stats.present / stats.total) * 100) : 0}%`,
+      subtitle: 'jornadas a tiempo y completas',
       icon: CheckCircle2,
       color: 'text-[#20B486]',
       bg: 'bg-[#20B486]/10',
-      border: 'border-[#20B486]/30',
       badge: 'Normal',
       badgeBg: 'bg-[#20B486]/15 text-[#20B486]',
     },
     {
       label: 'Retraso',
       value: `${stats.late} sesiones`,
-      rate: `${Math.round((stats.late / stats.total) * 100)}%`,
-      subtitle: 'ingresos posteriores a la hora límite',
+      rate: `${stats.total > 0 ? Math.round((stats.late / stats.total) * 100) : 0}%`,
+      subtitle: 'ingresos con tardanza penalizada',
       icon: Clock,
       color: 'text-[#F5B83D]',
       bg: 'bg-[#F5B83D]/10',
-      border: 'border-[#F5B83D]/30',
       badge: 'Tardanza',
       badgeBg: 'bg-[#F5B83D]/15 text-[#B87A00]',
     },
     {
       label: 'Faltas Justificadas',
       value: `${stats.justified} días`,
-      rate: `${Math.round((stats.justified / stats.total) * 100)}%`,
-      subtitle: 'con soporte médico o legal aprobado',
+      rate: `${stats.total > 0 ? Math.round((stats.justified / stats.total) * 100) : 0}%`,
+      subtitle: 'con soporte médico o legal',
       icon: ShieldCheck,
       color: 'text-[#5B3FF5]',
       bg: 'bg-[#5B3FF5]/10',
-      border: 'border-[#5B3FF5]/30',
       badge: 'Excusa Válida',
       badgeBg: 'bg-[#5B3FF5]/15 text-[#5B3FF5]',
     },
     {
       label: 'Faltas Injustificadas',
       value: `${stats.unjustified} días`,
-      rate: `${Math.round((stats.unjustified / stats.total) * 100)}%`,
-      subtitle: 'sin justificación radicada ante TL',
+      rate: `${stats.total > 0 ? Math.round((stats.unjustified / stats.total) * 100) : 0}%`,
+      subtitle: 'sin justificación radicada',
       icon: AlertTriangle,
       color: 'text-[#FF5C67]',
       bg: 'bg-[#FF5C67]/10',
-      border: 'border-[#FF5C67]/30',
       badge: 'Alerta HSE',
       badgeBg: 'bg-[#FF5C67]/15 text-[#FF5C67]',
     },
   ];
 
+  // Handler para abrir modal de modificación de asistencia
+  const handleOpenEdit = (record: DailyAttendanceRecord) => {
+    setEditingRecord(record);
+    setSelectedType(record.type);
+    setEditReason(record.reason || '');
+    setEditArrivalTime(record.arrivalTime || (record.type === 'LATE' ? '08:20 AM' : '07:55 AM'));
+  };
+
+  // Handler para guardar cambio de asistencia
+  const handleSaveAttendanceEdit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingRecord) return;
+
+    let finalArrivalTime = editArrivalTime;
+    let finalReason = editReason.trim();
+    let finalRef = editingRecord.referenceDoc;
+
+    if (selectedType === 'PRESENT') {
+      finalArrivalTime = finalArrivalTime || '07:55 AM';
+      finalReason = finalReason || 'Jornada presencial completa · Asistencia registrada';
+      finalRef = undefined;
+    } else if (selectedType === 'LATE') {
+      finalArrivalTime = finalArrivalTime || '08:22 AM';
+      finalReason = finalReason || 'Ingreso posterior a hora límite · Retraso registrado';
+      finalRef = undefined;
+    } else if (selectedType === 'JUSTIFIED_ABSENCE') {
+      finalArrivalTime = undefined as any;
+      finalReason = finalReason || 'Incapacidad médica validada por Team Leader';
+      finalRef = finalRef || `RAD-HSE-2026-${Math.floor(10000 + Math.random() * 90000)}`;
+    } else if (selectedType === 'UNJUSTIFIED_ABSENCE') {
+      finalArrivalTime = undefined as any;
+      finalReason = finalReason || 'Inasistencia sin soporte documental radicado';
+      finalRef = undefined;
+    }
+
+    setRecords(prev => prev.map(r => r.id === editingRecord.id ? {
+      ...r,
+      type: selectedType,
+      arrivalTime: finalArrivalTime,
+      reason: finalReason,
+      referenceDoc: finalRef
+    } : r));
+
+    showToast(`Asistencia del ${editingRecord.dayName} modificada a ${
+      selectedType === 'PRESENT' ? 'Asistencia' :
+      selectedType === 'LATE' ? 'Retraso' :
+      selectedType === 'JUSTIFIED_ABSENCE' ? 'Falta Justificada' : 'Falta Injustificada'
+    }`);
+    setEditingRecord(null);
+  };
+
+  // Handler para enviar mensaje personalizado al estudiante
+  const handleSendPersonalMessage = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!messageForm.subject.trim() || !messageForm.body.trim()) return;
+
+    sendPersonalizedCoderMessage({
+      coder: {
+        id: coder.id,
+        name: coder.name,
+        email: coder.email,
+        cedula: coder.cedula,
+        route: coder.route
+      },
+      subject: messageForm.subject,
+      body: messageForm.body,
+      priority: messageForm.priority,
+      sender: 'Paola Admin (HSE Barranquilla)'
+    });
+
+    showToast(`Mensaje enviado exitosamente a ${coder.name}`);
+    setShowMessageModal(false);
+    setMessageForm({ subject: '', body: '', priority: 'NORMAL' });
+  };
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 relative">
       
+      {/* Toast Flotante */}
+      <AnimatePresence>
+        {toastMessage && (
+          <motion.div
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            className="fixed top-8 right-8 z-50 bg-[#11132C] text-white px-5 py-3 rounded-2xl shadow-2xl flex items-center gap-3 border border-white/10 text-sm font-semibold"
+          >
+            <CheckCircle2 size={18} className="text-[#20B486]" />
+            <span>{toastMessage}</span>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* 1. BARRA SUPERIOR CON BOTÓN DE REGRESAR */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <button
@@ -275,15 +411,15 @@ export function CoderAttendanceHistory({ coder, onBack }: CoderAttendanceHistory
         </button>
 
         <span className="text-xs text-[#7C8499] font-medium bg-gray-100 px-3 py-1.5 rounded-full">
-          Portal HSE · Gestión de Estudiantes
+          Portal HSE · Historial & Novedades
         </span>
       </div>
 
-      {/* 2. CARD DE IDENTIDAD DEL CODER */}
+      {/* 2. CARD DE IDENTIDAD DEL CODER CON ACCIONES */}
       <motion.div
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
-        className="bg-white rounded-[24px] border border-[#E2E8F0] p-6 shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-6"
+        className="bg-white rounded-[24px] border border-[#E2E8F0] p-6 shadow-sm flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6"
       >
         <div className="flex items-center gap-5 min-w-0">
           <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-[#5B3FF5] to-[#7B61FF] text-white flex items-center justify-center font-bold text-xl shadow-lg shadow-[#5B3FF5]/25 shrink-0">
@@ -317,12 +453,26 @@ export function CoderAttendanceHistory({ coder, onBack }: CoderAttendanceHistory
           </div>
         </div>
 
-        <div className="flex items-center gap-4 w-full md:w-auto justify-between md:justify-end pt-4 md:pt-0 border-t md:border-t-0 border-[#E2E8F0]">
-          <div className="text-right">
+        {/* Acciones del Estudiante: Enviar Mensaje + Cumplimiento Global */}
+        <div className="flex items-center gap-5 w-full lg:w-auto justify-between lg:justify-end pt-4 lg:pt-0 border-t lg:border-t-0 border-[#E2E8F0]">
+          {/* Botón de Enviar Mensaje Personalizado */}
+          <button
+            type="button"
+            onClick={() => setShowMessageModal(true)}
+            className="flex items-center gap-2 bg-[#5B3FF5] hover:bg-[#4a32cc] text-white px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold shadow-md shadow-[#5B3FF5]/20 transition-all cursor-pointer"
+          >
+            <Mail size={16} />
+            <span>Enviar Mensaje al Coder</span>
+          </button>
+
+          <div className="text-right shrink-0">
             <span className="text-[11px] text-[#7C8499] uppercase font-bold tracking-wider block">
               Cumplimiento Global
             </span>
-            <span className="text-2xl font-black text-[#20B486]">
+            <span className={`text-2xl font-black ${
+              stats.attendancePct >= 90 ? 'text-[#20B486]' :
+              stats.attendancePct >= 75 ? 'text-[#F5B83D]' : 'text-[#FF5C67]'
+            }`}>
               {stats.attendancePct}%
             </span>
           </div>
@@ -366,7 +516,7 @@ export function CoderAttendanceHistory({ coder, onBack }: CoderAttendanceHistory
         })}
       </div>
 
-      {/* 4. SECCIÓN PRINCIPAL: LISTA DETALLADA POR DÍA */}
+      {/* 4. SECCIÓN PRINCIPAL: LISTA DETALLADA POR DÍA CON BOTÓN PARA MODIFICAR */}
       <div className="bg-white rounded-[24px] border border-[#E2E8F0] shadow-sm overflow-hidden flex flex-col">
         
         {/* Encabezado y Filtros de la Lista */}
@@ -377,7 +527,7 @@ export function CoderAttendanceHistory({ coder, onBack }: CoderAttendanceHistory
               Registro Diario de Asistencia y Novedades
             </h3>
             <p className="text-xs text-[#7C8499] mt-0.5">
-              Auditoría cronológica de cada jornada con registro de retardos y motivos de inasistencia.
+              Auditoría cronológica. Haz clic en el ícono de lápiz de cualquier día para modificar el estado.
             </p>
           </div>
 
@@ -441,7 +591,7 @@ export function CoderAttendanceHistory({ coder, onBack }: CoderAttendanceHistory
           </div>
         </div>
 
-        {/* Lista de Registros */}
+        {/* Lista de Registros Diarios */}
         <div className="divide-y divide-[#E2E8F0] max-h-[600px] overflow-y-auto custom-scrollbar">
           {filteredRecords.length === 0 ? (
             <div className="text-center py-12 text-[#7C8499]">
@@ -449,7 +599,6 @@ export function CoderAttendanceHistory({ coder, onBack }: CoderAttendanceHistory
             </div>
           ) : (
             filteredRecords.map((item) => {
-              // Configuración visual según el tipo de registro
               const isPresent = item.type === 'PRESENT';
               const isLate = item.type === 'LATE';
               const isJustified = item.type === 'JUSTIFIED_ABSENCE';
@@ -458,7 +607,7 @@ export function CoderAttendanceHistory({ coder, onBack }: CoderAttendanceHistory
               return (
                 <div
                   key={item.id}
-                  className="p-4 sm:px-6 hover:bg-[#F8F9FE] transition-colors flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4"
+                  className="p-4 sm:px-6 hover:bg-[#F8F9FE] transition-colors flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 group"
                 >
                   {/* Ícono de Estado + Día y Fecha */}
                   <div className="flex items-center gap-4 min-w-[240px]">
@@ -525,11 +674,23 @@ export function CoderAttendanceHistory({ coder, onBack }: CoderAttendanceHistory
                     </div>
                   </div>
 
-                  {/* Horario / Hora de Entrada */}
-                  <div className="text-right text-xs shrink-0 self-end sm:self-center">
-                    <span className="text-[#A3AAC2] block font-mono">
-                      {item.arrivalTime ? `Ingreso: ${item.arrivalTime}` : 'Jornada ausente'}
-                    </span>
+                  {/* Horario + Botón Pequeño de Modificar Asistencia */}
+                  <div className="flex items-center gap-3 shrink-0 self-end sm:self-center">
+                    <div className="text-right text-xs">
+                      <span className="text-[#A3AAC2] block font-mono">
+                        {item.arrivalTime ? `Ingreso: ${item.arrivalTime}` : 'Jornada ausente'}
+                      </span>
+                    </div>
+
+                    {/* Botón con ícono pequeño para modificar la asistencia de dicho día */}
+                    <button
+                      type="button"
+                      onClick={() => handleOpenEdit(item)}
+                      className="p-2 text-[#7C8499] hover:text-[#5B3FF5] hover:bg-white rounded-xl border border-transparent hover:border-[#E2E8F0] shadow-2xs transition-all cursor-pointer group-hover:border-gray-200"
+                      title={`Modificar asistencia del ${item.dayName} (${item.formattedDate})`}
+                    >
+                      <Edit3 size={15} />
+                    </button>
                   </div>
                 </div>
               );
@@ -537,6 +698,296 @@ export function CoderAttendanceHistory({ coder, onBack }: CoderAttendanceHistory
           )}
         </div>
       </div>
+
+      {/* MODAL PARA MODIFICAR LA ASISTENCIA DE DICHO DÍA (4 TARJETAS CON OPCIONES) */}
+      <AnimatePresence>
+        {editingRecord && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-white rounded-3xl p-6 sm:p-8 max-w-lg w-full shadow-2xl border border-gray-100"
+            >
+              <div className="flex justify-between items-start mb-5">
+                <div>
+                  <h3 className="text-lg font-bold text-[#11132C]">
+                    Modificar Asistencia
+                  </h3>
+                  <p className="text-xs text-[#7C8499] mt-0.5">
+                    {editingRecord.dayName}, {editingRecord.formattedDate} · {coder.name}
+                  </p>
+                </div>
+                <button
+                  onClick={() => setEditingRecord(null)}
+                  className="p-1 text-gray-400 hover:text-gray-700 transition-colors cursor-pointer"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              <form onSubmit={handleSaveAttendanceEdit} className="space-y-5">
+                {/* 4 Tarjetas de Opción */}
+                <div>
+                  <label className="block text-xs font-bold text-[#7B8195] uppercase mb-2">
+                    Selecciona el Nuevo Estado de Asistencia
+                  </label>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    
+                    {/* Tarjeta 1: Asistencia */}
+                    <div
+                      onClick={() => {
+                        setSelectedType('PRESENT');
+                        setEditArrivalTime('07:55 AM');
+                        setEditReason('Jornada presencial completa · Asistencia verificada');
+                      }}
+                      className={`p-3.5 rounded-2xl border-2 cursor-pointer transition-all flex items-start gap-3 select-none ${
+                        selectedType === 'PRESENT'
+                          ? 'border-[#20B486] bg-[#20B486]/10 ring-2 ring-[#20B486]/20'
+                          : 'border-[#E8EAF2] hover:border-[#20B486]/40 bg-white'
+                      }`}
+                    >
+                      <div className="w-8 h-8 rounded-lg bg-[#20B486]/15 text-[#20B486] flex items-center justify-center shrink-0 mt-0.5">
+                        <CheckCircle2 size={18} strokeWidth={2.5} />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="font-bold text-sm text-[#11132C]">Asistencia</p>
+                        <p className="text-[11px] text-[#7C8499] leading-tight mt-0.5">
+                          Jornada presencial cumplida a tiempo
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Tarjeta 2: Retraso */}
+                    <div
+                      onClick={() => {
+                        setSelectedType('LATE');
+                        setEditArrivalTime('08:20 AM');
+                        setEditReason('Retraso por transporte reportado');
+                      }}
+                      className={`p-3.5 rounded-2xl border-2 cursor-pointer transition-all flex items-start gap-3 select-none ${
+                        selectedType === 'LATE'
+                          ? 'border-[#F5B83D] bg-[#F5B83D]/10 ring-2 ring-[#F5B83D]/20'
+                          : 'border-[#E8EAF2] hover:border-[#F5B83D]/40 bg-white'
+                      }`}
+                    >
+                      <div className="w-8 h-8 rounded-lg bg-[#F5B83D]/15 text-[#B87A00] flex items-center justify-center shrink-0 mt-0.5">
+                        <Clock size={18} strokeWidth={2.5} />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="font-bold text-sm text-[#11132C]">Retraso</p>
+                        <p className="text-[11px] text-[#7C8499] leading-tight mt-0.5">
+                          Llegada posterior a hora límite
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Tarjeta 3: Falta Justificada */}
+                    <div
+                      onClick={() => {
+                        setSelectedType('JUSTIFIED_ABSENCE');
+                        setEditArrivalTime('');
+                        setEditReason('Incapacidad médica EPS radicada');
+                      }}
+                      className={`p-3.5 rounded-2xl border-2 cursor-pointer transition-all flex items-start gap-3 select-none ${
+                        selectedType === 'JUSTIFIED_ABSENCE'
+                          ? 'border-[#5B3FF5] bg-[#5B3FF5]/10 ring-2 ring-[#5B3FF5]/20'
+                          : 'border-[#E8EAF2] hover:border-[#5B3FF5]/40 bg-white'
+                      }`}
+                    >
+                      <div className="w-8 h-8 rounded-lg bg-[#5B3FF5]/15 text-[#5B3FF5] flex items-center justify-center shrink-0 mt-0.5">
+                        <ShieldCheck size={18} strokeWidth={2.5} />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="font-bold text-sm text-[#11132C]">Falta Justificada</p>
+                        <p className="text-[11px] text-[#7C8499] leading-tight mt-0.5">
+                          Con soporte legal o de EPS
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Tarjeta 4: Falta Injustificada */}
+                    <div
+                      onClick={() => {
+                        setSelectedType('UNJUSTIFIED_ABSENCE');
+                        setEditArrivalTime('');
+                        setEditReason('Ausencia sin justificación documental');
+                      }}
+                      className={`p-3.5 rounded-2xl border-2 cursor-pointer transition-all flex items-start gap-3 select-none ${
+                        selectedType === 'UNJUSTIFIED_ABSENCE'
+                          ? 'border-[#FF5C67] bg-[#FF5C67]/10 ring-2 ring-[#FF5C67]/20'
+                          : 'border-[#E8EAF2] hover:border-[#FF5C67]/40 bg-white'
+                      }`}
+                    >
+                      <div className="w-8 h-8 rounded-lg bg-[#FF5C67]/15 text-[#FF5C67] flex items-center justify-center shrink-0 mt-0.5">
+                        <XCircle size={18} strokeWidth={2.5} />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="font-bold text-sm text-[#11132C]">Falta Injustificada</p>
+                        <p className="text-[11px] text-[#7C8499] leading-tight mt-0.5">
+                          Inasistencia no soportada
+                        </p>
+                      </div>
+                    </div>
+
+                  </div>
+                </div>
+
+                {/* Campos de Detalle */}
+                <div className="space-y-3">
+                  {(selectedType === 'PRESENT' || selectedType === 'LATE') && (
+                    <div>
+                      <label className="block text-xs font-bold text-[#7B8195] uppercase mb-1">
+                        Hora de Llegada
+                      </label>
+                      <input
+                        type="text"
+                        value={editArrivalTime}
+                        onChange={e => setEditArrivalTime(e.target.value)}
+                        placeholder="Ej: 08:15 AM"
+                        className="w-full px-3.5 py-2 border border-[#E8EAF2] rounded-xl text-sm font-mono font-medium focus:border-[#5B3DF5] focus:outline-none"
+                      />
+                    </div>
+                  )}
+
+                  <div>
+                    <label className="block text-xs font-bold text-[#7B8195] uppercase mb-1">
+                      Motivo / Referencia
+                    </label>
+                    <input
+                      type="text"
+                      value={editReason}
+                      onChange={e => setEditReason(e.target.value)}
+                      placeholder="Describe la novedad o soporte..."
+                      className="w-full px-3.5 py-2 border border-[#E8EAF2] rounded-xl text-sm font-medium focus:border-[#5B3DF5] focus:outline-none"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-end gap-3 pt-4 border-t border-gray-100">
+                  <button
+                    type="button"
+                    onClick={() => setEditingRecord(null)}
+                    className="px-4 py-2 text-sm font-semibold text-gray-500 hover:text-gray-800 cursor-pointer"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-5 py-2 bg-[#5B3FF5] hover:bg-[#4a32cc] text-white rounded-xl text-sm font-bold shadow-md shadow-[#5B3FF5]/20 cursor-pointer"
+                  >
+                    Actualizar Asistencia
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* MODAL PARA ENVIAR MENSAJE PERSONALIZADO AL CODER */}
+      <AnimatePresence>
+        {showMessageModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-white rounded-3xl p-6 sm:p-8 max-w-lg w-full shadow-2xl border border-gray-100"
+            >
+              <div className="flex justify-between items-start mb-5">
+                <div>
+                  <h3 className="text-lg font-bold text-[#11132C] flex items-center gap-2">
+                    <MessageSquare size={18} className="text-[#5B3FF5]" />
+                    Enviar Mensaje a {coder.name}
+                  </h3>
+                  <p className="text-xs text-[#7C8499] mt-0.5">
+                    Este comunicado aparecerá directamente en el Chat HSE del portal del estudiante.
+                  </p>
+                </div>
+                <button
+                  onClick={() => setShowMessageModal(false)}
+                  className="p-1 text-gray-400 hover:text-gray-700 transition-colors cursor-pointer"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              <form onSubmit={handleSendPersonalMessage} className="space-y-4">
+                <div className="p-3 rounded-xl bg-[#F8F9FE] border border-[#E8EAF2] text-xs space-y-1">
+                  <p className="font-semibold text-[#11132C]">
+                    Destinatario: <span className="text-[#5B3FF5]">{coder.name}</span>
+                  </p>
+                  <p className="text-[#7C8499]">
+                    Correo: {coder.email} · Ruta: {coder.route || 'General'}
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-bold text-[#7B8195] uppercase mb-1">
+                      Asunto
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="Ej: Seguimiento de Asistencia"
+                      value={messageForm.subject}
+                      onChange={e => setMessageForm({ ...messageForm, subject: e.target.value })}
+                      className="w-full px-3.5 py-2 border border-[#E8EAF2] rounded-xl text-sm font-medium focus:border-[#5B3DF5] focus:outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-[#7B8195] uppercase mb-1">
+                      Prioridad
+                    </label>
+                    <select
+                      value={messageForm.priority}
+                      onChange={e => setMessageForm({ ...messageForm, priority: e.target.value as any })}
+                      className="w-full px-3 py-2 border border-[#E8EAF2] rounded-xl text-sm font-medium bg-white focus:border-[#5B3DF5] focus:outline-none"
+                    >
+                      <option value="NORMAL">Normal</option>
+                      <option value="URGENT">Urgente</option>
+                      <option value="INFO">Informativo</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-[#7B8195] uppercase mb-1">
+                    Mensaje Personalizado
+                  </label>
+                  <textarea
+                    rows={4}
+                    required
+                    placeholder="Escribe la observación, recomendación o citación para el estudiante..."
+                    value={messageForm.body}
+                    onChange={e => setMessageForm({ ...messageForm, body: e.target.value })}
+                    className="w-full px-3.5 py-2.5 border border-[#E8EAF2] rounded-xl text-sm font-normal focus:border-[#5B3DF5] focus:outline-none resize-none"
+                  />
+                </div>
+
+                <div className="flex items-center justify-end gap-3 pt-4 border-t border-gray-100">
+                  <button
+                    type="button"
+                    onClick={() => setShowMessageModal(false)}
+                    className="px-4 py-2 text-sm font-semibold text-gray-500 hover:text-gray-800 cursor-pointer"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-5 py-2 bg-[#5B3FF5] hover:bg-[#4a32cc] text-white rounded-xl text-sm font-bold shadow-md shadow-[#5B3FF5]/20 flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <Send size={14} />
+                    <span>Enviar Mensaje</span>
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
     </div>
   );

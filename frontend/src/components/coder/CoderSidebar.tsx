@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Inbox, FilePlus, LogOut, Menu } from 'lucide-react';
+import { Inbox, FilePlus, LogOut, Menu, MessageSquare, CalendarCheck } from 'lucide-react';
 import clsx from 'clsx';
 import { getCoderSession } from '../../utils/coderSession';
 
@@ -10,6 +10,8 @@ import { useAuth } from '../../context/AuthContext';
 const navItems = [
   { path: '/coder/history', name: 'Historial de solicitudes', icon: Inbox },
   { path: '/coder/new-excuse', name: 'Radicar Justificación', icon: FilePlus },
+  { path: '/coder/attendance', name: 'Mi Asistencia', icon: CalendarCheck },
+  { path: '/coder/chat', name: 'Chat HSE', icon: MessageSquare },
 ];
 
 export function CoderSidebar() {

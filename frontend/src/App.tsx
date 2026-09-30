@@ -13,6 +13,8 @@ import NotFound from './pages/NotFound';
 import { CoderLayout } from './components/coder/CoderLayout';
 import CoderHistory from './pages/coder/CoderHistory';
 import ExcuseSubmissionForm from './pages/coder/ExcuseSubmissionForm';
+import CoderChat from './pages/coder/CoderChat';
+import CoderAttendance from './pages/coder/CoderAttendance';
 import type { UserRole } from './types';
 
 // Roles administrativos autorizados para el portal HSE
@@ -61,6 +63,8 @@ function App() {
             <Route index element={<Navigate to="new-excuse" replace />} />
             <Route path="history" element={<CoderHistory />} />
             <Route path="new-excuse" element={<ExcuseSubmissionForm />} />
+            <Route path="attendance" element={<CoderAttendance />} />
+            <Route path="chat" element={<CoderChat />} />
           </Route>
 
           {/* Rutas 404 Not Found (explícita y comodín) */}
