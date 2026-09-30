@@ -10,12 +10,16 @@ from ...schemas.coder_portal import (
     CoderExcuseSubmission,
     CoderAttendanceSummary,
 )
+from ...schemas.dropout_risk import (
+    CoderDropoutRiskResponse,
+)
 from ...schemas.justification import (
     JustificationRecord,
     PipelineExecutionResult,
 )
 from ...services.coder_resolver import coder_resolver
 from ...services.portal_service import portal_service
+from ...services.dropout_risk_engine import calculate_coder_risk_score
 
 router = APIRouter(prefix="/coders", tags=["Coders & Portal de Excusas (BE-02 / BE-07)"])
 
@@ -104,3 +108,77 @@ async def search_coders(q: str = Query(..., min_length=2, description="Cédula, 
             if len(results) >= 20:
                 break
     return results
+
+
+@router.get(
+    "/{coder_id}/risk-score",
+    response_model=CoderDropoutRiskResponse,
+    summary="Predictive Coder Dropout Risk Score (IA-EXT-01)"
+)
+async def get_coder_dropout_risk_score(coder_id: str):
+    """
+    Calcula el Score de Riesgo de Deserción Escolar (0-100) y Semáforo de Permanencia:
+    - Analiza frecuencia y recencia de ausencias (ventanas de 30 y 14 días).
+    - Proporción de inasistencias injustificadas vs justificadas.
+    - Mapea el nivel de alerta con los umbrales reglamentarios de Riwi (U1, U2, U3, U4).
+    - Entrega recomendación accionable para el Team Leader y Bienestar HSE.
+    """
+    clean_id = coder_id.strip().lower()
+    coder = (
+        coder_resolver._coders_by_email.get(clean_id)
+        or coder_resolver._coders_by_cedula.get(clean_id)
+    )
+    if not coder:
+        for c in coder_resolver._coders_list:
+            if c.id == coder_id:
+                coder = c
+                break
+
+    coder_name = coder.full_name if coder else "Coder Riwi"
+    c_id = coder.id if coder else coder_id
+
+    # Consultar justificaciones radicadas en el sistema
+    excuses = portal_service.get_coder_excuses(
+        coder_email=coder.email if coder else (clean_id if "@" in clean_id else None),
+        coder_cedula=coder.cedula if coder else (clean_id if "@" not in clean_id else None)
+    )
+    approved = sum(1 for e in excuses if e.status == "APPROVED")
+    disapproved = sum(1 for e in excuses if e.status == "DISAPPROVED")
+    pending = sum(1 for e in excuses if e.status in ["REVISION_MANUAL", "PENDIENTE_DECISION_TL", "CODER_NOT_FOUND"])
+    justifications_count = {
+        "approved": approved,
+        "disapproved": disapproved,
+        "pending": pending
+    }
+
+    # Transformar historial de justificaciones en eventos de asistencia
+    attendance_history = []
+    for e in excuses:
+        attendance_history.append({
+            "date": e.created_at[:10] if isinstance(e.created_at, str) else str(e.created_at),
+            "status": "JUSTIFIED_ABSENCE" if e.status == "APPROVED" else "UNJUSTIFIED_ABSENCE",
+            "justified": e.status == "APPROVED",
+        })
+
+    # Si el adaptador de plataforma hermana tiene registros reales, los incorporamos
+    try:
+        from ...services.hse_engine import hse_engine
+        adapter = hse_engine.attendance_adapter
+        if hasattr(adapter, "_attendance_db"):
+            records = adapter._attendance_db.get(c_id, [])
+            for r in records:
+                attendance_history.append({
+                    "date": str(r.attendance_date),
+                    "status": r.status.value if hasattr(r.status, "value") else str(r.status),
+                    "justified": r.status in ("EXCUSED", "PRESENT")
+                })
+    except Exception:
+        pass
+
+    risk_data = calculate_coder_risk_score(
+        attendance_history=attendance_history,
+        justifications_count=justifications_count,
+        coder_id=c_id,
+        coder_name=coder_name,
+    )
+    return CoderDropoutRiskResponse(**risk_data)
