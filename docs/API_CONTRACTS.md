@@ -1,7 +1,15 @@
 # Contratos de Datos & Interfaces
 
-## 1. Ingesta Nativa Desacoplada: `POST /api/v1/inbound-email` (Samuel -> Strata Core Backend)
+## 1. Ingesta Nativa Desacoplada: `POST /api/v1/inbound-email` (Samuel -> Strata Core Backend) [CONN-04]
 Reemplaza el webhook de n8n por un controlador FastAPI nativo con validación Pydantic, deduplicación e idempotencia.
+
+### Cabeceras de Autenticación Interna:
+- `Authorization: Bearer <INBOUND_API_KEY>` (o `X-API-Key: <INBOUND_API_KEY>`)
+- `X-Signature-SHA256: <HMAC_HEX>` (Firma opcional HMAC-SHA256 con `INBOUND_HMAC_SECRET`)
+
+### Política de Reintentos (Conectores):
+- Reintentos con **Exponential Backoff** (1s, 2s, 4s) ante errores de servidor temporal (`HTTP 502, 503, 504`) o fallos de red (`URLError`).
+- Cero reintentos ante errores cliente `400, 401, 422`.
 
 ### Request Body (`InboundEmailDTO`):
 ```json

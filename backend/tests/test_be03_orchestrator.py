@@ -23,7 +23,7 @@ def test_process_pipeline_valid_medical_excuse():
             RawAttachmentInput(
                 filename="incapacidad_eps_sura.pdf",
                 mime_type="application/pdf",
-                data_base64=base64.b64encode(b"Dummy PDF Sura").decode("utf-8")
+                data_base64=base64.b64encode(b"%PDF-1.4 Dummy PDF Sura").decode("utf-8")
             )
         ]
     )
@@ -95,7 +95,7 @@ def test_api_process_endpoint():
             "attachments": [
                 {
                     "filename": "comprobante_cita.pdf",
-                    "data_base64": base64.b64encode(b"Dummy PDF").decode("utf-8")
+                    "data_base64": base64.b64encode(b"%PDF-1.4 Dummy PDF").decode("utf-8")
                 }
             ]
         }
