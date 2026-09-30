@@ -123,3 +123,40 @@ async def test_assistive_categories():
     jsonschema.validate(instance=res_injection, schema=schema)
     assert res_injection["categoria_sugerida"] == "REVISION_MANUAL"
     assert res_injection["confianza_score"] == 0.0
+
+    # 6. Caso: Síntomas de malestar / fiebre sin constancia EPS formal -> REVISION_MANUAL y enfermedad_sin_soporte
+    res_malestar = await server.evaluate_excuse(
+        request=None,
+        file=None,
+        email_subject="Inasistencia por malestar de salud",
+        email_body="Buenos días, hoy tuve una calamidad, amanecí con fiebre muy alta y mucho cólico, no puedo ir al entrenamiento."
+    )
+    jsonschema.validate(instance=res_malestar, schema=schema)
+    assert res_malestar["categoria_sugerida"] == "REVISION_MANUAL"
+    assert res_malestar["tipo_novedad"] == "enfermedad_sin_soporte"
+    assert res_malestar["valido"] is False
+    assert res_malestar["requiere_revision_manual"] is True
+
+    # 7. Caso: Incapacidad médica formal de EPS Sanitas válida -> POSIBLEMENTE_VALIDO e inasistencia_medica
+    doc_sanitas = fitz.open()
+    page_sanitas = doc_sanitas.new_page()
+    page_sanitas.insert_text((50, 50), "EPS SANITAS Certificado de incapacidad médica reposo 1 dia gastrointestinal")
+    pdf_sanitas_bytes = doc_sanitas.tobytes()
+    doc_sanitas.close()
+
+    mock_sanitas = MockUploadFile("incapacidad_sanitas.pdf", pdf_sanitas_bytes)
+    try:
+        res_medica = await server.evaluate_excuse(
+            request=None,
+            file=mock_sanitas,
+            email_subject="Incapacidad EPS Sanitas Carlos Restrepo",
+            email_body="Adjunto soporte médico de Sanitas por incapacidad del día de hoy."
+        )
+        jsonschema.validate(instance=res_medica, schema=schema)
+        assert res_medica["categoria_sugerida"] == "POSIBLEMENTE_VALIDO"
+        assert res_medica["tipo_novedad"] == "inasistencia_medica"
+        assert res_medica["valido"] is True
+        assert res_medica["requiere_revision_manual"] is False
+    finally:
+        mock_sanitas.cleanup()
+
