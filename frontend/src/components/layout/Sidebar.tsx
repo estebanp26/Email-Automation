@@ -66,6 +66,7 @@ export function Sidebar({ mobileOpen = false, onCloseMobile }: SidebarProps) {
             "h-16 lg:h-20 flex items-center relative z-10 border-b border-white/10 px-4",
             isOpen ? "justify-between" : "justify-center"
           )}
+          title={isOpen ? "Colapsar menú" : "Expandir menú"}
         >
           <button
             onClick={() => setIsOpen(!isOpen)}

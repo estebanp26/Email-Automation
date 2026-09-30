@@ -8,6 +8,7 @@ import Students from './pages/Students';
 import Login from './pages/Login';
 import Settings from './pages/Settings';
 import { CoderLayout } from './components/coder/CoderLayout';
+import CoderHistory from './pages/coder/CoderHistory';
 import ExcuseSubmissionForm from './pages/coder/ExcuseSubmissionForm';
 
 function ProtectedRoute({ children, role }: { children: React.ReactNode; role?: 'hse' | 'coder' }) {
@@ -20,7 +21,7 @@ function ProtectedRoute({ children, role }: { children: React.ReactNode; role?: 
 
   // Si un coder intenta entrar a la vista HSE, lo redirigimos a su portal
   if (role === 'hse' && userRole === 'coder') {
-    return <Navigate to="/coder/new-excuse" replace />;
+    return <Navigate to="/coder/history" replace />;
   }
 
   return <>{children}</>;
@@ -48,15 +49,19 @@ function App() {
           <Route path="settings" element={<Settings />} />
         </Route>
 
-        {/* Vista Coder: Formulario de Justificaciones y Excusas */}
+        {/* Portal del Coder: con Sidebar colapsable idéntico a HSE */}
         <Route
-          path="/coder/new-excuse"
+          path="/coder"
           element={
-            <CoderLayout>
-              <ExcuseSubmissionForm />
-            </CoderLayout>
+            <ProtectedRoute role="coder">
+              <CoderLayout />
+            </ProtectedRoute>
           }
-        />
+        >
+          <Route index element={<Navigate to="history" replace />} />
+          <Route path="history" element={<CoderHistory />} />
+          <Route path="new-excuse" element={<ExcuseSubmissionForm />} />
+        </Route>
 
         {/* Ruta comodín */}
         <Route path="*" element={<Navigate to="/login" replace />} />

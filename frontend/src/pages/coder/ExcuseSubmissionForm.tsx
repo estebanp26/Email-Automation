@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -17,7 +18,10 @@ import {
   HelpCircle, 
   Send, 
   Sparkles,
-  RefreshCw
+  RefreshCw,
+  LogOut,
+  Inbox,
+  PlusCircle
 } from 'lucide-react';
 import { 
   excuseFormSchema, 
@@ -27,11 +31,14 @@ import {
 } from '../../schemas/excuseValidationSchema';
 import { EvidenceDropzone, type SelectedFile } from '../../components/coder/EvidenceDropzone';
 import { getCoderSession } from '../../utils/coderSession';
+import { saveNewCoderJustification } from '../../utils/coderJustifications';
 
 export default function ExcuseSubmissionForm() {
+  const navigate = useNavigate();
   const [currentStep, setCurrentStep] = useState<1 | 2>(1);
   const [selectedFiles, setSelectedFiles] = useState<SelectedFile[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [submissionSuccess, setSubmissionSuccess] = useState<null | {
     radicadoId: string;
     submittedAt: string;
@@ -40,6 +47,20 @@ export default function ExcuseSubmissionForm() {
   }>(null);
 
   const session = useMemo(() => getCoderSession(), []);
+
+  const initials = useMemo(() => {
+    if (!session.name) return 'CO';
+    const parts = session.name.trim().split(/\s+/);
+    if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+    return (parts[0][0] + parts[1][0]).toUpperCase();
+  }, [session.name]);
+
+  const handleLogout = () => {
+    localStorage.removeItem('hse_token');
+    localStorage.removeItem('hse_role');
+    localStorage.removeItem('hse_coder_session');
+    navigate('/login', { replace: true });
+  };
 
   // Configuración de React Hook Form + Zod con persistencia de campos no montados
   const {
@@ -132,6 +153,9 @@ export default function ExcuseSubmissionForm() {
       };
 
       console.log('Payload estructurado preparado para Supabase Storage / Backend:', payloadReadyForBackend);
+
+      // Persistir la justificación para el Coder en su historial
+      saveNewCoderJustification(payloadReadyForBackend);
 
       setSubmissionSuccess({
         radicadoId: radNumber,
@@ -237,15 +261,24 @@ export default function ExcuseSubmissionForm() {
         <div className="mt-8 flex flex-col sm:flex-row items-center gap-3">
           <button
             type="button"
+            onClick={() => navigate('/coder/history')}
+            className="w-full sm:flex-1 py-3.5 px-4 rounded-xl bg-gradient-to-r from-[#5636F5] to-[#633BFF] hover:opacity-95 text-white font-semibold text-sm transition-all shadow-[0_8px_20px_rgba(99,59,255,0.25)] flex items-center justify-center gap-2 cursor-pointer"
+          >
+            <span>Ver en Historial de Solicitudes</span>
+            <ArrowRight className="size-4" />
+          </button>
+
+          <button
+            type="button"
             onClick={() => {
               setSubmissionSuccess(null);
               setCurrentStep(1);
               setSelectedFiles([]);
             }}
-            className="w-full sm:flex-1 py-3.5 px-4 rounded-xl bg-gradient-to-r from-[#5636F5] to-[#633BFF] hover:opacity-95 text-white font-semibold text-sm transition-all shadow-[0_8px_20px_rgba(99,59,255,0.25)] flex items-center justify-center gap-2 cursor-pointer"
+            className="w-full sm:w-auto py-3.5 px-5 rounded-xl bg-white hover:bg-gray-50 text-[#111827] font-semibold text-sm border border-[#E2E8F0] transition-colors flex items-center justify-center gap-2 cursor-pointer shadow-sm"
           >
             <RefreshCw className="size-4" />
-            Radicar otra Justificación
+            <span>Radicar otra</span>
           </button>
         </div>
       </motion.div>
@@ -258,7 +291,6 @@ export default function ExcuseSubmissionForm() {
       <div className="p-6 rounded-3xl bg-white border border-[#E2E8F0] shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div className="space-y-1">
           <div className="flex items-center gap-2">
-            <span className="size-2 rounded-full bg-[#20B486] animate-ping" />
             <span className="text-xs font-bold uppercase tracking-wider text-[#5B3FF5]">
               Reporte de Justificaciones
             </span>
@@ -271,43 +303,112 @@ export default function ExcuseSubmissionForm() {
           </p>
         </div>
 
-        {/* Stepper Visual interactivo */}
-        <div className="flex items-center gap-1.5 sm:gap-2 bg-[#F6F7FB] p-1.5 rounded-2xl border border-[#E2E8F0] w-full sm:w-auto justify-between sm:justify-center">
-          <button
-            type="button"
-            onClick={() => setCurrentStep(1)}
-            className={`flex-1 sm:flex-initial flex items-center justify-center gap-2 px-3 sm:px-3.5 py-2 sm:py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-              currentStep === 1
-                ? 'bg-gradient-to-r from-[#5636F5] to-[#633BFF] text-white shadow-md shadow-[#5B3FF5]/30'
-                : 'text-[#7C8499] hover:text-[#111827]'
-            }`}
-          >
-            <span className={`size-5 rounded-full flex items-center justify-center text-[10px] font-bold ${
-              currentStep === 1 ? 'bg-white/20 text-white' : 'bg-white text-[#7C8499] border border-[#E2E8F0]'
-            }`}>
-              1
-            </span>
-            <span>1. Motivo</span>
-          </button>
+        <div className="flex items-center gap-3 self-stretch sm:self-auto justify-between sm:justify-end">
+          {/* Stepper Visual interactivo */}
+          <div className="flex items-center gap-2 bg-[#F6F7FB] p-1.5 rounded-2xl border border-[#E2E8F0]">
+            <button
+              type="button"
+              onClick={() => setCurrentStep(1)}
+              className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                currentStep === 1
+                  ? 'bg-gradient-to-r from-[#5636F5] to-[#633BFF] text-white shadow-md shadow-[#5B3FF5]/30'
+                  : 'text-[#7C8499] hover:text-[#111827]'
+              }`}
+            >
+              <span className={`size-5 rounded-full flex items-center justify-center text-[10px] font-bold ${
+                currentStep === 1 ? 'bg-white/20 text-white' : 'bg-white text-[#7C8499] border border-[#E2E8F0]'
+              }`}>
+                1
+              </span>
+              <span>1. Motivo</span>
+            </button>
 
-          <div className="h-4 w-px bg-[#CBD5E1] shrink-0" />
+            <div className="h-4 w-px bg-[#CBD5E1]" />
 
-          <button
-            type="button"
-            onClick={handleProceedToEvidence}
-            className={`flex-1 sm:flex-initial flex items-center justify-center gap-2 px-3 sm:px-3.5 py-2 sm:py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-              currentStep === 2
-                ? 'bg-gradient-to-r from-[#5636F5] to-[#633BFF] text-white shadow-md shadow-[#5B3FF5]/30'
-                : 'text-[#7C8499] hover:text-[#111827]'
-            }`}
-          >
-            <span className={`size-5 rounded-full flex items-center justify-center text-[10px] font-bold ${
-              currentStep === 2 ? 'bg-white/20 text-white' : 'bg-white text-[#7C8499] border border-[#E2E8F0]'
-            }`}>
-              2
-            </span>
-            <span>2. Evidencias</span>
-          </button>
+            <button
+              type="button"
+              onClick={handleProceedToEvidence}
+              className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                currentStep === 2
+                  ? 'bg-gradient-to-r from-[#5636F5] to-[#633BFF] text-white shadow-md shadow-[#5B3FF5]/30'
+                  : 'text-[#7C8499] hover:text-[#111827]'
+              }`}
+            >
+              <span className={`size-5 rounded-full flex items-center justify-center text-[10px] font-bold ${
+                currentStep === 2 ? 'bg-white/20 text-white' : 'bg-white text-[#7C8499] border border-[#E2E8F0]'
+              }`}>
+                2
+              </span>
+              <span>2. Evidencias</span>
+            </button>
+          </div>
+
+          {/* Avatar del Coder con menú desplegable */}
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setShowProfileMenu(!showProfileMenu)}
+              className="size-10 rounded-full bg-[#11132C] hover:ring-2 hover:ring-[#5B3FF5] transition-all flex items-center justify-center text-white font-bold text-sm select-none shadow-md shadow-[#11132C]/20 border border-white/10 cursor-pointer"
+              title={`${session.name} · Clic para opciones`}
+            >
+              {initials}
+            </button>
+
+            {showProfileMenu && (
+              <>
+                <div 
+                  className="fixed inset-0 z-40" 
+                  onClick={() => setShowProfileMenu(false)} 
+                />
+                <div className="absolute top-12 right-0 w-60 bg-white rounded-2xl shadow-2xl border border-gray-100 py-3 z-50 divide-y divide-gray-100">
+                  <div className="px-4 py-2">
+                    <p className="text-[10px] text-[#7C8499] uppercase font-bold tracking-wider">Coder Conectado</p>
+                    <p className="text-sm font-bold text-[#111827] truncate mt-0.5">{session.name}</p>
+                    <p className="text-xs text-[#7C8499] font-mono">CC: {session.cedula}</p>
+                    <span className="inline-block mt-1.5 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-[#5B3FF5]/10 text-[#5B3FF5]">
+                      {session.route || 'Ruta Web'}
+                    </span>
+                  </div>
+
+                  <div className="py-1">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowProfileMenu(false);
+                        navigate('/coder/history');
+                      }}
+                      className="w-full text-left px-4 py-2 text-xs sm:text-sm text-[#111827] hover:bg-[#F6F7FB] flex items-center gap-3 transition-colors cursor-pointer"
+                    >
+                      <Inbox size={16} className="text-[#5B3FF5]" />
+                      <span>Historial de solicitudes</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowProfileMenu(false);
+                        navigate('/coder/new-excuse');
+                      }}
+                      className="w-full text-left px-4 py-2 text-xs sm:text-sm text-[#111827] hover:bg-[#F6F7FB] flex items-center gap-3 transition-colors cursor-pointer font-medium"
+                    >
+                      <PlusCircle size={16} className="text-[#5B3FF5]" />
+                      <span>Radicar Justificación</span>
+                    </button>
+                  </div>
+
+                  <div className="pt-1">
+                    <button
+                      type="button"
+                      onClick={handleLogout}
+                      className="w-full text-left px-4 py-2 text-xs sm:text-sm text-[#FF5C67] hover:bg-red-50 flex items-center gap-3 transition-colors cursor-pointer font-semibold"
+                    >
+                      <LogOut size={16} className="text-[#FF5C67]" />
+                      <span>Cerrar sesión</span>
+                    </button>
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
         </div>
       </div>
 
