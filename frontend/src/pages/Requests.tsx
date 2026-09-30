@@ -3,10 +3,11 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Mail, Send, FileEdit, Trash, Reply, Inbox, Paperclip, User, 
   CheckCircle2, XCircle, AlertCircle, Zap,
-  Calendar, ShieldCheck, MessageSquare, AlertTriangle, RotateCw
+  Calendar, ShieldCheck, MessageSquare, AlertTriangle, RotateCw, Search
 } from 'lucide-react';
 import { api } from '../services/api';
 import { getN8nConfig } from '../services/n8n';
+import { matchesNormalized } from '../utils/textUtils';
 
 export default function Requests() {
   const [activeFolder, setActiveFolder] = useState<'inbox' | 'sent' | 'drafts'>('inbox');
@@ -14,6 +15,7 @@ export default function Requests() {
   const [sentEmails, setSentEmails] = useState<any[]>([]);
   const [selectedEmail, setSelectedEmail] = useState<any | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
   
   // Composing state
   const [isComposing, setIsComposing] = useState(false);
@@ -33,11 +35,23 @@ export default function Requests() {
     details?: string;
   } | null>(null);
 
-  // Listas derivadas: Bandeja (pendientes por resolver) vs Enviados (respondidos / resueltos)
-  const inboxList = requests.filter(r => !r.hasHumanIntervention && !r.hseDecision && !r.isResponded);
-  const resolvedRequests = requests.filter(r => r.hasHumanIntervention || r.hseDecision || r.isResponded);
+  const inboxList = requests.filter((r: any) => !r.hasHumanIntervention && !r.hseDecision && !r.isResponded);
+  const resolvedRequests = requests.filter((r: any) => r.hasHumanIntervention || r.hseDecision || r.isResponded);
   const sentList = [...resolvedRequests, ...sentEmails];
   const activeList = activeFolder === 'inbox' ? inboxList : activeFolder === 'sent' ? sentList : [];
+
+  const filteredActiveList = activeList.filter((item: any) => {
+    const q = searchQuery.trim();
+    if (!q) return true;
+    const subject = item.emailInfo?.subject || item.subject || '';
+    const sender = item.emailInfo?.senderName || item.to || '';
+    const body = item.emailInfo?.body || item.body || '';
+    return (
+      matchesNormalized(subject, q) ||
+      matchesNormalized(sender, q) ||
+      matchesNormalized(body, q)
+    );
+  });
 
   const fetchRequests = async (showSpinner = false) => {
     if (showSpinner) setIsRefreshing(true);
@@ -282,24 +296,37 @@ export default function Requests() {
 
       {/* 2. LISTA DE CORREOS (Panel Central) */}
       <div className="w-[380px] flex-shrink-0 bg-white border border-[#E2E8F0] rounded-[24px] shadow-sm flex flex-col overflow-hidden">
-        <div className="p-5 border-b border-[#E2E8F0] bg-gray-50/50 flex items-center justify-between">
-          <div>
-            <h2 className="text-[18px] font-bold text-[#111827] capitalize">
-              {activeFolder === 'inbox' ? 'Bandeja de Entrada' : activeFolder === 'sent' ? 'Enviados' : 'Borradores'}
-            </h2>
-            <p className="text-sm text-[#7C8499]">{activeList.length} correos</p>
+        <div className="p-4 border-b border-[#E2E8F0] bg-gray-50/50 space-y-3">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-[18px] font-bold text-[#111827] capitalize">
+                {activeFolder === 'inbox' ? 'Bandeja de Entrada' : activeFolder === 'sent' ? 'Enviados' : 'Borradores'}
+              </h2>
+              <p className="text-xs text-[#7C8499]">{filteredActiveList.length} correos</p>
+            </div>
+            <button
+              onClick={() => fetchRequests(true)}
+              title="Sincronizar correos ahora"
+              className="p-2 text-[#7C8499] hover:text-[#5B3FF5] hover:bg-white rounded-full transition-colors cursor-pointer border border-transparent hover:border-[#E2E8F0]"
+            >
+              <RotateCw size={16} className={isRefreshing ? 'animate-spin text-[#5B3FF5]' : ''} />
+            </button>
           </div>
-          <button
-            onClick={() => fetchRequests(true)}
-            title="Sincronizar correos ahora"
-            className="p-2 text-[#7C8499] hover:text-[#5B3FF5] hover:bg-white rounded-full transition-colors cursor-pointer border border-transparent hover:border-[#E2E8F0]"
-          >
-            <RotateCw size={16} className={isRefreshing ? 'animate-spin text-[#5B3FF5]' : ''} />
-          </button>
+
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-[#7C8499]" size={14} />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Buscar por asunto, remitente o texto..."
+              className="pl-9 pr-3 py-1.5 w-full bg-white border border-[#E2E8F0] rounded-xl text-xs focus:outline-none focus:border-[#5B3FF5] transition-all text-[#111827] placeholder:text-[#A3AAC2]"
+            />
+          </div>
         </div>
         
         <div className="flex-1 overflow-y-auto custom-scrollbar">
-          {activeList.map((item) => {
+          {filteredActiveList.map((item: any) => {
             const isSelected = selectedEmail?.id === item.id && !isComposing;
             const subject = item.emailInfo?.subject || item.subject;
             const sender = item.emailInfo?.senderName || item.to;

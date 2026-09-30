@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { LayoutDashboard, Inbox, Settings, Users } from 'lucide-react';
+import { LayoutDashboard, Inbox, Settings, Users, Menu } from 'lucide-react';
 import clsx from 'clsx';
 
 const navItems = [
@@ -31,18 +31,20 @@ export function Sidebar() {
       {/* Header / Logo */}
       <div className={clsx("h-20 flex items-center relative z-10 border-b border-white/5", isOpen ? "px-6 justify-start" : "justify-center")}>
         <button
+          type="button"
           onClick={() => setIsOpen(!isOpen)}
           className={clsx(
             "hover:opacity-80 transition-opacity flex items-center justify-center cursor-pointer",
-            !isOpen && "w-8 h-8 rounded-full bg-white/10 overflow-hidden"
+            !isOpen && "w-10 h-10 rounded-xl bg-white/10 hover:bg-white/20 transition-colors"
           )}
+          title={isOpen ? "Colapsar menú" : "Expandir menú"}
         >
           {isOpen ? (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex items-center">
               <img src="https://moodle.riwi.io/pluginfile.php/1/theme_academi/logo/1789715233/Imagen1%20%281%29.png" alt="Riwi Logo" className="h-8 object-contain" />
             </motion.div>
           ) : (
-            <img src="https://riwi.io/wp-content/uploads/2023/07/favicon.png" alt="Toggle Menu" className="w-6 h-6 object-contain" />
+            <Menu className="w-6 h-6 text-white" />
           )}
         </button>
       </div>

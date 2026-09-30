@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { Search, Mail, ChevronRight, Users, BookOpen } from 'lucide-react';
 import { api } from '../services/api';
+import { matchesNormalized } from '../utils/textUtils';
 
 export default function Students() {
   const [students, setStudents] = useState<any[]>([]);
@@ -48,14 +49,16 @@ export default function Students() {
     count: students.length
   };
 
-  // Filtrar coders por ruta activa y búsqueda
+  // Filtrar coders por ruta activa y búsqueda (tolerante a tildes / acentos)
   const filteredCoders = useMemo(() => {
     return students.filter(s => {
       const matchesRoute = (s.route || 'Sin ruta') === activeRouteName;
-      const matchesSearch = !searchQuery || 
-        s.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        s.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (s.cedula && s.cedula.includes(searchQuery));
+      const q = searchQuery.trim();
+      const matchesSearch = !q || 
+        matchesNormalized(s.name, q) ||
+        matchesNormalized(s.email, q) ||
+        matchesNormalized(s.route, q) ||
+        (s.cedula && s.cedula.includes(q));
       return matchesRoute && matchesSearch;
     });
   }, [students, activeRouteName, searchQuery]);

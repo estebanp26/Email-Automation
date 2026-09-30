@@ -56,7 +56,7 @@ export default function Login() {
         localStorage.setItem('hse_token', `jwt_coder_${coderFound.cedula}`);
         localStorage.setItem('hse_role', 'coder');
         localStorage.setItem('hse_coder_session', JSON.stringify(sessionData));
-        navigate('/coder/new-excuse');
+        navigate('/coder/history');
         return;
       }
 
@@ -72,7 +72,7 @@ export default function Login() {
         localStorage.setItem('hse_token', `jwt_coder_${userVal}`);
         localStorage.setItem('hse_role', 'coder');
         localStorage.setItem('hse_coder_session', JSON.stringify(sessionFallback));
-        navigate('/coder/new-excuse');
+        navigate('/coder/history');
         return;
       }
 
@@ -91,7 +91,7 @@ export default function Login() {
         localStorage.setItem('hse_token', `jwt_coder_${userVal}`);
         localStorage.setItem('hse_role', 'coder');
         localStorage.setItem('hse_coder_session', JSON.stringify(sessionFallback));
-        navigate('/coder/new-excuse');
+        navigate('/coder/history');
         return;
       }
       setError('No se pudo validar las credenciales con el servidor.');
