@@ -9,6 +9,14 @@ from typing import List, Tuple, Optional, Dict, Any
 from pathlib import Path
 
 from ..config import settings
+from ..core.security_file import (
+    FileSecurityValidator,
+    SecurityValidationException,
+    PathTraversalException,
+    MalwareDetectedException,
+    ContentSpoofingException,
+    PayloadTooLargeException,
+)
 from ..schemas.email import (
     RawEmailInput,
     RawAttachmentInput,
@@ -184,43 +192,93 @@ class EmailNormalizationService:
         return cleaned_cc, has_formacion
 
     @classmethod
-    def normalize_attachment(cls, raw: RawAttachmentInput) -> NormalizedAttachment:
-        """Valida, calcula hash SHA-256 e infiere MIME type del adjunto."""
-        filename = Path(raw.filename).name.strip()
-        ext = Path(filename).suffix.lower()
+    def normalize_attachment(cls, raw: RawAttachmentInput, strict: bool = False) -> NormalizedAttachment:
+        """
+        Valida, calcula hash SHA-256 e infiere MIME type del adjunto.
+        Si strict=True, las violaciones de seguridad (path traversal, malware, magic bytes spoofing, DoS)
+        lanzan excepciones de seguridad específicas para interrumpir la transacción con HTTP 400/413.
+        """
+        # 1. Validación de nombre y Path Traversal
+        error = None
+        is_valid = True
+        try:
+            filename = FileSecurityValidator.validate_and_sanitize_filename(raw.filename)
+        except PathTraversalException as e:
+            if strict:
+                raise
+            is_valid = False
+            error = str(e)
+            filename = Path(raw.filename).name.strip() or "adjunto_inseguro"
 
-        # Determinar MIME type si no viene o es genérico
+        ext = Path(filename).suffix.lower()
+        if not ext and "." in raw.filename:
+            ext = Path(raw.filename).suffix.lower()
+
+        # Determinar MIME type inicial si no viene o es genérico
         mime = raw.mime_type or MIME_TYPE_MAP.get(ext, "application/octet-stream")
         if mime == "application/octet-stream" and ext in MIME_TYPE_MAP:
             mime = MIME_TYPE_MAP[ext]
 
-        # Validar y decodificar Base64
-        error = None
+        # Validar extensiones permitidas
+        if ext not in settings.ALLOWED_ATTACHMENT_EXTENSIONS:
+            err_msg = f"Extensión no permitida '{ext}'. Formatos admitidos: {', '.join(settings.ALLOWED_ATTACHMENT_EXTENSIONS)}"
+            if strict:
+                raise ContentSpoofingException(err_msg)
+            is_valid = False
+            error = err_msg
+
+        # 2. Pre-validar longitud del Base64 antes de decodificar (Protección DoS)
+        if len(raw.data_base64) > 22 * 1024 * 1024:
+            err_msg = f"Adjunto '{filename}' excede el tamaño máximo permitido ({settings.MAX_ATTACHMENT_SIZE_BYTES // (1024*1024)}MB)"
+            if strict:
+                raise PayloadTooLargeException(err_msg)
+            is_valid = False
+            error = err_msg
+
+        # 3. Decodificar Base64
         byte_len = 0
         sha256 = ""
-        is_valid = True
-
+        data_bytes = b""
         try:
-            # Aceptar base64url o base64 estándar con o sin relleno
             padded = raw.data_base64 + "=" * (-len(raw.data_base64) % 4)
             data_bytes = base64.b64decode(padded, altchars="-_" if "-" in raw.data_base64 else None)
             byte_len = len(data_bytes)
             sha256 = hashlib.sha256(data_bytes).hexdigest()
         except Exception as e:
+            if strict:
+                raise SecurityValidationException(f"Error decodificando base64 en '{filename}': {str(e)}")
             is_valid = False
             error = f"Error decodificando base64: {str(e)}"
             sha256 = hashlib.sha256(raw.data_base64.encode("utf-8")).hexdigest()
 
-        if is_valid:
-            # Validar tamaño máximo
-            if byte_len > settings.MAX_ATTACHMENT_SIZE_BYTES:
+        # 4. Inspección profunda de seguridad en bytes si no hay error previo
+        if is_valid and data_bytes:
+            # Tamaño binario
+            try:
+                FileSecurityValidator.validate_attachment_size(byte_len, settings.MAX_ATTACHMENT_SIZE_BYTES, filename)
+            except PayloadTooLargeException as e:
+                if strict:
+                    raise
                 is_valid = False
-                error = f"Adjunto excede el tamaño máximo permitido ({settings.MAX_ATTACHMENT_SIZE_BYTES // (1024*1024)}MB)"
+                error = str(e)
 
-            # Validar extensiones permitidas para evidencias oficiales
-            if ext not in settings.ALLOWED_ATTACHMENT_EXTENSIONS:
+            # Malware / EICAR
+            try:
+                FileSecurityValidator.scan_malware_signatures(data_bytes, filename)
+            except MalwareDetectedException as e:
+                if strict:
+                    raise
                 is_valid = False
-                error = f"Extensión no permitida '{ext}'. Formatos admitidos: {', '.join(settings.ALLOWED_ATTACHMENT_EXTENSIONS)}"
+                error = str(e)
+
+            # Magic bytes reales / Anti-Spoofing
+            try:
+                mime = FileSecurityValidator.validate_magic_bytes(filename, raw.mime_type, data_bytes)
+            except ContentSpoofingException as e:
+                if strict:
+                    raise
+                is_valid = False
+                error = str(e)
 
         return NormalizedAttachment(
             filename=filename,
@@ -308,9 +366,10 @@ class EmailNormalizationService:
             is_sensitive=is_sensitive
         )
 
-    def normalize(self, raw: RawEmailInput) -> NormalizedEmail:
+    def normalize(self, raw: RawEmailInput, strict: bool = True) -> NormalizedEmail:
         """
         Ejecuta el pipeline completo de normalización para una entrada de correo.
+        Si strict=True, las violaciones de seguridad en adjuntos interrumpen el procesamiento.
         """
         # Identificador único de mensaje
         message_id = raw.message_id or f"riwi-msg-{uuid.uuid4()}"
@@ -339,9 +398,9 @@ class EmailNormalizationService:
         else:
             recv_at = datetime.now(timezone.utc)
 
-        # Adjuntos
+        # Adjuntos (aplica validación estricta de seguridad si strict=True)
         normalized_attachments = [
-            self.normalize_attachment(att) for att in (raw.attachments or [])
+            self.normalize_attachment(att, strict=strict) for att in (raw.attachments or [])
         ]
 
         # Extracción preliminar guiada por las reglas del PPTX
@@ -365,11 +424,12 @@ class EmailNormalizationService:
             preliminary_extraction=preliminary
         )
 
-    def ingest(self, raw: RawEmailInput) -> EmailIngestResponse:
+    def ingest(self, raw: RawEmailInput, strict: bool = True) -> EmailIngestResponse:
         """
         Punto de entrada de ingestión. Devuelve el payload canónico con advertencias operativas.
+        Si strict=True, las anomalías de seguridad en archivos adjuntos lanzan excepciones de seguridad.
         """
-        normalized = self.normalize(raw)
+        normalized = self.normalize(raw, strict=strict)
         warnings: List[str] = []
 
         if not normalized.has_formacion_cc:

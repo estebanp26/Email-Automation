@@ -145,7 +145,7 @@ def test_api_ingest_endpoint_full_flow():
             {
                 "filename": "comprobante_cita.pdf",
                 "mime_type": "application/pdf",
-                "data_base64": base64.b64encode(b"Dummy PDF content").decode("utf-8")
+                "data_base64": base64.b64encode(b"%PDF-1.4 Dummy PDF content for test").decode("utf-8")
             }
         ]
     }
