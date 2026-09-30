@@ -35,11 +35,23 @@ export default function Requests() {
     details?: string;
   } | null>(null);
 
-  // Listas derivadas: Bandeja (pendientes por resolver) vs Enviados (respondidos / resueltos)
-  const inboxList = requests.filter(r => !r.hasHumanIntervention && !r.hseDecision && !r.isResponded);
-  const resolvedRequests = requests.filter(r => r.hasHumanIntervention || r.hseDecision || r.isResponded);
+  const inboxList = requests.filter((r: any) => !r.hasHumanIntervention && !r.hseDecision && !r.isResponded);
+  const resolvedRequests = requests.filter((r: any) => r.hasHumanIntervention || r.hseDecision || r.isResponded);
   const sentList = [...resolvedRequests, ...sentEmails];
   const activeList = activeFolder === 'inbox' ? inboxList : activeFolder === 'sent' ? sentList : [];
+
+  const filteredActiveList = activeList.filter((item: any) => {
+    const q = searchQuery.trim();
+    if (!q) return true;
+    const subject = item.emailInfo?.subject || item.subject || '';
+    const sender = item.emailInfo?.senderName || item.to || '';
+    const body = item.emailInfo?.body || item.body || '';
+    return (
+      matchesNormalized(subject, q) ||
+      matchesNormalized(sender, q) ||
+      matchesNormalized(body, q)
+    );
+  });
 
   const fetchRequests = async (showSpinner = false) => {
     if (showSpinner) setIsRefreshing(true);
@@ -352,17 +364,10 @@ export default function Requests() {
             </h2>
             <p className="text-xs sm:text-sm text-[#7C8499]">{activeList.length} correos</p>
           </div>
-          <button
-            onClick={() => fetchRequests(true)}
-            title="Sincronizar correos ahora"
-            className="p-2 text-[#7C8499] hover:text-[#5B3FF5] hover:bg-white rounded-full transition-colors cursor-pointer border border-transparent hover:border-[#E2E8F0]"
-          >
-            <RotateCw size={16} className={isRefreshing ? 'animate-spin text-[#5B3FF5]' : ''} />
-          </button>
         </div>
         
         <div className="flex-1 overflow-y-auto custom-scrollbar">
-          {activeList.map((item) => {
+          {filteredActiveList.map((item: any) => {
             const isSelected = selectedEmail?.id === item.id && !isComposing;
             const subject = item.emailInfo?.subject || item.subject;
             const sender = item.emailInfo?.senderName || item.to;
