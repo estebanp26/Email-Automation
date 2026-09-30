@@ -272,11 +272,11 @@ export default function ExcuseSubmissionForm() {
         </div>
 
         {/* Stepper Visual interactivo */}
-        <div className="flex items-center gap-2 bg-[#F6F7FB] p-1.5 rounded-2xl border border-[#E2E8F0] self-stretch sm:self-auto justify-center">
+        <div className="flex items-center gap-1.5 sm:gap-2 bg-[#F6F7FB] p-1.5 rounded-2xl border border-[#E2E8F0] w-full sm:w-auto justify-between sm:justify-center">
           <button
             type="button"
             onClick={() => setCurrentStep(1)}
-            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+            className={`flex-1 sm:flex-initial flex items-center justify-center gap-2 px-3 sm:px-3.5 py-2 sm:py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
               currentStep === 1
                 ? 'bg-gradient-to-r from-[#5636F5] to-[#633BFF] text-white shadow-md shadow-[#5B3FF5]/30'
                 : 'text-[#7C8499] hover:text-[#111827]'
@@ -290,12 +290,12 @@ export default function ExcuseSubmissionForm() {
             <span>1. Motivo</span>
           </button>
 
-          <div className="h-4 w-px bg-[#CBD5E1]" />
+          <div className="h-4 w-px bg-[#CBD5E1] shrink-0" />
 
           <button
             type="button"
             onClick={handleProceedToEvidence}
-            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+            className={`flex-1 sm:flex-initial flex items-center justify-center gap-2 px-3 sm:px-3.5 py-2 sm:py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
               currentStep === 2
                 ? 'bg-gradient-to-r from-[#5636F5] to-[#633BFF] text-white shadow-md shadow-[#5B3FF5]/30'
                 : 'text-[#7C8499] hover:text-[#111827]'
@@ -324,7 +324,7 @@ export default function ExcuseSubmissionForm() {
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: 16 }}
               transition={{ duration: 0.2 }}
-              className="p-6 sm:p-8 rounded-3xl bg-white border border-[#E2E8F0] shadow-sm space-y-6"
+              className="p-5 sm:p-8 rounded-3xl bg-white border border-[#E2E8F0] shadow-sm space-y-5 sm:space-y-6"
             >
               <div className="border-b border-[#E2E8F0] pb-4 flex items-center justify-between">
                 <div>
@@ -347,7 +347,7 @@ export default function ExcuseSubmissionForm() {
                   Tipo de Novedad <span className="text-rose-500">*</span>
                 </label>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 sm:gap-3">
                   {NOVELTY_TYPES.map((type) => {
                     const isSelected = selectedType === type.id;
                     return (
@@ -355,7 +355,7 @@ export default function ExcuseSubmissionForm() {
                         key={type.id}
                         type="button"
                         onClick={() => setValue('novelty_type', type.id, { shouldValidate: true })}
-                        className={`p-3.5 rounded-2xl text-left border transition-all cursor-pointer flex flex-col justify-between group ${
+                        className={`p-3.5 sm:p-4 min-h-[58px] rounded-2xl text-left border transition-all cursor-pointer flex flex-col justify-between group ${
                           isSelected
                             ? 'bg-[#F2F0FF] border-[#5B3FF5] shadow-sm ring-2 ring-[#5B3FF5]/20'
                             : 'bg-white border-[#E2E8F0] hover:border-[#5B3FF5]/40 hover:bg-[#F6F7FB]'

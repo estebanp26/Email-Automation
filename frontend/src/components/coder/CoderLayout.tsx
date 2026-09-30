@@ -34,18 +34,18 @@ export function CoderLayout({ children }: CoderLayoutProps) {
 
       {/* Header Superior del Rol Coder en morado corporativo RIWI (#171B3A) para máximo contraste del logo */}
       <header className="sticky top-0 z-30 w-full border-b border-white/10 bg-[#171B3A] shadow-md transition-all">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 h-20 flex items-center justify-between">
+        <div className="max-w-6xl mx-auto px-3.5 sm:px-6 h-16 sm:h-20 flex items-center justify-between">
           
           {/* Logo oficial Riwi y título de rol */}
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2.5 sm:gap-4">
             <img
               src="https://moodle.riwi.io/pluginfile.php/1/theme_academi/logo/1789715233/Imagen1%20%281%29.png"
               alt="Logo Riwi"
-              className="h-8 sm:h-9 object-contain"
+              className="h-7 sm:h-9 object-contain"
             />
             <div className="hidden sm:block h-6 w-px bg-white/20" />
             <div className="flex items-center gap-2">
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-[#5B3FF5]/25 text-purple-200 border border-[#5B3FF5]/40 shadow-sm">
+              <span className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1 rounded-full text-[11px] sm:text-xs font-semibold bg-[#5B3FF5]/25 text-purple-200 border border-[#5B3FF5]/40 shadow-sm">
                 <GraduationCap className="size-3.5" />
                 Portal del Coder
               </span>
@@ -53,9 +53,9 @@ export function CoderLayout({ children }: CoderLayoutProps) {
           </div>
 
           {/* Información del Coder y Logout */}
-          <div className="flex items-center gap-3 sm:gap-4">
+          <div className="flex items-center gap-2 sm:gap-4">
             {/* Card del Estudiante */}
-            <div className="flex items-center gap-3 pl-3 pr-2 py-1.5 rounded-xl bg-white/10 border border-white/15 shadow-sm">
+            <div className="flex items-center gap-2.5 sm:gap-3 pl-2 sm:pl-3 pr-2 py-1 sm:py-1.5 rounded-xl bg-white/10 border border-white/15 shadow-sm">
               <div className="text-right hidden sm:block">
                 <p className="text-xs font-bold text-white tracking-tight leading-tight truncate max-w-[180px]">
                   {session.name}
@@ -68,7 +68,7 @@ export function CoderLayout({ children }: CoderLayoutProps) {
               </div>
 
               {/* Avatar con iniciales */}
-              <div className="size-9 rounded-lg bg-gradient-to-br from-[#5636F5] to-[#633BFF] flex items-center justify-center text-white font-bold text-xs shadow-md shadow-[#5B3FF5]/30">
+              <div className="size-8 sm:size-9 rounded-lg bg-gradient-to-br from-[#5636F5] to-[#633BFF] flex items-center justify-center text-white font-bold text-xs shadow-md shadow-[#5B3FF5]/30">
                 {initials}
               </div>
             </div>
@@ -77,7 +77,7 @@ export function CoderLayout({ children }: CoderLayoutProps) {
             <button
               type="button"
               onClick={handleLogout}
-              className="size-9 sm:size-10 rounded-xl bg-white/10 hover:bg-rose-500/20 text-slate-300 hover:text-rose-400 border border-white/15 hover:border-rose-500/30 flex items-center justify-center transition-all cursor-pointer"
+              className="size-8 sm:size-10 rounded-xl bg-white/10 hover:bg-rose-500/20 text-slate-300 hover:text-rose-400 border border-white/15 hover:border-rose-500/30 flex items-center justify-center transition-all cursor-pointer"
               title="Cerrar sesión"
             >
               <LogOut className="size-4" />
@@ -87,7 +87,7 @@ export function CoderLayout({ children }: CoderLayoutProps) {
       </header>
 
       {/* Contenido Principal en paleta clara/blanca y morado */}
-      <main className="flex-1 w-full max-w-5xl mx-auto px-4 sm:px-6 py-8 relative z-10">
+      <main className="flex-1 w-full max-w-5xl mx-auto px-3.5 sm:px-6 py-5 sm:py-8 relative z-10">
         {children}
       </main>
 
