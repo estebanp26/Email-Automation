@@ -105,23 +105,29 @@ export default function Dashboard() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex justify-between items-start">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className="text-[28px] font-bold text-[#11132C] mb-1">Resumen del Sistema HSE - Barranquilla</h1>
-          <h2 className="text-xl font-bold text-[#11132C] mt-4 mb-1">¡Bienvenido de nuevo, Paola!</h2>
-          <p className="text-[#7C8499] text-sm">Aquí tienes un resumen en tiempo real de las solicitudes del sistema.</p>
+          <h1 className="text-xl sm:text-2xl lg:text-[28px] font-bold text-[#11132C] leading-tight">
+            Resumen del Sistema HSE - Barranquilla
+          </h1>
+          <h2 className="text-base sm:text-lg lg:text-xl font-bold text-[#11132C] mt-2 sm:mt-3 mb-1">
+            ¡Bienvenido de nuevo, Paola!
+          </h2>
+          <p className="text-[#7C8499] text-xs sm:text-sm">
+            Aquí tienes un resumen en tiempo real de las solicitudes del sistema.
+          </p>
         </div>
         
-        <div className="flex items-center gap-4 mt-2 relative">
+        <div className="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-end relative">
           <button 
             onClick={() => navigate('/requests')}
-            className="flex items-center gap-2 bg-[#5B3FF5] hover:bg-[#4a32cc] px-4 py-2 rounded-full shadow-lg shadow-[#5B3FF5]/30 text-sm font-semibold text-white transition-colors cursor-pointer"
+            className="flex-1 sm:flex-none flex items-center justify-center gap-2 bg-[#5B3FF5] hover:bg-[#4a32cc] px-4 py-2.5 rounded-full shadow-lg shadow-[#5B3FF5]/30 text-xs sm:text-sm font-semibold text-white transition-colors cursor-pointer"
           >
-            <Download size={16} /> Ver Solicitudes ({stats.total})
+            <Download size={15} /> Ver Solicitudes ({stats.total})
           </button>
 
           <div 
-            className="w-10 h-10 rounded-full bg-[#11132C] flex items-center justify-center text-white font-bold text-sm cursor-pointer select-none"
+            className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-[#11132C] flex items-center justify-center text-white font-bold text-xs sm:text-sm cursor-pointer select-none shrink-0"
             onClick={() => setShowProfileMenu(!showProfileMenu)}
           >
             PA
@@ -145,25 +151,25 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* KPI Cards */}
-      <div className="grid grid-cols-4 gap-6 pt-4">
+      {/* KPI Cards (1 columna en móvil, 2 en tablet, 4 en desktop) */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 pt-2">
         {kpiCards.map((kpi, i) => (
-          <div key={i} className="bg-white rounded-3xl p-6 relative overflow-hidden shadow-[0_4px_20px_-10px_rgba(0,0,0,0.05)] border border-gray-50 flex flex-col justify-between h-[160px]">
+          <div key={i} className="bg-white rounded-3xl p-5 sm:p-6 relative overflow-hidden shadow-[0_4px_20px_-10px_rgba(0,0,0,0.05)] border border-gray-50 flex flex-col justify-between min-h-[140px] sm:h-[160px]">
             <div className={`absolute bottom-0 left-0 right-0 h-24 bg-gradient-to-t ${kpi.wave} pointer-events-none rounded-b-3xl`} />
             
             <div className="flex justify-between items-start z-10 relative">
               <div className="flex items-center gap-3">
-                <div className={`w-10 h-10 rounded-full ${kpi.bg} flex items-center justify-center text-white shadow-md shadow-${kpi.color}/20`}>
-                  <kpi.icon size={20} strokeWidth={2.5} />
+                <div className={`w-9 h-9 sm:w-10 sm:h-10 rounded-full ${kpi.bg} flex items-center justify-center text-white shadow-md shadow-${kpi.color}/20`}>
+                  <kpi.icon size={18} strokeWidth={2.5} />
                 </div>
-                <span className="font-semibold text-[#11132C]">{kpi.label}</span>
+                <span className="font-semibold text-xs sm:text-sm text-[#11132C]">{kpi.label}</span>
               </div>
               <ChevronDown size={16} className="text-gray-300 -rotate-90 cursor-pointer" />
             </div>
             
             <div className="text-center z-10 relative mt-2">
-              <h3 className="text-[40px] font-bold text-[#11132C] leading-none mb-3">{kpi.value}</h3>
-              <p className="text-xs text-[#7C8499] flex items-center justify-center gap-1">
+              <h3 className="text-3xl sm:text-[40px] font-bold text-[#11132C] leading-none mb-2 sm:mb-3">{kpi.value}</h3>
+              <p className="text-[11px] sm:text-xs text-[#7C8499] flex items-center justify-center gap-1">
                 <span className={kpi.color}>↗ {kpi.growth}</span> {kpi.text}
               </p>
             </div>
@@ -171,54 +177,54 @@ export default function Dashboard() {
         ))}
       </div>
 
-      {/* Charts Row */}
-      <div className="grid grid-cols-[2fr_1fr] gap-6">
+      {/* Charts Row (1 columna en móvil/tablet, 2fr_1fr en desktop) */}
+      <div className="grid grid-cols-1 lg:grid-cols-[2fr_1fr] gap-4 sm:gap-6">
         {/* Bar Chart */}
-        <div className="bg-white rounded-3xl p-6 shadow-[0_4px_20px_-10px_rgba(0,0,0,0.05)] border border-gray-50">
-          <div className="flex justify-between items-start mb-6">
+        <div className="bg-white rounded-3xl p-4 sm:p-6 shadow-[0_4px_20px_-10px_rgba(0,0,0,0.05)] border border-gray-50">
+          <div className="flex justify-between items-start mb-4 sm:mb-6">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-[#5B3FF5]/10 flex items-center justify-center text-[#5B3FF5]">
-                <BarChart2 size={20} />
+              <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-[#5B3FF5]/10 flex items-center justify-center text-[#5B3FF5]">
+                <BarChart2 size={18} />
               </div>
               <div>
-                <h3 className="font-bold text-[#11132C]">Solicitudes por semana</h3>
+                <h3 className="font-bold text-sm sm:text-base text-[#11132C]">Solicitudes por semana</h3>
                 <p className="text-xs text-[#7C8499]">Total, aprobadas y denegadas</p>
               </div>
             </div>
           </div>
           
-          <div className="h-[280px] w-full">
+          <div className="h-[240px] sm:h-[280px] w-full">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={weeklyData} margin={{ top: 20, right: 0, left: -20, bottom: 0 }}>
-                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#7C8499', fontSize: 12 }} dy={10} />
-                <YAxis axisLine={false} tickLine={false} tick={{ fill: '#7C8499', fontSize: 12 }} />
+                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#7C8499', fontSize: 11 }} dy={10} />
+                <YAxis axisLine={false} tickLine={false} tick={{ fill: '#7C8499', fontSize: 11 }} />
                 <Tooltip cursor={{ fill: 'transparent' }} contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 15px rgba(0,0,0,0.1)' }} />
-                <Legend iconType="circle" wrapperStyle={{ top: -45, right: 20, width: 'auto' }} />
-                <Bar dataKey="Total" fill="#7B61FF" radius={[4, 4, 4, 4]} barSize={12} />
-                <Bar dataKey="Aprobados" fill="#20B486" radius={[4, 4, 4, 4]} barSize={12} />
-                <Bar dataKey="Denegados" fill="#FF5C67" radius={[4, 4, 4, 4]} barSize={12} />
+                <Legend iconType="circle" wrapperStyle={{ top: -35, right: 10, width: 'auto', fontSize: 11 }} />
+                <Bar dataKey="Total" fill="#7B61FF" radius={[4, 4, 4, 4]} barSize={10} />
+                <Bar dataKey="Aprobados" fill="#20B486" radius={[4, 4, 4, 4]} barSize={10} />
+                <Bar dataKey="Denegados" fill="#FF5C67" radius={[4, 4, 4, 4]} barSize={10} />
               </BarChart>
             </ResponsiveContainer>
           </div>
         </div>
 
         {/* Donut Chart */}
-        <div className="bg-white rounded-3xl p-6 shadow-[0_4px_20px_-10px_rgba(0,0,0,0.05)] border border-gray-50 flex flex-col">
+        <div className="bg-white rounded-3xl p-4 sm:p-6 shadow-[0_4px_20px_-10px_rgba(0,0,0,0.05)] border border-gray-50 flex flex-col">
           <div className="flex justify-between items-start mb-4">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-[#5B3FF5]/10 flex items-center justify-center text-[#5B3FF5]">
-                <PieChartIcon size={20} />
+              <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-[#5B3FF5]/10 flex items-center justify-center text-[#5B3FF5]">
+                <PieChartIcon size={18} />
               </div>
               <div>
-                <h3 className="font-bold text-[#11132C]">Solicitudes por revisar</h3>
+                <h3 className="font-bold text-sm sm:text-base text-[#11132C]">Solicitudes por revisar</h3>
                 <p className="text-xs text-[#7C8499]">Porcentaje de solicitudes auditadas</p>
               </div>
             </div>
             <ChevronDown size={16} className="text-gray-300 -rotate-90 cursor-pointer" />
           </div>
 
-          <div className="flex-1 relative flex flex-col items-center justify-center">
-            <div className="h-[200px] w-full relative">
+          <div className="flex-1 relative flex flex-col items-center justify-center min-h-[220px]">
+            <div className="h-[180px] sm:h-[200px] w-full relative">
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
                   <Pie
@@ -227,8 +233,8 @@ export default function Dashboard() {
                     cy="65%"
                     startAngle={180}
                     endAngle={0}
-                    innerRadius={75}
-                    outerRadius={95}
+                    innerRadius={65}
+                    outerRadius={85}
                     paddingAngle={5}
                     dataKey="value"
                     stroke="none"
@@ -240,9 +246,9 @@ export default function Dashboard() {
                 </PieChart>
               </ResponsiveContainer>
               
-              <div className="absolute inset-0 flex flex-col items-center justify-end pb-8 pointer-events-none">
-                <span className="text-[40px] font-black text-[#11132C] leading-none">{percentReviewed}%</span>
-                <span className="text-sm text-[#7C8499] font-medium mt-1">Revisadas</span>
+              <div className="absolute inset-0 flex flex-col items-center justify-end pb-6 pointer-events-none">
+                <span className="text-3xl sm:text-[40px] font-black text-[#11132C] leading-none">{percentReviewed}%</span>
+                <span className="text-xs sm:text-sm text-[#7C8499] font-medium mt-1">Revisadas</span>
               </div>
             </div>
 
@@ -250,16 +256,16 @@ export default function Dashboard() {
               <div className="flex flex-col gap-1">
                 <div className="flex items-center gap-2">
                   <div className="w-3 h-3 rounded-full bg-[#5B3FF5]" />
-                  <span className="font-bold text-[#11132C] text-sm">Revisadas</span>
+                  <span className="font-bold text-[#11132C] text-xs sm:text-sm">Revisadas</span>
                 </div>
-                <span className="text-xs text-[#7C8499] pl-5">{percentReviewed}% ({totalEvaluated})</span>
+                <span className="text-[11px] sm:text-xs text-[#7C8499] pl-5">{percentReviewed}% ({totalEvaluated})</span>
               </div>
               <div className="flex flex-col gap-1">
                 <div className="flex items-center gap-2">
                   <div className="w-3 h-3 rounded-full bg-[#E2E8F0]" />
-                  <span className="font-bold text-[#11132C] text-sm">Pendientes</span>
+                  <span className="font-bold text-[#11132C] text-xs sm:text-sm">Pendientes</span>
                 </div>
-                <span className="text-xs text-[#7C8499] pl-5">{100 - percentReviewed}% ({stats.por_revisar ?? stats.pending})</span>
+                <span className="text-[11px] sm:text-xs text-[#7C8499] pl-5">{100 - percentReviewed}% ({stats.por_revisar ?? stats.pending})</span>
               </div>
             </div>
           </div>
@@ -267,19 +273,19 @@ export default function Dashboard() {
       </div>
 
       {/* Recent Emails */}
-      <div className="bg-white rounded-3xl p-6 shadow-[0_4px_20px_-10px_rgba(0,0,0,0.05)] border border-gray-50">
-        <div className="flex justify-between items-center mb-6">
+      <div className="bg-white rounded-3xl p-4 sm:p-6 shadow-[0_4px_20px_-10px_rgba(0,0,0,0.05)] border border-gray-50">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-4 sm:mb-6">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-[#5B3FF5]/10 flex items-center justify-center text-[#5B3FF5]">
-              <Mail size={20} />
+            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-[#5B3FF5]/10 flex items-center justify-center text-[#5B3FF5]">
+              <Mail size={18} />
             </div>
-            <h3 className="font-bold text-[#11132C] text-lg">Correos recientes recibidos ({recentEmails.length})</h3>
+            <h3 className="font-bold text-[#11132C] text-base sm:text-lg">Correos recientes recibidos ({recentEmails.length})</h3>
           </div>
           <button 
             onClick={() => navigate('/requests')}
-            className="bg-[#5B3FF5] text-white px-5 py-2.5 rounded-full text-sm font-semibold flex items-center gap-2 hover:bg-[#4a32cc] transition-colors shadow-lg shadow-[#5B3FF5]/30 cursor-pointer"
+            className="w-full sm:w-auto bg-[#5B3FF5] text-white px-4 sm:px-5 py-2 sm:py-2.5 rounded-full text-xs sm:text-sm font-semibold flex items-center justify-center gap-2 hover:bg-[#4a32cc] transition-colors shadow-lg shadow-[#5B3FF5]/30 cursor-pointer"
           >
-            <Maximize2 size={16} /> Ver en pantalla completa
+            <Maximize2 size={15} /> Ver en pantalla completa
           </button>
         </div>
 
