@@ -5,6 +5,8 @@ import { Inbox, FilePlus, LogOut, Menu } from 'lucide-react';
 import clsx from 'clsx';
 import { getCoderSession } from '../../utils/coderSession';
 
+import { useAuth } from '../../context/AuthContext';
+
 const navItems = [
   { path: '/coder/history', name: 'Historial de solicitudes', icon: Inbox },
   { path: '/coder/new-excuse', name: 'Radicar Justificación', icon: FilePlus },
@@ -14,7 +16,19 @@ export function CoderSidebar() {
   const [isOpen, setIsOpen] = useState(true);
   const location = useLocation();
   const navigate = useNavigate();
-  const session = useMemo(() => getCoderSession(), []);
+  const { user, logout } = useAuth();
+
+  const session = useMemo(() => {
+    if (user && user.role === 'CODER') {
+      return {
+        name: user.name,
+        cedula: user.cedula || '',
+        email: user.email,
+        route: user.route || 'Desarrollo de Software',
+      };
+    }
+    return getCoderSession();
+  }, [user]);
 
   const initials = useMemo(() => {
     if (!session.name) return 'CO';
@@ -24,9 +38,7 @@ export function CoderSidebar() {
   }, [session.name]);
 
   const handleLogout = () => {
-    localStorage.removeItem('hse_token');
-    localStorage.removeItem('hse_role');
-    localStorage.removeItem('hse_coder_session');
+    logout();
     navigate('/login', { replace: true });
   };
 

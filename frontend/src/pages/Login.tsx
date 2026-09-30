@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Lock, User, Eye, EyeOff, Check } from 'lucide-react';
 import logoLogin from '../assets/logo-login.png';
@@ -7,6 +7,8 @@ import logoWhite from '../assets/logo-white.png';
 import zorroFull from '../assets/zorro_full.png';
 import bgCode from '../assets/bg-code.png';
 import { api } from '../services/api';
+import { useAuth } from '../context/AuthContext';
+import { createStandardJwt, normalizeRole } from '../utils/jwt';
 
 export default function Login() {
   const [username, setUsername] = useState('admin@riwi.io');
@@ -16,6 +18,26 @@ export default function Login() {
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
+  const location = useLocation();
+  const { login, isAuthenticated, user } = useAuth();
+
+  // Redirección si ya está autenticado
+  useEffect(() => {
+    if (isAuthenticated && user) {
+      if (user.role === 'CODER') {
+        navigate('/coder/history', { replace: true });
+      } else {
+        navigate('/dashboard', { replace: true });
+      }
+    }
+  }, [isAuthenticated, user, navigate]);
+
+  // Mensaje si la sesión expiró
+  useEffect(() => {
+    if (location.state && (location.state as any).expired) {
+      setError('Tu sesión ha expirado por inactividad o límite de tiempo. Inicia sesión nuevamente.');
+    }
+  }, [location.state]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -26,11 +48,34 @@ export default function Login() {
     const passVal = password.trim();
 
     try {
-      // 1. Caso HSE Admin: inicio al panel de control HSE
-      if (userVal === 'admin@riwi.io' && passVal === 'admin123') {
-        localStorage.setItem('hse_token', 'jwt_hse_admin_12345');
-        localStorage.setItem('hse_role', 'hse');
-        navigate('/');
+      // 1. Usuarios administrativos de la base de datos (public.hse_users)
+      const hseAccounts: Record<string, { role: string; name: string }> = {
+        'admin@riwi.io': { role: 'ADMIN', name: 'Administrador General HSE' },
+        'admin.hse@riwi.io': { role: 'ADMIN', name: 'Administrador General HSE' },
+        'laura.hse@riwi.io': { role: 'HSE', name: 'Laura Psicóloga HSE' },
+        'andres.lead@riwi.io': { role: 'TEAM_LEADER', name: 'Andrés Team Leader' },
+      };
+
+      if (hseAccounts[userVal] && passVal === 'admin123') {
+        const acc = hseAccounts[userVal];
+        const normalized = normalizeRole(acc.role);
+
+        // Generar JWT estándar con claims RFC 7519 y tiempo de expiración
+        const token = createStandardJwt({
+          sub: `hse-${userVal}`,
+          email: userVal,
+          name: acc.name,
+          role: acc.role,
+        });
+
+        login(token, {
+          id: `hse-${userVal}`,
+          email: userVal,
+          name: acc.name,
+          role: normalized,
+        });
+
+        navigate('/dashboard', { replace: true });
         return;
       }
 
@@ -46,33 +91,49 @@ export default function Login() {
       });
 
       if (coderFound) {
-        const sessionData = {
+        const token = createStandardJwt({
+          sub: coderFound.id,
+          email: coderFound.email,
+          name: coderFound.name,
+          role: 'CODER',
+          cedula: String(coderFound.cedula),
+          route: coderFound.route || 'Desarrollo de Software',
+        });
+
+        login(token, {
           id: coderFound.id,
           name: coderFound.name,
           cedula: String(coderFound.cedula),
           email: coderFound.email,
           route: coderFound.route || 'Desarrollo de Software',
-        };
-        localStorage.setItem('hse_token', `jwt_coder_${coderFound.cedula}`);
-        localStorage.setItem('hse_role', 'coder');
-        localStorage.setItem('hse_coder_session', JSON.stringify(sessionData));
-        navigate('/coder/history');
+          role: 'CODER',
+        });
+
+        navigate('/coder/history', { replace: true });
         return;
       }
 
-      // Fallback si ingresa su cédula en usuario y contraseña (números >= 6 dígitos)
+      // 3. Fallback de Coder si ingresa su cédula en usuario y contraseña (números >= 6 dígitos)
       if (userVal === passVal && userVal.length >= 6 && /^\d+$/.test(userVal)) {
-        const sessionFallback = {
+        const token = createStandardJwt({
+          sub: `coder-${userVal}`,
+          email: `${userVal}@riwi.io`,
+          name: `Coder ${userVal}`,
+          role: 'CODER',
+          cedula: userVal,
+          route: 'Desarrollo de Software',
+        });
+
+        login(token, {
           id: `coder-${userVal}`,
           name: `Coder ${userVal}`,
           cedula: userVal,
           email: `${userVal}@riwi.io`,
           route: 'Desarrollo de Software',
-        };
-        localStorage.setItem('hse_token', `jwt_coder_${userVal}`);
-        localStorage.setItem('hse_role', 'coder');
-        localStorage.setItem('hse_coder_session', JSON.stringify(sessionFallback));
-        navigate('/coder/history');
+          role: 'CODER',
+        });
+
+        navigate('/coder/history', { replace: true });
         return;
       }
 
@@ -81,17 +142,25 @@ export default function Login() {
       console.warn('Error en proceso de login:', err);
       // Fallback de contingencia si no hay red inmediata
       if (userVal === passVal && userVal.length >= 6) {
-        const sessionFallback = {
+        const token = createStandardJwt({
+          sub: `coder-${userVal}`,
+          email: `${userVal}@riwi.io`,
+          name: `Coder ${userVal}`,
+          role: 'CODER',
+          cedula: userVal,
+          route: 'Desarrollo de Software',
+        });
+
+        login(token, {
           id: `coder-${userVal}`,
           name: `Coder ${userVal}`,
           cedula: userVal,
           email: `${userVal}@riwi.io`,
           route: 'Desarrollo de Software',
-        };
-        localStorage.setItem('hse_token', `jwt_coder_${userVal}`);
-        localStorage.setItem('hse_role', 'coder');
-        localStorage.setItem('hse_coder_session', JSON.stringify(sessionFallback));
-        navigate('/coder/history');
+          role: 'CODER',
+        });
+
+        navigate('/coder/history', { replace: true });
         return;
       }
       setError('No se pudo validar las credenciales con el servidor.');
