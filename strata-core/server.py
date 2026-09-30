@@ -721,7 +721,7 @@ async def get_requests_list(status: Optional[str] = None, limit: int = 250):
                 j.received_at,
                 j.excuse_type,
                 j.validation_status,
-                j.ai_recommendation,
+                COALESCE(j.ai_response->>'verdict', j.validation_status) AS ai_recommendation,
                 j.ai_confidence,
                 j.ai_reason,
                 j.has_human_intervention,

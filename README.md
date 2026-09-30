@@ -1,116 +1,244 @@
-# Email-Automation (HSE Attendance Justification System con Strata Core)
+# Email-Automation — Sistema de Justificaciones HSE (RIWI)
 
-Sistema automatizado de ingesta, filtración, análisis y resolución de justificaciones de inasistencia/tardanza para el equipo de HSE (Habilidades para la Vida), impulsado por el motor local **Strata Core**.
+Sistema automatizado de ingesta, evaluación y respuesta de justificaciones de inasistencia/tardanza para el equipo HSE. Motor local **Strata Core** (FastAPI + PyMuPDF + Tesseract + Qwen 2.5 vía Ollama), orquestación **n8n**, persistencia **PostgreSQL 16** y **dashboard React + Vite**.
 
-## 🚀 Arquitectura del Proyecto (Monorepo)
+## 1. Arquitectura real
 
 ```
-Email-Automation/
-├── n8n/                # Workflows modulares de orquestación (Squad: Esteban, Jesus, Luis)
-├── frontend/           # Dashboard para la Team Leader HSE (Squad: Kevin, Camilo)
-├── connection/         # Webhooks y adaptadores Outlook/Gmail (Squad: Samuel)
-├── strata-core/        # Motor universal de extracción y evidencia (Squad: Andres, Sebastian)
-├── database/           # Schemas PostgreSQL / Supabase y Seeds (Squad: Eliam, Sergio)
-├── docs/               # Contratos de API, guías de arquitectura y roadmap
-└── .env.example        # Variables de entorno unificadas
+Outlook / Gmail (conectores Python / listener IMAP)
+        │ payload normalizado
+        ▼
+n8n (:5678) ──► PostgreSQL (:5432, db hse_email_automation)
+   │
+   ├──► Strata Core (:8001) ──► PyMuPDF / Tesseract ──► Ollama (qwen2.5:1.5b, con fallback sin IA)
+   │
+   ├──► Guardrails deterministas + umbral confianza
+   │
+   ├──► PostgreSQL (tablas coders, justifications)
+   │
+   └──► Correo respuesta al coder / cola manual en Dashboard HSE (:5173)
 ```
 
-## 👥 Organización de Squads & Responsables
+Principio: **n8n no hace OCR ni inferencia** (la consume por HTTP); **Strata Core no gestiona identidades** (eso es n8n + Postgres).
 
-| Squad | Integrantes | Foco Principal | Rama de Trabajo |
-| :--- | :--- | :--- | :--- |
-| **n8n Core** | **Esteban (Leader)**, Jesus, Luis | Orquestación, encolamiento y despacho de correos | `feature/n8n-core` |
-| **Frontend** | **Kevin**, Camilo | Dashboard Next.js con visor de evidencias espaciales | `feature/frontend-dashboard` |
-| **Conexión** | **Samuel** | Webhooks Outlook (Graph API) & Gmail (PubSub) | `feature/email-connections` |
-| **Strata Core**| **Andres**, Sebastian | Motor universal de extracción local con Qwen 2.5 y Tesseract | `feature/ai-engine` |
-| **Database** | **Eliam**, Sergio | Supabase PostgreSQL, Storage S3 y reglas dinámicas | `feature/db-supabase` |
+> `backend/app` (FastAPI `:8000`, `/api/v1/...`) es código legacy/experimental. El sistema en producción que levantan `run.py/run.sh` usa **Strata Core `:8001`** (`/api/kpis`, `/api/requests`, `/api/students`, `/health`, `/api/evaluate-excuse`) como backend de datos del frontend.
 
-## 🛠️ Regla de Oro: Config-Driven Architecture
-Ninguna regla de negocio o plantilla de correo está quemada en código. Todo se lee dinámicamente de la base de datos para permitir ajustes el lunes sin tocar producción.
+## 2. Estructura del repositorio
 
----
+```
+.
+├── strata-core/server.py       # Backend real (FastAPI :8001)
+├── strata-core/requirements.txt
+├── frontend/                   # Dashboard HSE (Vite + React 19 + TS, :5173)
+├── backend/app/                # Backend legacy :8000 (no lo levanta run.py)
+├── database/migrations/        # 001_*.sql, 002_seed, 003_attendance, 004_indexes
+├── docker-compose.yml          # Solo postgres (servicio "postgres", container hse-postgres)
+├── run.py / run.sh / run.ps1 / run.bat  # Lanzadores todo-en-uno
+├── scripts/gmail_live_listener.py       # Escuchador IMAP en vivo (opcional)
+├── gmail_connector.py / outlook_connector.py / mail_sender.py
+├── n8n_workflow_email_hse.json
+└── .env.example
+```
 
-## 🔗 Integración Frontend (Dashboard HSE) con Workflow n8n
+## 3. Requisitos previos
 
-El frontend se conecta de manera desacoplada con el flujo de automatización orquestado en **n8n** ([`n8n_workflow_email_hse.json`](./n8n_workflow_email_hse.json)) mediante webhooks REST.
+- Docker y Docker Compose
+- Python 3.10+ (`python3 --version`)
+- Node.js 20+ y npm (`node --version`)
+- Binario Tesseract (`which tesseract`)
+- Ollama (opcional, solo para inferencia real): `ollama serve` + `ollama pull qwen2.5:1.5b`. Sin Ollama el sistema arranca igual con veredicto fallback.
+- Instancia n8n accesible (`:5678`)
 
-### 1. Puntos de Conexión (Webhooks) Enlazados
+Puertos usados: `5432` Postgres, `8001` Strata, `5173` Frontend, `5678` n8n.
 
-#### A. Webhook de Despacho Manual HSE (`POST /webhook/riwi-hse-dispatch-email` o `/webhook-test/...`)
-- **Nodo destino en n8n:** `node-webhook-hse-dispatch` $\rightarrow$ `14 Despachar Email Notificación HSE`.
-- **Propósito:** Disparado inmediatamente cuando el analista de HSE toma una decisión sobre una justificación (Aprobar, Rechazar o Pedir Corrección) desde la interfaz web.
-- **Contrato del Payload:**
-  ```json
-  {
-    "justification_id": "c6357532-2555-4a40-a4ff-bd148a8036b2",
-    "action": "APPROVED",
-    "coder_name": "Valentina Ospina",
-    "recipient_email": "valentina.ospina@riwi.io",
-    "start_date": "2026-09-27",
-    "excuse_type": "calamidad",
-    "hse_notes": "Se verificó la situación familiar aportada. Convalidado por 2 días.",
-    "hse_reviewer_name": "Paola Admin (HSE)"
-  }
-  ```
-  *Valores de `action`:* `'APPROVED'`, `'DISAPPROVED'`, `'REQUEST_CORRECTION'`.
+## 4. Puesta en marcha paso a paso (manual, recomendado)
 
-#### B. Webhook de Ingesta / Prueba de Correo Entrante (`POST /webhook/riwi-email-incoming` o `/webhook-test/...`)
-- **Nodo destino en n8n:** `Webhook Correo Entrante`.
-- **Propósito:** Permite la ingesta en vivo desde adaptadores de correo (Outlook Graph / Gmail) o desde el botón de simulación del dashboard para validar el pipeline de IA y persistencia.
+### Paso 0 — Clonar y entrar
 
----
+```bash
+cd Email-Riwi
+```
 
-### 2. Estructura y Servicios en el Frontend (`/frontend`)
+### Paso 1 — Variables de entorno raíz
 
-- **[`src/services/n8n.ts`](./frontend/src/services/n8n.ts):**
-  - Manejo de endpoints dinámicos de n8n (por defecto `http://localhost:5678`).
-  - Alternador entre modo **Prueba** (`/webhook-test/`) y modo **Producción** (`/webhook/`).
-  - Persistencia de configuración en `localStorage` (configurable desde la UI sin reiniciar el servidor).
-  - Métodos:
-    - `dispatchHseDecision(payload)`: Envía la resolución humana al webhook resolutivo.
-    - `sendIncomingEmailSimulation(payload)`: Simula la recepción de correos de prueba.
-    - `testN8nConnection()`: Verifica la salud y conectividad con la instancia de n8n.
-- **[`src/services/api.ts`](./frontend/src/services/api.ts):**
-  - Método `resolveRequestWithN8n`: Actualiza el estado local y simultáneamente despacha la resolución al webhook de n8n.
-- **[`src/pages/Requests.tsx`](./frontend/src/pages/Requests.tsx):**
-  - Panel integrado **"Resolución Manual HSE & Despacho a n8n"** en la vista de detalle:
-    - 🟢 **Aprobar Excusa** (`APPROVED`)
-    - 🔴 **Rechazar Caso** (`DISAPPROVED`)
-    - 🟡 **Pedir Soporte** (`REQUEST_CORRECTION`)
-    - Campos editables para fechas afectadas (`start_date`), tipo de excusa (`excuse_type`) y observaciones obligatorias (`hse_notes`).
-    - Alertas visuales con feedback en tiempo real según la respuesta de n8n.
-- **[`src/pages/Settings.tsx`](./frontend/src/pages/Settings.tsx):**
-  - Tarjeta destacada **"Conexión con n8n Workflow"**:
-    - Edición de la URL base de n8n.
-    - Selector interactivo entre modo *Prueba* y *Producción*.
-    - Botón **"Probar Conectividad con n8n"** para diagnóstico en vivo.
-    - Botón **"Simular Envío de Correo Entrante"** para pruebas end-to-end.
-    - Visualización de URLs calculadas de los webhooks.
-- **Variables de Entorno ([`frontend/.env.example`](./frontend/.env.example)):**
-  ```env
-  VITE_API_URL=http://localhost:8000
-  VITE_N8N_URL=http://localhost:5678
-  VITE_N8N_USE_TEST_WEBHOOK=true
-  ```
+```bash
+cp .env.example .env
+```
 
----
+Valores por defecto que ya coinciden con Docker local (`POSTGRES_USER=hse_admin`, `POSTGRES_PASSWORD=hse_segura_123`, `POSTGRES_DB=hse_email_automation`, `STRATA_CORE_URL=http://localhost:8001`). Cámbialos solo para producción. Nunca subas `.env` a Git.
 
-### 3. Puesta en Marcha y Pruebas Paso a Paso
+Para el listener de Gmail en vivo agrega en `.env`:
 
-1. **Importar el Workflow en n8n:**
-   - Accede a tu instancia de n8n (ej. `http://localhost:5678`).
-   - Ve a **Workflows** $\rightarrow$ **Import from File** y carga [`n8n_workflow_email_hse.json`](./n8n_workflow_email_hse.json).
-   - Haz clic en **Publish / Activate** (para modo producción) o haz clic en **"Listen for test event"** sobre el nodo *Webhook Despachar Notificación HSE* (para depuración en modo prueba).
+```env
+GMAIL_USER=tu_correo@gmail.com
+GMAIL_APP_PASSWORD=xxxx xxxx xxxx xxxx
+```
 
-2. **Ejecutar el Frontend:**
-   ```bash
-   cd frontend
-   npm install
-   npm run dev
-   ```
-   Abre `http://localhost:5173` en el navegador.
+### Paso 2 — Base de datos PostgreSQL
 
-3. **Validar la Conexión:**
-   - Dirígete a **Configuración** $\rightarrow$ tarjeta **"Conexión con n8n Workflow"** y pulsa **"Probar Conectividad con n8n"**.
-   - En **Bandeja de Entrada / Solicitudes**, selecciona una justificación y pulsa **"Aprobar Excusa"** o **"Rechazar Caso"** para comprobar el disparo y recepción en n8n.
+Si es primera vez (sin contenedor previo):
 
+```bash
+docker compose up -d
+docker compose ps
+```
+
+Esto crea `hse-postgres` y ejecuta automáticamente `database/migrations/*.sql` (solo en primer arranque con volumen vacío).
+
+Si ya tienes contenedores corriendo (ej. `riwi-postgres`, `riwi-n8n`), **no** ejecutes `compose up` de nuevo, solo verifícalos:
+
+```bash
+docker ps --format "{{.Names}} {{.Status}} {{.Ports}}"
+```
+
+> Nota: `docker-compose.yml` solo define Postgres, no n8n. `run.py/run.sh` intentan hacer `docker start hse-postgres` y `novasync-n8n`; si tus contenedores se llaman distinto (`riwi-*`), ese paso solo muestra un aviso y continúa.
+
+### Paso 3 — Strata Core (backend real `:8001`)
+
+```bash
+cd strata-core
+python3 -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt psycopg2-binary python-dotenv
+python -m uvicorn server:app --host 0.0.0.0 --port 8001 --reload
+```
+
+Verifica:
+
+- Docs: `http://localhost:8001/docs`
+- Salud: `http://localhost:8001/health`
+- KPIs: `http://localhost:8001/api/kpis` (si devuelve `{"total":...}` hay conexión a Postgres; si devuelve ceros con `"error"`, revisa `.env` de DB)
+
+`psycopg2-binary` no está en `requirements.txt` pero es obligatorio para `/api/kpis`, `/api/requests`, `/api/students`.
+
+### Paso 4 — Frontend (`:5173`)
+
+En otra terminal, desde la raíz:
+
+```bash
+cd frontend
+echo "VITE_API_URL=http://localhost:8001" > .env
+npm install
+npm run dev -- --host 0.0.0.0 --port 5173
+```
+
+Abre `http://localhost:5173`.
+
+> `frontend/.env.example` dice `http://localhost:8000`, está desactualizado. El valor correcto es `http://localhost:8001` (Strata). `vite.config.ts` además proxea `/api -> http://localhost:8001`.
+
+### Paso 5 — n8n
+
+1. Abre `http://localhost:5678`.
+2. `Workflows → Import from File → n8n_workflow_email_hse.json`.
+3. Configura credencial Postgres (`hse_admin / hse_segura_123 / hse_email_automation @ localhost:5432`).
+4. `Activate` (producción `/webhook/...`) o `Listen for test event` (depuración `/webhook-test/...`).
+5. Desde el frontend en `Configuración → Conexión con n8n` pulsa `Probar Conectividad`, y en `Solicitudes` usa `Aprobar / Rechazar` para validar el despacho (`POST /webhook/riwi-hse-dispatch-email`).
+
+Webhooks:
+
+| Ruta | Uso |
+| :--- | :--- |
+| `POST /webhook/riwi-email-incoming` | Ingesta correo normalizado |
+| `POST /webhook/riwi-hse-dispatch-email` | Decisión manual HSE (`APPROVED` / `DISAPPROVED` / `REQUEST_CORRECTION`) |
+
+### Paso 6 — Listener Gmail en vivo (opcional)
+
+```bash
+# desde la raíz, con el venv de strata-core activo
+python scripts/gmail_live_listener.py
+```
+
+Filtra spam y solo despacha correos con palabras HSE (`justificación`, `incapacidad`, `cita médica`, `calamidad`, etc.). Si no hay `GMAIL_USER/GMAIL_APP_PASSWORD`, omítelo.
+
+## 5. Atajo todo-en-uno
+
+```bash
+# Linux/macOS
+./run.sh
+# o multiplataforma
+python run.py
+# Windows
+run.bat
+# o
+powershell -ExecutionPolicy Bypass -File .\run.ps1
+```
+
+Hace, en orden: (1) `docker start hse-postgres/novasync-n8n` si existen, (2) Strata `:8001` con el venv si existe, (3) Frontend `:5173`, (4) listener Gmail. `Ctrl+C` detiene todo y libera `8001/5173`.
+
+URLs al terminar:
+
+- Frontend: `http://localhost:5173` · Solicitudes: `http://localhost:5173/requests` · Coders: `http://localhost:5173/students`
+- Strata: `http://localhost:8001/docs`
+- n8n: `http://localhost:5678`
+- Postgres: `localhost:5432`
+
+## 6. Contratos API (Strata `:8001`)
+
+| Método | Ruta | Descripción |
+| :--- | :--- | :--- |
+| `GET` | `/health` | Estado + modelo Ollama |
+| `POST` | `/api/evaluate-excuse` | `file` / `email_body` / `email_subject` / `rules_json` → veredicto (`valido`, `categoria_sugerida`, `confianza_score`, `requiere_revision_manual`) |
+| `GET` | `/api/kpis` | KPIs dashboard |
+| `GET` | `/api/requests?status=&limit=` | Bandeja (`approved`/`denied`/`pending_review`) |
+| `GET` | `/api/requests/recent?limit=10` | Carrusel inicio |
+| `GET` | `/api/requests/weekly` | Gráfico semanal |
+| `GET` | `/api/students` | Coders |
+| `POST` | `/api/requests/{id}/resolve` | `{action: APPROVED/DISAPPROVED, notes, reviewer_name}` |
+
+## 7. Pruebas
+
+```bash
+python outlook_connector.py --test
+python gmail_connector.py --test
+python mail_sender.py --test
+python test_workflow_simulation.py
+```
+
+## 8. Solución de problemas
+
+- `docker compose up` falla por nombre en uso: ya tienes `riwi-postgres` arriba, usa ese y no crees otro.
+- `/api/kpis` devuelve ceros con `error`: falta `psycopg2-binary` o `.env` de DB incorrecto.
+- Frontend vacío / error CORS: revisa que `frontend/.env` sea `VITE_API_URL=http://localhost:8001`, no `:8000`.
+- `ollama list` → `could not connect`: ejecuta `ollama serve &` primero. Sin Ollama igual funciona (fallback).
+- Puerto ocupado `8001/5173`: `fuser -k 8001/tcp; fuser -k 5173/tcp`.
+- `psql: command not found`: usa `docker exec -it <pg-container> psql -U hse_admin -d hse_email_automation`.
+- Listener Gmail se cierra al instante: faltan `GMAIL_USER/GMAIL_APP_PASSWORD` en `.env`.
+
+## 9. Seguridad
+
+- Nunca subas `.env`.
+- Cambia `POSTGRES_PASSWORD` fuera de local.
+- Adjuntos se procesan en local (Strata + Ollama), no se envían a IA externa en el flujo principal.
+
+## 10. Subir cambios a `develop` (git push)
+
+Ya estás en la rama `develop` con remoto `origin` (`https://github.com/estebanp26/Email-Automation.git`). El `push` lo haces tú; estos son los comandos:
+
+```bash
+# 1. Ver qué cambió (deberías ver README.md y strata-core/server.py)
+git status --short
+git diff --stat
+
+# 2. Revisa el diff antes de subir
+git diff README.md strata-core/server.py
+
+# 3. Agrega solo los archivos intencionales (no uses git add . a ciegas)
+git add README.md strata-core/server.py .gitignore
+
+# 4. Confirma que no se cuela nada sensible (no debe aparecer .env ni .venv ni node_modules)
+git status --short
+
+# 5. Commit (usa el estilo del repo: feat/fix/docs + alcance)
+git commit -m "docs: pasos de ejecución verificados y fix ai_recommendation en /api/requests"
+
+# 6. Trae lo último de develop para evitar rechazos
+git pull --rebase origin develop
+
+# 7. Sube a develop
+git push origin develop
+```
+
+Notas:
+
+- `.env`, `frontend/.env`, `.venv/`, `node_modules/`, `dist/` y `temp_processing/` están en `.gitignore` y **no** se suben (verificados: `git check-ignore` los excluye y `git ls-files` confirma que solo `.env.example` está versionado).
+- Si `git push` es rechazado por cambios remotos, repite el paso 6 y resuelve el rebase antes de reintentar.
+- Si prefieres PR en vez de push directo: `git checkout -b feature/mi-cambio && git push -u origin feature/mi-cambio`, luego abre el PR contra `develop` en GitHub.
