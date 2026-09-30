@@ -19,8 +19,9 @@ export interface Student {
   id: string;
   name: string;
   email: string;
-  route: 'AI for Devs' | 'Frontend' | 'Backend' | 'C#' | 'Java' | 'Análisis de datos';
-  attendance: Attendance;
+  cedula?: string;
+  route: string;
+  attendance?: Attendance;
 }
 
 export interface EmailInfo {
@@ -48,4 +49,3 @@ export interface KPIStats {
   denied: number;
   pending: number;
 }
-

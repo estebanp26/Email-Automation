@@ -21,7 +21,7 @@ def test_submit_coder_excuse():
         end_date="2026-09-30",
         reason="Cita odontológica prioritaria programada.",
         attachment_filename="cita_odontologia.pdf",
-        attachment_data_base64=base64.b64encode(b"Dummy PDF Cita").decode("utf-8")
+        attachment_data_base64=base64.b64encode(b"%PDF-1.4 Dummy PDF Cita").decode("utf-8")
     )
     result = portal_service.submit_excuse(sub)
     assert result.execution_status == "COMPLETED"
@@ -63,7 +63,7 @@ def test_api_submit_coder_excuse_endpoint():
         "end_date": "2026-09-29",
         "reason": "Incapacidad médica por amigdalitis bacteriana emitida por EPS.",
         "attachment_filename": "incapacidad_sura.pdf",
-        "attachment_data_base64": base64.b64encode(b"Dummy PDF").decode("utf-8")
+        "attachment_data_base64": base64.b64encode(b"%PDF-1.4 Dummy PDF").decode("utf-8")
     }
     response = client.post("/api/v1/coders/excuses", json=payload)
     assert response.status_code == 201

@@ -1,26 +1,102 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Lock, User, Eye, Check } from 'lucide-react';
+import { Lock, User, Eye, EyeOff, Check } from 'lucide-react';
 import logoLogin from '../assets/logo-login.png';
 import logoWhite from '../assets/logo-white.png';
 import zorroFull from '../assets/zorro_full.png';
 import bgCode from '../assets/bg-code.png';
+import { api } from '../services/api';
 
 export default function Login() {
   const [username, setUsername] = useState('admin@riwi.io');
   const [password, setPassword] = useState('admin123');
+  const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
   const [error, setError] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (username === 'admin@riwi.io' && password === 'admin123') {
-      localStorage.setItem('hse_token', 'jwt_simulado_12345');
-      navigate('/');
-    } else {
-      setError('Credenciales incorrectas. Usa admin@riwi.io / admin123');
+    setError('');
+    setIsLoading(true);
+
+    const userVal = username.trim();
+    const passVal = password.trim();
+
+    try {
+      // 1. Caso HSE Admin: inicio al panel de control HSE
+      if (userVal === 'admin@riwi.io' && passVal === 'admin123') {
+        localStorage.setItem('hse_token', 'jwt_hse_admin_12345');
+        localStorage.setItem('hse_role', 'hse');
+        navigate('/');
+        return;
+      }
+
+      // 2. Caso Coder: consulta contra la lista oficial de estudiantes de la base de datos
+      const students = await api.getStudents();
+      
+      const coderFound = students.find((s) => {
+        const studentCedula = String(s.cedula || '').trim();
+        const matchCedula = studentCedula === userVal;
+        const matchEmail = s.email?.toLowerCase().trim() === userVal.toLowerCase();
+        const passMatchesCedula = studentCedula === passVal;
+        return (matchCedula || matchEmail) && passMatchesCedula;
+      });
+
+      if (coderFound) {
+        const sessionData = {
+          id: coderFound.id,
+          name: coderFound.name,
+          cedula: String(coderFound.cedula),
+          email: coderFound.email,
+          route: coderFound.route || 'Desarrollo de Software',
+        };
+        localStorage.setItem('hse_token', `jwt_coder_${coderFound.cedula}`);
+        localStorage.setItem('hse_role', 'coder');
+        localStorage.setItem('hse_coder_session', JSON.stringify(sessionData));
+        navigate('/coder/new-excuse');
+        return;
+      }
+
+      // Fallback si ingresa su cédula en usuario y contraseña (números >= 6 dígitos)
+      if (userVal === passVal && userVal.length >= 6 && /^\d+$/.test(userVal)) {
+        const sessionFallback = {
+          id: `coder-${userVal}`,
+          name: `Coder ${userVal}`,
+          cedula: userVal,
+          email: `${userVal}@riwi.io`,
+          route: 'Desarrollo de Software',
+        };
+        localStorage.setItem('hse_token', `jwt_coder_${userVal}`);
+        localStorage.setItem('hse_role', 'coder');
+        localStorage.setItem('hse_coder_session', JSON.stringify(sessionFallback));
+        navigate('/coder/new-excuse');
+        return;
+      }
+
+      setError('Credenciales incorrectas. Para HSE usa admin@riwi.io / admin123. Para Coder ingresa tu cédula como usuario y contraseña.');
+    } catch (err) {
+      console.warn('Error en proceso de login:', err);
+      // Fallback de contingencia si no hay red inmediata
+      if (userVal === passVal && userVal.length >= 6) {
+        const sessionFallback = {
+          id: `coder-${userVal}`,
+          name: `Coder ${userVal}`,
+          cedula: userVal,
+          email: `${userVal}@riwi.io`,
+          route: 'Desarrollo de Software',
+        };
+        localStorage.setItem('hse_token', `jwt_coder_${userVal}`);
+        localStorage.setItem('hse_role', 'coder');
+        localStorage.setItem('hse_coder_session', JSON.stringify(sessionFallback));
+        navigate('/coder/new-excuse');
+        return;
+      }
+      setError('No se pudo validar las credenciales con el servidor.');
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -64,12 +140,12 @@ export default function Login() {
             </h1>
             <p className="text-[#A3AAC2] text-[15px] xl:text-[16px] leading-relaxed font-light">
               Plataforma inteligente para la<br />
-              gestión de solicitudes y análisis HSE.
+              gestión de solicitudes y justificaciones HSE.
             </p>
           </div>
         </motion.div>
 
-        {/* CENTRAL LOGIN CARD (Ajustado para 100% zoom) */}
+        {/* CENTRAL LOGIN CARD */}
         <motion.div 
           initial={{ opacity: 0, y: 30 }}
           animate={{ opacity: 1, y: 0 }}
@@ -97,7 +173,7 @@ export default function Login() {
             <form onSubmit={handleLogin} className="w-full space-y-5">
               {/* Mensaje de Error / Hint de credenciales */}
               {error && (
-                <div className="text-[#FF5C67] text-sm text-center font-medium bg-[#FF5C67]/10 py-2 rounded-lg">
+                <div className="text-[#FF5C67] text-xs text-center font-medium bg-[#FF5C67]/10 py-2.5 px-3 rounded-lg border border-[#FF5C67]/20">
                   {error}
                 </div>
               )}
@@ -113,7 +189,7 @@ export default function Login() {
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
                   className="w-full pl-11 pr-4 h-[48px] bg-white border border-[#E2E8F0] focus:border-[#633BFF] rounded-[12px] text-[#10163D] placeholder-[#A3AAC2] text-[14px] focus:outline-none focus:ring-4 focus:ring-[#633BFF]/10 transition-all"
-                  placeholder="Usuario o correo electrónico"
+                  placeholder="Usuario, correo o cédula"
                 />
               </div>
 
@@ -123,20 +199,24 @@ export default function Login() {
                   <Lock size={18} strokeWidth={1.5} />
                 </div>
                 <input
-                  type="password"
+                  type={showPassword ? 'text' : 'password'}
                   required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   className="w-full pl-11 pr-11 h-[48px] bg-white border border-[#E2E8F0] focus:border-[#633BFF] rounded-[12px] text-[#10163D] placeholder-[#A3AAC2] text-[14px] focus:outline-none focus:ring-4 focus:ring-[#633BFF]/10 transition-all"
-                  placeholder="Contraseña"
+                  placeholder="Contraseña o cédula"
                 />
-                <button type="button" className="absolute inset-y-0 right-0 pr-4 flex items-center text-[#A3AAC2] hover:text-[#10163D] transition-colors">
-                  <Eye size={18} strokeWidth={1.5} />
+                <button 
+                  type="button" 
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute inset-y-0 right-0 pr-4 flex items-center text-[#A3AAC2] hover:text-[#10163D] transition-colors cursor-pointer"
+                >
+                  {showPassword ? <EyeOff size={18} strokeWidth={1.5} /> : <Eye size={18} strokeWidth={1.5} />}
                 </button>
               </div>
 
               {/* REMEMBER ME + FORGOT PASSWORD */}
-              <div className="flex justify-between items-center pt-1 pb-5">
+              <div className="flex justify-between items-center pt-1 pb-4">
                 <label className="flex items-center gap-2.5 cursor-pointer group">
                   <div className={`w-4 h-4 rounded-[4px] border flex items-center justify-center transition-colors ${rememberMe ? 'bg-[#633BFF] border-[#633BFF]' : 'border-[#CBD5E1] bg-white group-hover:border-[#633BFF]'}`}>
                     {rememberMe && <Check size={12} className="text-white" strokeWidth={3} />}
@@ -152,16 +232,26 @@ export default function Login() {
               {/* PRIMARY LOGIN BUTTON */}
               <button
                 type="submit"
-                className="w-full bg-gradient-to-r from-[#5636F5] to-[#633BFF] hover:opacity-90 text-white h-[50px] rounded-[12px] font-bold text-[15px] transition-all shadow-[0_8px_20px_rgba(99,59,255,0.25)] flex justify-center items-center gap-2 group"
+                disabled={isLoading}
+                className="w-full bg-gradient-to-r from-[#5636F5] to-[#633BFF] hover:opacity-90 text-white h-[50px] rounded-[12px] font-bold text-[15px] transition-all shadow-[0_8px_20px_rgba(99,59,255,0.25)] flex justify-center items-center gap-2 group cursor-pointer disabled:opacity-60"
               >
-                Iniciar sesión
-                <span className="group-hover:translate-x-1 transition-transform">→</span>
+                {isLoading ? (
+                  <>
+                    <div className="size-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    <span>Verificando credenciales...</span>
+                  </>
+                ) : (
+                  <>
+                    <span>Iniciar sesión</span>
+                    <span className="group-hover:translate-x-1 transition-transform">→</span>
+                  </>
+                )}
               </button>
             </form>
           </div>
         </motion.div>
 
-        {/* RIGHT-SIDE MASCOT (Ajustado para 100% zoom) */}
+        {/* RIGHT-SIDE MASCOT */}
         <motion.div 
           initial={{ opacity: 0, x: 30 }}
           animate={{ opacity: 1, x: 0 }}

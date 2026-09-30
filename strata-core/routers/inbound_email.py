@@ -1,8 +1,9 @@
-from __future__ import annotations
-
+import os
+import hmac
+import hashlib
 import logging
-from typing import Dict, Any, Union
-from fastapi import APIRouter, BackgroundTasks, Response, status, HTTPException
+from typing import Dict, Any, Union, Optional
+from fastapi import APIRouter, BackgroundTasks, Response, Header, Request, status, HTTPException
 from fastapi.responses import JSONResponse
 
 from schemas.inbound_dto import (
@@ -20,26 +21,72 @@ router = APIRouter(
 )
 
 
+async def verify_inbound_auth(
+    authorization: Optional[str] = None,
+    x_api_key: Optional[str] = None,
+    x_signature_sha256: Optional[str] = None,
+    raw_body: bytes = b""
+) -> None:
+    """Valida la autenticación por clave de API interna (Bearer / X-API-Key) y HMAC."""
+    expected_key = os.getenv("INBOUND_API_KEY") or os.getenv("INTERNAL_API_KEY")
+    expected_hmac = os.getenv("INBOUND_HMAC_SECRET")
+
+    if expected_key:
+        token = None
+        if authorization and authorization.lower().startswith("bearer "):
+            token = authorization[7:].strip()
+        elif x_api_key:
+            token = x_api_key.strip()
+
+        if not token or not hmac.compare_digest(token, expected_key):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Unauthorized: Clave de API interna inválida o ausente en cabeceras Bearer / X-API-Key"
+            )
+
+    if expected_hmac:
+        computed_sig = hmac.new(expected_hmac.encode("utf-8"), raw_body, hashlib.sha256).hexdigest()
+        if not x_signature_sha256 or not hmac.compare_digest(x_signature_sha256, computed_sig):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Unauthorized: Firma HMAC-SHA256 inválida o ausente en X-Signature-SHA256"
+            )
+
+
 @router.post(
     "/inbound-email",
     response_model=Union[InboundEmailResponse, IdempotencyResponse],
     summary="Recepción y normalización de eventos de correo (Outlook y Gmail)",
     description=(
-        "Recibe eventos de correo desde adaptadores de Outlook y Gmail, valida su esquema, "
+        "Recibe eventos de correo desde adaptadores de Outlook y Gmail, valida autenticación interna, "
         "almacena temporalmente los adjuntos en disco seguro, garantiza idempotencia "
         "y encola el evento para identificación y validación con estado PENDING_IDENTIFICATION."
     )
 )
 async def receive_inbound_email(
     dto: InboundEmailDTO,
+    request: Request,
     background_tasks: BackgroundTasks,
-    response: Response
+    response: Response,
+    authorization: Optional[str] = Header(None),
+    x_api_key: Optional[str] = Header(None),
+    x_signature_sha256: Optional[str] = Header(None)
 ) -> Union[InboundEmailResponse, IdempotencyResponse]:
     """
     Controlador central de ingesta desacoplada de correos.
+    - Valida clave interna Bearer / HMAC si está configurada en el entorno.
     - Retorna HTTP 200 OK con 'Event already processed' si el message_id ya fue recibido.
     - Retorna HTTP 202 Accepted si el correo es nuevo y se encoló con éxito.
     """
+    # 0. Verificación de Autenticación Interna (Bearer / HMAC)
+    raw_body = await request.body()
+    await verify_inbound_auth(
+        authorization=authorization,
+        x_api_key=x_api_key,
+        x_signature_sha256=x_signature_sha256,
+        raw_body=raw_body
+    )
+
     # 1. Detección y rechazo de payload duplicado (Garantía de Idempotencia)
     if inbound_service.is_message_already_processed(dto.message_id):
         logger.info(f"Idempotencia detectada: Correo duplicado con message_id '{dto.message_id}'.")

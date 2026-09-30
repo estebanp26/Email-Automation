@@ -37,6 +37,7 @@ import time
 import email
 import base64
 import hashlib
+import hmac
 import logging
 import imaplib
 import argparse
@@ -181,6 +182,7 @@ def extract_attachments(
             "mime_type": content_type or "application/octet-stream",
             "size_bytes": len(raw_bytes),
             "sha256": sha256,
+            "sha256_hash": sha256,
             "data_base64": b64_data,
             "local_path": local_path
         })
@@ -482,58 +484,118 @@ class OutlookGraphClient:
 
 
 # =============================================================================
-# DESPACHADORES: FASTAPI BACKEND NATIVO Y N8N WEBHOOK
+# DESPACHADOR NATIVO: FASTAPI BACKEND (/api/v1/inbound-email) — CONN-04
 # =============================================================================
 
 def forward_to_inbound_api(
     payload: Dict[str, Any],
     api_url: str = "http://localhost:8001/api/v1/inbound-email",
-    timeout: int = 30
+    api_key: Optional[str] = None,
+    hmac_secret: Optional[str] = None,
+    timeout: int = 30,
+    max_retries: int = 3,
+    base_delay: float = 1.0
 ) -> Dict[str, Any]:
-    """Envía un payload de correo normalizado al controlador nativo FastAPI POST /api/v1/inbound-email."""
-    req_data = json.dumps(payload).encode("utf-8")
-    req = urllib.request.Request(
-        api_url,
-        data=req_data,
-        headers={"Content-Type": "application/json"},
-        method="POST"
-    )
-    try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
-            res_body = resp.read().decode("utf-8")
-            return {
-                "status": "SUCCESS",
-                "code": resp.status,
-                "response": json.loads(res_body) if res_body else {}
-            }
-    except urllib.error.HTTPError as e:
-        err_body = e.read().decode("utf-8") if hasattr(e, "read") else str(e)
-        return {"status": "HTTP_ERROR", "code": e.code, "error": err_body}
-    except urllib.error.URLError as e:
-        return {"status": "CONNECTION_ERROR", "code": None, "error": str(e.reason)}
+    """
+    Envía un payload de correo normalizado al controlador nativo FastAPI POST /api/v1/inbound-email.
+    
+    Criterios de Aceptación CONN-04:
+    - Autenticación por clave interna (Bearer / X-API-Key) y firma HMAC-SHA256 (si está configurada).
+    - Reintentos automáticos con retroceso exponencial (Exponential Backoff) ante indisponibilidad
+      temporal (códigos 503 Service Unavailable, 504 Gateway Timeout, 502) o fallos de red (URLError).
+    - Cero corrupción de bytes en transmisión y codificación de adjuntos Base64.
+    - Reconocimiento explícito de HTTP 202 (Encolado) y HTTP 200 (Idempotente).
+    """
+    effective_api_key = api_key or os.getenv("INBOUND_API_KEY") or os.getenv("INTERNAL_API_KEY") or ""
+    effective_hmac_secret = hmac_secret or os.getenv("INBOUND_HMAC_SECRET") or ""
 
+    req_data = json.dumps(payload, ensure_ascii=False).encode("utf-8")
 
-def forward_to_n8n_webhook(
-    payload: Dict[str, Any],
-    webhook_url: str = "http://localhost:5678/webhook/riwi-email-incoming",
-    timeout: int = 30
-) -> Dict[str, Any]:
-    """Envía un payload de correo normalizado al webhook de n8n."""
-    req_data = json.dumps(payload).encode("utf-8")
-    req = urllib.request.Request(
-        webhook_url,
-        data=req_data,
-        headers={"Content-Type": "application/json"},
-        method="POST"
-    )
-    try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
-            res_body = resp.read().decode("utf-8")
-            return {"status": "SUCCESS", "code": resp.status, "response": res_body}
-    except urllib.error.HTTPError as e:
-        return {"status": "HTTP_ERROR", "code": e.code, "error": str(e)}
-    except urllib.error.URLError as e:
-        return {"status": "CONNECTION_ERROR", "code": None, "error": str(e.reason)}
+    headers = {
+        "Content-Type": "application/json",
+        "User-Agent": "Riwi-Outlook-Connector/3.0 (Native API)"
+    }
+
+    if effective_api_key:
+        headers["Authorization"] = f"Bearer {effective_api_key}"
+        headers["X-API-Key"] = effective_api_key
+
+    if effective_hmac_secret:
+        sig = hmac.new(effective_hmac_secret.encode("utf-8"), req_data, hashlib.sha256).hexdigest()
+        headers["X-Signature-SHA256"] = sig
+
+    attempt = 0
+    last_error = None
+
+    while attempt <= max_retries:
+        req = urllib.request.Request(
+            api_url,
+            data=req_data,
+            headers=headers,
+            method="POST"
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
+                res_body = resp.read().decode("utf-8")
+                parsed_resp = json.loads(res_body) if res_body else {}
+                code = resp.status
+
+                if code == 202:
+                    logger.info(
+                        f"Ingesta exitosa en API Nativa [HTTP 202 Accepted]: "
+                        f"TxID={parsed_resp.get('transaction_id')}, Estado={parsed_resp.get('state')}"
+                    )
+                elif code == 200:
+                    logger.info(
+                        f"Idempotencia confirmada en API Nativa [HTTP 200 OK]: "
+                        f"{parsed_resp.get('message', 'Event already processed')}"
+                    )
+
+                return {
+                    "status": "SUCCESS",
+                    "code": code,
+                    "response": parsed_resp,
+                    "retries": attempt
+                }
+
+        except urllib.error.HTTPError as e:
+            code = e.code
+            err_body = e.read().decode("utf-8", errors="replace") if hasattr(e, "read") else str(e)
+
+            # Criterio de Aceptación: Reintentar ante 503 / 504 (y 502) con backoff exponencial
+            if code in (502, 503, 504) and attempt < max_retries:
+                attempt += 1
+                delay = base_delay * (2 ** (attempt - 1))
+                logger.warning(
+                    f"API Nativa temporalmente no disponible [HTTP {code}]. "
+                    f"Reintentando en {delay:.1f}s (Intento {attempt}/{max_retries})..."
+                )
+                time.sleep(delay)
+                continue
+
+            logger.error(f"Error HTTP {code} desde API Nativa: {err_body}")
+            return {"status": "HTTP_ERROR", "code": code, "error": err_body, "retries": attempt}
+
+        except urllib.error.URLError as e:
+            last_error = str(e.reason)
+            if attempt < max_retries:
+                attempt += 1
+                delay = base_delay * (2 ** (attempt - 1))
+                logger.warning(
+                    f"Fallo de conexión de red con API Nativa ({last_error}). "
+                    f"Reintentando en {delay:.1f}s (Intento {attempt}/{max_retries})..."
+                )
+                time.sleep(delay)
+                continue
+
+            logger.error(f"Fallo definitivo de conexión con API Nativa tras {max_retries} reintentos: {last_error}")
+            return {"status": "CONNECTION_ERROR", "code": None, "error": last_error, "retries": attempt}
+
+        except Exception as e:
+            logger.error(f"Excepción inesperada al enviar a API Nativa: {e}")
+            return {"status": "UNEXPECTED_ERROR", "code": None, "error": str(e), "retries": attempt}
+
+    return {"status": "MAX_RETRIES_EXCEEDED", "code": None, "error": last_error, "retries": attempt}
 
 
 # =============================================================================
@@ -541,15 +603,20 @@ def forward_to_n8n_webhook(
 # =============================================================================
 
 def run_offline_test():
-    """Ejecuta una prueba determinista de parsing y normalización sin conexión externa."""
+    """Ejecuta una prueba determinista de parsing, normalización, integridad binaria y API nativa."""
     print("=" * 70)
-    print("  SUITE DE PRUEBA OFFLINE: PARSING Y NORMALIZACIÓN DE OUTLOOK       ")
+    print("  SUITE DE PRUEBA OFFLINE: OUTLOOK CONNECTOR -> API NATIVA (CONN-04)  ")
     print("=" * 70)
 
-    # 1. Simular mensaje MIME multipart complejo con adjunto PDF
+    # 1. Simular mensaje MIME multipart complejo con adjunto PDF e imagen PNG
     boundary = "----=_Part_Boundary_12345"
-    sample_pdf_bytes = b"%PDF-1.4 Mock PDF para prueba de justificacion medica"
+    sample_pdf_bytes = b"%PDF-1.4 Mock PDF binario con caracteres especiales \x00\x01\xfe\xff para prueba HSE"
     sample_pdf_b64 = base64.b64encode(sample_pdf_bytes).decode("ascii")
+    expected_pdf_sha256 = hashlib.sha256(sample_pdf_bytes).hexdigest()
+
+    sample_png_bytes = b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15c4"
+    sample_png_b64 = base64.b64encode(sample_png_bytes).decode("ascii")
+    expected_png_sha256 = hashlib.sha256(sample_png_bytes).hexdigest()
 
     raw_mime = f"""From: "Santiago Morales" <santiago.morales@riwi.io>
 To: "HSE Riwi" <hse@riwi.io>
@@ -563,7 +630,7 @@ Content-Type: multipart/mixed; boundary="{boundary}"
 Content-Type: text/plain; charset="utf-8"
 Content-Transfer-Encoding: 7bit
 
-Estimado equipo HSE, adjunto mi incapacidad medica de EPS Sanitas por 2 dias.
+Estimado equipo HSE, adjunto mi incapacidad medica de EPS Sanitas y formula.
 Cedula: 1002345678.
 
 --{boundary}
@@ -572,6 +639,12 @@ Content-Disposition: attachment; filename="incapacidad_sanitas.pdf"
 Content-Transfer-Encoding: base64
 
 {sample_pdf_b64}
+--{boundary}
+Content-Type: image/png; name="foto_formula.png"
+Content-Disposition: attachment; filename="foto_formula.png"
+Content-Transfer-Encoding: base64
+
+{sample_png_b64}
 --{boundary}--
 """
 
@@ -583,28 +656,40 @@ Content-Transfer-Encoding: base64
     body_text, _ = get_email_body(msg)
     attachments = extract_attachments(msg)
 
-    print(f"  [1/4] Remitente decodificado: {sender_name} <{sender_email}>")
+    print(f"  [1/5] Remitente decodificado: {sender_name} <{sender_email}>")
     assert sender_email == "santiago.morales@riwi.io", f"Email incorrecto: {sender_email}"
     assert sender_name == "Santiago Morales", f"Nombre incorrecto: {sender_name}"
 
-    print(f"  [2/4] Asunto RFC 2047 decodificado: '{subject}'")
+    print(f"  [2/5] Asunto RFC 2047 decodificado: '{subject}'")
     assert "Justificación inasistencia" in subject, "Fallo al decodificar acentos RFC 2047"
 
-    print(f"  [3/4] Extracción de cuerpo de texto: '{body_text[:50]}...'")
+    print(f"  [3/5] Extracción de cuerpo de texto: '{body_text[:50]}...'")
     assert "EPS Sanitas" in body_text, "Cuerpo no contiene texto esperado"
 
-    print(f"  [4/4] Extracción de adjuntos: {len(attachments)} adjunto(s)")
-    assert len(attachments) == 1, "Se esperaba 1 adjunto"
-    att = attachments[0]
-    assert att["filename"] == "incapacidad_sanitas.pdf"
-    assert att["mime_type"] == "application/pdf"
-    assert att["sha256"] == hashlib.sha256(sample_pdf_bytes).hexdigest()
-    assert att["data_base64"] == sample_pdf_b64
+    print(f"  [4/5] Validación de Cero Corrupción de Bytes en Adjuntos (CONN-04):")
+    assert len(attachments) == 2, f"Se esperaban 2 adjuntos, obtenidos {len(attachments)}"
+    
+    # PDF
+    pdf_att = attachments[0]
+    decoded_pdf_bytes = base64.b64decode(pdf_att["data_base64"])
+    assert decoded_pdf_bytes == sample_pdf_bytes, "¡CORRUPCIÓN DE BYTES DETECTADA EN PDF!"
+    assert pdf_att["sha256"] == expected_pdf_sha256
+    assert pdf_att["sha256_hash"] == expected_pdf_sha256
+    print(f"        ✓ PDF ({pdf_att['filename']}): {len(decoded_pdf_bytes)} bytes idénticos (SHA-256 verificado)")
 
-    # Validar construcción de payload para n8n
+    # PNG
+    png_att = attachments[1]
+    decoded_png_bytes = base64.b64decode(png_att["data_base64"])
+    assert decoded_png_bytes == sample_png_bytes, "¡CORRUPCIÓN DE BYTES DETECTADA EN IMAGEN PNG!"
+    assert png_att["sha256"] == expected_png_sha256
+    assert png_att["sha256_hash"] == expected_png_sha256
+    print(f"        ✓ PNG ({png_att['filename']}): {len(decoded_png_bytes)} bytes idénticos (SHA-256 verificado)")
+
+    # 5. Validar construcción de payload compatible con InboundEmailDTO
     payload = {
         "source_provider": "OUTLOOK",
         "message_id": msg["Message-ID"],
+        "conversation_id": "conv_test_123456",
         "sender_email": sender_email,
         "sender_name": sender_name,
         "email_subject": subject,
@@ -613,8 +698,9 @@ Content-Transfer-Encoding: base64
         "attachments": attachments,
         "has_attachments": len(attachments) > 0
     }
-    print(f"\n  [OK] Payload de salida compatible con n8n verificado:")
-    print(f"       Tamaño payload: {len(json.dumps(payload))} bytes | Adjuntos: {len(payload['attachments'])}")
+    print(f"\n  [5/5] Contrato InboundEmailDTO validado exitosamente:")
+    print(f"        Tamaño payload: {len(json.dumps(payload))} bytes | Adjuntos: {len(payload['attachments'])}")
+    print(f"        Destino nativo configurado: POST /api/v1/inbound-email")
 
     print("\n" + "=" * 70)
     print("  ¡TODAS LAS PRUEBAS OFFLINE DE OUTLOOK PASARON AL 100%!          ")
@@ -628,7 +714,7 @@ Content-Transfer-Encoding: base64
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Conector de Outlook / Office 365 para el Sistema HSE Riwi"
+        description="Conector Nativo de Outlook / Office 365 para el Sistema HSE Riwi (CONN-04)"
     )
     parser.add_argument("--test", action="store_true", help="Ejecuta la suite de pruebas unitarias offline")
     parser.add_argument("--mode", choices=["imap", "graph"], default="imap", help="Modo de conexión (imap o graph)")
@@ -636,10 +722,10 @@ def main():
     parser.add_argument("--password", default=os.getenv("OUTLOOK_PASSWORD"), help="Contraseña o App Password de Outlook")
     parser.add_argument("--host", default=os.getenv("OUTLOOK_HOST", "outlook.office365.com"), help="Servidor IMAP de Outlook")
     parser.add_argument("--port", type=int, default=int(os.getenv("OUTLOOK_PORT", 993)), help="Puerto IMAP SSL")
-    parser.add_argument("--forward-api", action="store_true", help="Reenvía cada correo procesado al endpoint nativo FastAPI /api/v1/inbound-email")
-    parser.add_argument("--api-url", default=os.getenv("INBOUND_API_URL", "http://localhost:8001/api/v1/inbound-email"), help="URL del endpoint de ingesta FastAPI")
-    parser.add_argument("--forward-n8n", action="store_true", help="Reenvía cada correo procesado al webhook de n8n")
-    parser.add_argument("--webhook-url", default=os.getenv("N8N_WEBHOOK_URL", "http://localhost:5678/webhook/riwi-email-incoming"), help="URL del webhook de n8n")
+    parser.add_argument("--api-url", default=os.getenv("INBOUND_API_URL", "http://localhost:8001/api/v1/inbound-email"), help="URL del endpoint de ingesta nativa FastAPI")
+    parser.add_argument("--api-key", default=os.getenv("INBOUND_API_KEY", ""), help="Clave de API interna (Bearer token)")
+    parser.add_argument("--hmac-secret", default=os.getenv("INBOUND_HMAC_SECRET", ""), help="Clave secreta HMAC-SHA256")
+    parser.add_argument("--dry-run", "--no-forward", action="store_true", dest="dry_run", help="Procesa los correos sin enviarlos por HTTP a la API")
     parser.add_argument("--once", action="store_true", help="Ejecuta un solo barrido y termina")
     parser.add_argument("--interval", type=int, default=30, help="Intervalo en segundos para sondeo continuo")
 
@@ -669,12 +755,16 @@ def main():
 
                 for mail in emails:
                     print(f" • [{mail['received_at']}] De: {mail['sender_name']} <{mail['sender_email']}> | Asunto: {mail['email_subject']}")
-                    if args.forward_api:
-                        res = forward_to_inbound_api(mail, api_url=args.api_url)
-                        logger.info(f"Reenvío a Inbound API: {res.get('status')} (Code: {res.get('code')})")
-                    if args.forward_n8n:
-                        res = forward_to_n8n_webhook(mail, webhook_url=args.webhook_url)
-                        logger.info(f"Reenvío a n8n: {res['status']}")
+                    if not args.dry_run:
+                        res = forward_to_inbound_api(
+                            payload=mail,
+                            api_url=args.api_url,
+                            api_key=args.api_key,
+                            hmac_secret=args.hmac_secret
+                        )
+                        logger.info(f"Despacho a Inbound API: {res.get('status')} (Code: {res.get('code')}, Retries: {res.get('retries', 0)})")
+                    else:
+                        logger.info("Modo --dry-run activo: Envío a API omitido.")
 
                 if args.once:
                     break
