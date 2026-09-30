@@ -314,9 +314,15 @@ Saludos,
 
     return cases
 
-def send_cases(cases, target_url="http://localhost:5678/webhook/riwi-email-incoming"):
+def send_cases(cases, target_url=None):
+    if not target_url:
+        target_url = os.getenv("INBOUND_API_URL", "http://localhost:8001/api/v1/inbound-email")
+
+    api_key = os.getenv("INBOUND_API_KEY") or os.getenv("INTERNAL_API_KEY")
+
     print("=" * 70)
-    print("  DESPACHANDO 10 JUSTIFICACIONES BALANCEADAS AL SISTEMA HSE RIWI   ")
+    print("  DESPACHANDO 10 JUSTIFICACIONES A LA API NATIVA (CONN-04)        ")
+    print(f"  Destino: {target_url}")
     print("=" * 70)
     
     results = []
@@ -334,11 +340,19 @@ def send_cases(cases, target_url="http://localhost:5678/webhook/riwi-email-incom
             "has_attachments": len(item["attachments"]) > 0
         }
 
+        headers = {
+            "Content-Type": "application/json",
+            "User-Agent": "Riwi-Batch-Sender/3.0 (Native API)"
+        }
+        if api_key:
+            headers["Authorization"] = f"Bearer {api_key}"
+            headers["X-API-Key"] = api_key
+
         req_bytes = json.dumps(payload).encode("utf-8")
         req = urllib.request.Request(
             target_url,
             data=req_bytes,
-            headers={"Content-Type": "application/json"},
+            headers=headers,
             method="POST"
         )
 
@@ -346,18 +360,19 @@ def send_cases(cases, target_url="http://localhost:5678/webhook/riwi-email-incom
         try:
             with urllib.request.urlopen(req, timeout=30) as resp:
                 elapsed = time.time() - t_start
-                print(f"  [✓] #{idx:02d} [{item['target_category']}] -> {item['sender_name']} | {elapsed:.2f}s | HTTP {resp.status}")
-                results.append({"idx": idx, "success": True, "category": item["target_category"]})
+                status_label = "202 ENCOLADO" if resp.status == 202 else f"{resp.status} OK"
+                print(f"  [✓] #{idx:02d} [{item['target_category']}] -> {item['sender_name']} | {elapsed:.2f}s | HTTP {status_label}")
+                results.append({"idx": idx, "success": True, "category": item["target_category"], "code": resp.status})
         except Exception as e:
             elapsed = time.time() - t_start
             print(f"  [✗] #{idx:02d} [{item['target_category']}] -> {item['sender_name']} | Error: {e}")
             results.append({"idx": idx, "success": False, "category": item["target_category"], "error": str(e)})
 
         # Intervalo controlado para permitir procesamiento ordenado
-        time.sleep(1.0)
+        time.sleep(0.5)
 
     print("\n" + "-" * 70)
-    print(f"  Envío finalizado: {sum(1 for r in results if r['success'])}/{len(results)} correos procesados por n8n.")
+    print(f"  Envío finalizado: {sum(1 for r in results if r['success'])}/{len(results)} correos procesados exitosamente por la API Nativa.")
     print("-" * 70)
 
 if __name__ == "__main__":

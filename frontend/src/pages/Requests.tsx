@@ -3,11 +3,11 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Mail, Send, FileEdit, Trash, Reply, Inbox, Paperclip, User, 
   CheckCircle2, XCircle, AlertCircle, Zap,
-  Calendar, ShieldCheck, MessageSquare, AlertTriangle, RotateCw, Search
+  Calendar, ShieldCheck, MessageSquare, AlertTriangle, RotateCw,
+  ArrowLeft
 } from 'lucide-react';
+import clsx from 'clsx';
 import { api } from '../services/api';
-import { getN8nConfig } from '../services/n8n';
-import { matchesNormalized } from '../utils/textUtils';
 
 export default function Requests() {
   const [activeFolder, setActiveFolder] = useState<'inbox' | 'sent' | 'drafts'>('inbox');
@@ -15,7 +15,7 @@ export default function Requests() {
   const [sentEmails, setSentEmails] = useState<any[]>([]);
   const [selectedEmail, setSelectedEmail] = useState<any | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
+  const [showMobileDetail, setShowMobileDetail] = useState(false);
   
   // Composing state
   const [isComposing, setIsComposing] = useState(false);
@@ -24,7 +24,7 @@ export default function Requests() {
   const [showToast, setShowToast] = useState(false);
   const [toastMessage, setToastMessage] = useState('Mensaje enviado');
 
-  // n8n Manual Resolution State
+  // Manual Resolution State
   const [hseNotes, setHseNotes] = useState('');
   const [excuseType, setExcuseType] = useState('inasistencia_medica');
   const [startDate, setStartDate] = useState('');
@@ -85,9 +85,11 @@ export default function Requests() {
     setActiveFolder(folder);
     setIsComposing(false);
     setResolutionStatus(null);
+    setShowMobileDetail(false);
     const targetList = folder === 'inbox' ? inboxList : folder === 'sent' ? sentList : [];
     if (targetList.length > 0) {
       handleSelectEmail(targetList[0]);
+      setShowMobileDetail(false); // Mantener en lista en móvil al cambiar carpeta
     } else {
       setSelectedEmail(null);
     }
@@ -167,7 +169,11 @@ export default function Requests() {
           modifiedAt: new Date().toISOString(),
         }
       } : r));
-      api.resolveRequestWithN8n(replyingId, 'REQUEST_CORRECTION', composeData.body).catch(() => {});
+      api.resolveJustification(replyingId, {
+        action: 'REQUEST_MORE_INFO',
+        notes: composeData.body,
+        reviewer_name: 'Paola Admin (HSE)'
+      }).catch(() => {});
     }
 
     setSentEmails(prev => [newSentEmail, ...prev]);
@@ -181,7 +187,7 @@ export default function Requests() {
     setTimeout(() => setShowToast(false), 3000);
   };
 
-  // Despacho de resolución manual a n8n
+  // Despacho de resolución manual al backend nativo
   const handleResolveAction = async (action: 'APPROVED' | 'DISAPPROVED' | 'REQUEST_CORRECTION') => {
     if (!selectedEmail) return;
 
@@ -195,21 +201,21 @@ export default function Requests() {
     );
 
     try {
-      const result = await api.resolveRequestWithN8n(
+      const result = await api.resolveJustification(
         selectedEmail.id,
-        action,
-        notesToSend,
         {
-          startDate,
-          excuseType,
-          reviewerName: 'Paola Admin (HSE)'
+          action,
+          notes: notesToSend,
+          reviewer_name: 'Paola Admin (HSE)',
+          override_start_date: startDate || undefined,
+          override_excuse_type: excuseType,
+          dispatch_notification: true
         }
       );
 
       const updatedReq = {
-        ...result.request,
-        hasHumanIntervention: true,
-        hseDecision: action,
+        ...selectedEmail,
+        ...result.updatedRequest,
         isResponded: true,
       };
 
@@ -224,26 +230,78 @@ export default function Requests() {
         setSelectedEmail(null);
       }
 
-      setToastMessage(`Caso ${action === 'APPROVED' ? 'Aprobado' : action === 'DISAPPROVED' ? 'Rechazado' : 'Notificado'} y movido a Enviados`);
+      const actionLabel = action === 'APPROVED' ? 'Aprobado' : action === 'DISAPPROVED' ? 'Rechazado' : 'Notificado';
+      setToastMessage(`Caso ${actionLabel} exitosamente y registrado en backend`);
       setShowToast(true);
       setTimeout(() => setShowToast(false), 3500);
+
+      setResolutionStatus({
+        type: 'success',
+        message: `Caso ${actionLabel.toLowerCase()} formalmente por el equipo HSE`,
+        details: 'Decisión persistida en base de datos y correo formal notificado al coder.'
+      });
     } catch (err: any) {
       setResolutionStatus({
         type: 'error',
-        message: 'Error al procesar la resolución',
-        details: err.message
+        message: 'Error al procesar la resolución en el servidor',
+        details: err?.message || 'Fallo de conexión'
       });
+      setToastMessage('Error al procesar la resolución');
+      setShowToast(true);
+      setTimeout(() => setShowToast(false), 3500);
     } finally {
       setIsResolving(false);
     }
   };
-  const n8nConfig = getN8nConfig();
 
   return (
-    <div className="h-[calc(100vh-6rem)] flex gap-4 overflow-hidden">
+    <div className="h-[calc(100vh-5.5rem)] lg:h-[calc(100vh-6rem)] flex flex-col lg:flex-row gap-3 sm:gap-4 overflow-hidden">
       
-      {/* 1. SIDEBAR DE CARPETAS (Paneles Izquierdos) */}
-      <div className="w-[240px] flex-shrink-0 flex flex-col gap-4">
+      {/* Selector móvil de carpetas (solo visible en < 1024px) */}
+      <div className="lg:hidden flex items-center justify-between gap-2 overflow-x-auto pb-1 shrink-0">
+        <div className="flex items-center gap-1.5 overflow-x-auto py-1">
+          <button
+            type="button"
+            onClick={() => handleFolderChange('inbox')}
+            className={clsx(
+              "px-3 py-1.5 rounded-full text-xs font-bold transition-all shrink-0 flex items-center gap-1.5 cursor-pointer",
+              activeFolder === 'inbox' ? "bg-[#5B3FF5] text-white shadow-md shadow-[#5B3FF5]/30" : "bg-white text-[#7C8499] border border-[#E2E8F0]"
+            )}
+          >
+            <Inbox size={14} /> Bandeja ({inboxList.length})
+          </button>
+          <button
+            type="button"
+            onClick={() => handleFolderChange('sent')}
+            className={clsx(
+              "px-3 py-1.5 rounded-full text-xs font-bold transition-all shrink-0 flex items-center gap-1.5 cursor-pointer",
+              activeFolder === 'sent' ? "bg-[#5B3FF5] text-white shadow-md shadow-[#5B3FF5]/30" : "bg-white text-[#7C8499] border border-[#E2E8F0]"
+            )}
+          >
+            <Send size={14} /> Enviados ({sentList.length})
+          </button>
+          <button
+            type="button"
+            onClick={() => handleFolderChange('drafts')}
+            className={clsx(
+              "px-3 py-1.5 rounded-full text-xs font-bold transition-all shrink-0 flex items-center gap-1.5 cursor-pointer",
+              activeFolder === 'drafts' ? "bg-[#5B3FF5] text-white shadow-md shadow-[#5B3FF5]/30" : "bg-white text-[#7C8499] border border-[#E2E8F0]"
+            )}
+          >
+            <FileEdit size={14} /> Borradores
+          </button>
+        </div>
+        <button
+          type="button"
+          onClick={() => { handleComposeNew(); setShowMobileDetail(true); }}
+          className="bg-gradient-to-r from-[#5636F5] to-[#633BFF] text-white px-3 py-1.5 rounded-full text-xs font-bold flex items-center gap-1.5 shrink-0 shadow-sm cursor-pointer"
+        >
+          <FileEdit size={13} /> Redactar
+        </button>
+      </div>
+
+      {/* 1. SIDEBAR DE CARPETAS (Paneles Izquierdos en Desktop) */}
+      <div className="hidden lg:flex w-[240px] flex-shrink-0 flex-col gap-4">
         <button
           onClick={handleComposeNew}
           className="w-full bg-gradient-to-r from-[#5636F5] to-[#633BFF] hover:opacity-90 text-white rounded-[16px] py-4 px-4 flex items-center justify-center gap-2 font-bold shadow-[0_8px_20px_rgba(99,59,255,0.25)] transition-all cursor-pointer"
@@ -276,18 +334,18 @@ export default function Requests() {
             />
           </div>
 
-          {/* n8n Status Badge */}
+          {/* Backend Status Badge */}
           <div className="mt-auto pt-4 border-t border-[#E8EAF2]">
             <div className="p-3 bg-[#F8F9FE] border border-[#E8EAF2] rounded-[16px] text-xs">
               <div className="flex items-center gap-2 mb-1">
                 <span className="w-2 h-2 rounded-full bg-[#20B486] animate-pulse" />
-                <span className="font-bold text-[#111827]">n8n Conectado</span>
+                <span className="font-bold text-[#111827]">Backend REST Nativo</span>
               </div>
               <p className="text-[11px] text-[#7C8499] truncate font-mono">
-                {n8nConfig.baseUrl}
+                /api/v1/justifications
               </p>
               <div className="mt-1 flex items-center gap-1 text-[10px] font-semibold text-[#5B3FF5]">
-                <Zap size={11} /> {n8nConfig.useTestWebhook ? 'Modo Test' : 'Modo Producción'}
+                <Zap size={11} /> Conexión Directa HSE
               </div>
             </div>
           </div>
@@ -295,33 +353,16 @@ export default function Requests() {
       </div>
 
       {/* 2. LISTA DE CORREOS (Panel Central) */}
-      <div className="w-[380px] flex-shrink-0 bg-white border border-[#E2E8F0] rounded-[24px] shadow-sm flex flex-col overflow-hidden">
-        <div className="p-4 border-b border-[#E2E8F0] bg-gray-50/50 space-y-3">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-[18px] font-bold text-[#111827] capitalize">
-                {activeFolder === 'inbox' ? 'Bandeja de Entrada' : activeFolder === 'sent' ? 'Enviados' : 'Borradores'}
-              </h2>
-              <p className="text-xs text-[#7C8499]">{filteredActiveList.length} correos</p>
-            </div>
-            <button
-              onClick={() => fetchRequests(true)}
-              title="Sincronizar correos ahora"
-              className="p-2 text-[#7C8499] hover:text-[#5B3FF5] hover:bg-white rounded-full transition-colors cursor-pointer border border-transparent hover:border-[#E2E8F0]"
-            >
-              <RotateCw size={16} className={isRefreshing ? 'animate-spin text-[#5B3FF5]' : ''} />
-            </button>
-          </div>
-
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-[#7C8499]" size={14} />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Buscar por asunto, remitente o texto..."
-              className="pl-9 pr-3 py-1.5 w-full bg-white border border-[#E2E8F0] rounded-xl text-xs focus:outline-none focus:border-[#5B3FF5] transition-all text-[#111827] placeholder:text-[#A3AAC2]"
-            />
+      <div className={clsx(
+        "w-full lg:w-[380px] flex-shrink-0 bg-white border border-[#E2E8F0] rounded-[24px] shadow-sm flex flex-col overflow-hidden",
+        showMobileDetail ? "hidden lg:flex" : "flex flex-1 lg:flex-initial"
+      )}>
+        <div className="p-4 sm:p-5 border-b border-[#E2E8F0] bg-gray-50/50 flex items-center justify-between">
+          <div>
+            <h2 className="text-[16px] sm:text-[18px] font-bold text-[#111827] capitalize">
+              {activeFolder === 'inbox' ? 'Bandeja de Entrada' : activeFolder === 'sent' ? 'Enviados' : 'Borradores'}
+            </h2>
+            <p className="text-xs sm:text-sm text-[#7C8499]">{activeList.length} correos</p>
           </div>
         </div>
         
@@ -337,7 +378,10 @@ export default function Requests() {
             return (
               <div 
                 key={item.id} 
-                onClick={() => handleSelectEmail(item)}
+                onClick={() => {
+                  handleSelectEmail(item);
+                  setShowMobileDetail(true);
+                }}
                 className={`p-4 border-b border-[#E2E8F0] cursor-pointer transition-colors ${
                   isSelected ? 'bg-[#F2F0FF] border-l-4 border-l-[#5B3FF5]' : 'bg-white hover:bg-gray-50 border-l-4 border-l-transparent'
                 }`}
@@ -396,7 +440,10 @@ export default function Requests() {
       </div>
 
       {/* 3. VISOR / EDITOR (Panel Derecho) */}
-      <div className="flex-1 bg-white border border-[#E2E8F0] rounded-[24px] shadow-sm flex flex-col overflow-hidden relative">
+      <div className={clsx(
+        "flex-1 bg-white border border-[#E2E8F0] rounded-[24px] shadow-sm flex flex-col overflow-hidden relative",
+        !showMobileDetail ? "hidden lg:flex" : "flex"
+      )}>
         
         {/* Notificación Toast */}
         <AnimatePresence>
@@ -415,9 +462,26 @@ export default function Requests() {
         {isComposing ? (
           /* VISTA DE REDACCION */
           <div className="flex flex-col h-full">
-            <div className="p-5 border-b border-[#E2E8F0] flex justify-between items-center bg-gray-50/50">
-              <h2 className="text-[18px] font-bold text-[#111827]">Nuevo Mensaje</h2>
-              <button onClick={() => setIsComposing(false)} className="text-[#A3AAC2] hover:text-red-500 transition-colors">
+            <div className="p-4 sm:p-5 border-b border-[#E2E8F0] flex justify-between items-center bg-gray-50/50">
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowMobileDetail(false)}
+                  className="lg:hidden p-1.5 rounded-lg text-[#7C8499] hover:bg-white hover:text-[#111827] transition-colors cursor-pointer"
+                  aria-label="Volver a la lista"
+                >
+                  <ArrowLeft size={18} />
+                </button>
+                <h2 className="text-[16px] sm:text-[18px] font-bold text-[#111827]">Nuevo Mensaje</h2>
+              </div>
+              <button 
+                onClick={() => {
+                  setIsComposing(false);
+                  setShowMobileDetail(false);
+                }} 
+                className="text-[#A3AAC2] hover:text-red-500 transition-colors p-1"
+                aria-label="Cerrar redacción"
+              >
                 <Trash size={18} />
               </button>
             </div>
@@ -475,14 +539,25 @@ export default function Requests() {
           /* VISTA DE LECTURA Y RESOLUCIÓN */
           <div className="flex flex-col h-full overflow-hidden">
             {/* Cabecera del correo */}
-            <div className="p-6 border-b border-[#E2E8F0] flex justify-between items-start bg-gray-50/30 shrink-0">
-              <div>
-                <div className="flex items-center gap-3 mb-2">
-                  <h2 className="text-[20px] font-bold text-[#111827]">
+            <div className="p-4 sm:p-6 border-b border-[#E2E8F0] flex flex-col sm:flex-row justify-between items-start gap-3 bg-gray-50/30 shrink-0">
+              <div className="w-full sm:w-auto">
+                <div className="flex items-center gap-2 mb-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowMobileDetail(false)}
+                    className="lg:hidden p-1.5 -ml-1 rounded-lg text-[#7C8499] hover:bg-white hover:text-[#111827] transition-colors shrink-0 cursor-pointer"
+                    aria-label="Volver a la lista"
+                  >
+                    <ArrowLeft size={18} />
+                  </button>
+                  <h2 className="text-[17px] sm:text-[20px] font-bold text-[#111827] line-clamp-1 sm:line-clamp-none">
                     {selectedEmail.emailInfo?.subject || selectedEmail.subject}
                   </h2>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2 mb-3">
                   {(selectedEmail.category || selectedEmail.status) && (
-                    <span className={`text-[11px] font-bold px-3 py-1 rounded-full flex items-center gap-1.5 ${
+                    <span className={`text-[10px] sm:text-[11px] font-bold px-2.5 sm:px-3 py-1 rounded-full flex items-center gap-1.5 ${
                       (selectedEmail.category === 'POSIBLEMENTE_VALIDO' || selectedEmail.status === 'approved') ? 'bg-[#20B486]/15 text-[#20B486]' :
                       (selectedEmail.category === 'POSIBLEMENTE_INVALIDO' || selectedEmail.status === 'denied') ? 'bg-[#FF5C67]/15 text-[#FF5C67]' :
                       'bg-[#F5B83D]/15 text-[#F5B83D]'
@@ -500,20 +575,20 @@ export default function Requests() {
                 </div>
 
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-[#5B3FF5] to-blue-400 flex items-center justify-center text-white font-bold">
+                  <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-gradient-to-tr from-[#5B3FF5] to-blue-400 flex items-center justify-center text-white font-bold shrink-0">
                     {(selectedEmail.emailInfo?.senderName || selectedEmail.to || 'A')[0]}
                   </div>
-                  <div>
-                    <p className="font-bold text-[14px] text-[#111827]">
+                  <div className="min-w-0">
+                    <p className="font-bold text-[13px] sm:text-[14px] text-[#111827] truncate">
                       {selectedEmail.emailInfo?.senderName || (activeFolder === 'sent' ? 'Yo (Admin)' : selectedEmail.to)}
                     </p>
-                    <p className="text-[12px] text-[#7C8499]">
+                    <p className="text-[11px] sm:text-[12px] text-[#7C8499] truncate">
                       {activeFolder === 'sent' ? `Para: ${selectedEmail.to}` : `<${selectedEmail.emailInfo?.senderEmail}>`}
                     </p>
                   </div>
                 </div>
               </div>
-              <p className="text-sm text-[#A3AAC2]">
+              <p className="text-xs sm:text-sm text-[#A3AAC2] self-end sm:self-auto">
                 {new Date(selectedEmail.emailInfo?.date || selectedEmail.date).toLocaleString('es-ES')}
               </p>
             </div>
@@ -588,7 +663,7 @@ export default function Requests() {
               )}
 
               {/* ============================================================== */}
-              {/* PANEL DE RESOLUCIÓN MANUAL Y DESPACHO A N8N                    */}
+              {/* PANEL DE RESOLUCIÓN MANUAL Y DESPACHO A BACKEND NATIVO        */}
               {/* ============================================================== */}
               {/* ============================================================== */}
               {/* PANEL DE DETALLE: ENVIADOS (NOTIFICADO) vs BANDEJA (POR RESOLVER) */}
@@ -645,7 +720,7 @@ export default function Requests() {
                       </div>
                       <div>
                         <h3 className="text-[15px] font-bold text-[#111827]">
-                          Resolución Manual HSE & Despacho a n8n
+                          Resolución Oficial HSE (Backend API Nativo)
                         </h3>
                         <p className="text-xs text-[#7C8499]">
                           Al confirmar la decisión, el mensaje se responderá formalmente y se moverá a <strong>Enviados</strong>.
@@ -653,7 +728,7 @@ export default function Requests() {
                       </div>
                     </div>
                     <span className="text-[11px] font-mono text-[#7C8499] hidden sm:block">
-                      POST {n8nConfig.dispatchWebhookPath}
+                      POST /api/v1/justifications/resolve
                     </span>
                   </div>
 
@@ -709,7 +784,7 @@ export default function Requests() {
 
                   <div>
                     <label className="block text-xs font-bold uppercase tracking-wider text-[#7C8499] mb-1.5 flex items-center gap-1.5">
-                      <MessageSquare size={13} /> Observaciones / Justificación de la Decisión (se incluirá en el correo n8n)
+                      <MessageSquare size={13} /> Observaciones / Justificación de la Decisión (se incluirá en la notificación oficial)
                     </label>
                     <textarea 
                       rows={3}
@@ -777,8 +852,8 @@ export default function Requests() {
 
               <div className="flex items-center gap-2 text-xs text-[#7C8499]">
                 <Zap size={14} className="text-[#5B3FF5]" />
-                <span>Workflow destino:</span>
-                <span className="font-mono text-[#111827]">{n8nConfig.baseUrl}</span>
+                <span>Servicio destino:</span>
+                <span className="font-mono text-[#111827]">API REST Nativa</span>
               </div>
             </div>
           </div>
@@ -787,7 +862,7 @@ export default function Requests() {
           <div className="flex-1 flex flex-col items-center justify-center text-[#A3AAC2] p-8 text-center">
             <Mail size={64} className="mb-4 opacity-20" />
             <h3 className="text-xl font-bold text-[#111827] mb-2">Ningún mensaje seleccionado</h3>
-            <p className="max-w-[300px]">Selecciona un correo de la lista a la izquierda para auditarlo, validarlo y despachar la resolución al workflow de n8n.</p>
+            <p className="max-w-[300px]">Selecciona un correo de la lista a la izquierda para auditarlo, validarlo y registrar la resolución oficial.</p>
           </div>
         )}
       </div>

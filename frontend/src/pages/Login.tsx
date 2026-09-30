@@ -192,14 +192,14 @@ export default function Login() {
       </div>
 
       {/* OVERALL CANVAS / Main Layout Grid */}
-      <div className="relative z-10 w-full max-w-[1400px] mx-auto px-6 lg:px-12 grid grid-cols-1 lg:grid-cols-[1fr_auto_1fr] gap-6 xl:gap-12 items-center">
+      <div className="relative z-10 w-full max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-12 py-8 lg:py-0 flex flex-col lg:grid lg:grid-cols-[1fr_auto_1fr] gap-8 xl:gap-12 items-center justify-center min-h-screen">
         
-        {/* LEFT BRANDING AREA */}
+        {/* LEFT BRANDING AREA (Desktop / Tablet grande) */}
         <motion.div 
           initial={{ opacity: 0, x: -30 }}
           animate={{ opacity: 1, x: 0 }}
           transition={{ duration: 0.6 }}
-          className="flex justify-start items-center"
+          className="hidden lg:flex justify-start items-center"
         >
           <div className="max-w-[380px]">
             <img src={logoWhite} alt="Riwi Logo" className="h-[42px] object-contain mb-10" />
@@ -219,10 +219,10 @@ export default function Login() {
           initial={{ opacity: 0, y: 30 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6, delay: 0.1 }}
-          className="w-full max-w-[480px] bg-white rounded-[28px] p-8 lg:p-10 relative overflow-hidden shadow-[0_20px_60px_-15px_rgba(0,0,0,0.6)] justify-self-center flex-shrink-0 transform lg:translate-x-8 xl:translate-x-12"
+          className="w-full max-w-[440px] sm:max-w-[480px] bg-white rounded-[24px] sm:rounded-[28px] p-6 sm:p-8 lg:p-10 relative overflow-hidden shadow-[0_20px_60px_-15px_rgba(0,0,0,0.6)] justify-self-center flex-shrink-0 lg:transform lg:translate-x-8 xl:translate-x-12"
         >
           {/* CARD BOTTOM DECORATION */}
-          <div className="absolute bottom-0 left-0 right-0 h-28 pointer-events-none overflow-hidden">
+          <div className="absolute bottom-0 left-0 right-0 h-24 sm:h-28 pointer-events-none overflow-hidden">
             <svg viewBox="0 0 480 112" className="w-full h-full object-cover" preserveAspectRatio="none">
               <path d="M0,56 C150,100 350,0 480,56 L480,112 L0,112 Z" fill="#F2F0FF" opacity="0.6" />
               <path d="M0,80 C200,28 400,140 480,80 L480,112 L0,112 Z" fill="#EDEBFF" opacity="0.4" />
@@ -231,15 +231,15 @@ export default function Login() {
 
           <div className="relative z-10 flex flex-col items-center">
             {/* RIWI LOGO INSIDE LOGIN CARD */}
-            <img src={logoLogin} alt="Riwi Logo" className="h-[36px] object-contain mb-8" />
+            <img src={logoLogin} alt="Riwi Logo" className="h-[32px] sm:h-[36px] object-contain mb-6 sm:mb-8" />
             
             {/* LOGIN TITLE */}
-            <div className="text-center mb-8">
-              <h2 className="text-[22px] font-bold text-[#10163D] mb-1.5">Inicia sesión en tu cuenta</h2>
-              <p className="text-[#7C8499] text-[14px]">Accede al sistema HSE - Barranquilla</p>
+            <div className="text-center mb-6 sm:mb-8">
+              <h2 className="text-[20px] sm:text-[22px] font-bold text-[#10163D] mb-1.5">Inicia sesión en tu cuenta</h2>
+              <p className="text-[#7C8499] text-[13px] sm:text-[14px]">Accede al sistema HSE - Barranquilla</p>
             </div>
 
-            <form onSubmit={handleLogin} className="w-full space-y-5">
+            <form onSubmit={handleLogin} className="w-full space-y-4 sm:space-y-5">
               {/* Mensaje de Error / Hint de credenciales */}
               {error && (
                 <div className="text-[#FF5C67] text-xs text-center font-medium bg-[#FF5C67]/10 py-2.5 px-3 rounded-lg border border-[#FF5C67]/20">
@@ -257,7 +257,7 @@ export default function Login() {
                   required
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
-                  className="w-full pl-11 pr-4 h-[48px] bg-white border border-[#E2E8F0] focus:border-[#633BFF] rounded-[12px] text-[#10163D] placeholder-[#A3AAC2] text-[14px] focus:outline-none focus:ring-4 focus:ring-[#633BFF]/10 transition-all"
+                  className="w-full pl-11 pr-4 h-[46px] sm:h-[48px] bg-white border border-[#E2E8F0] focus:border-[#633BFF] rounded-[12px] text-[#10163D] placeholder-[#A3AAC2] text-[14px] focus:outline-none focus:ring-4 focus:ring-[#633BFF]/10 transition-all"
                   placeholder="Usuario, correo o cédula"
                 />
               </div>
@@ -272,7 +272,7 @@ export default function Login() {
                   required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="w-full pl-11 pr-11 h-[48px] bg-white border border-[#E2E8F0] focus:border-[#633BFF] rounded-[12px] text-[#10163D] placeholder-[#A3AAC2] text-[14px] focus:outline-none focus:ring-4 focus:ring-[#633BFF]/10 transition-all"
+                  className="w-full pl-11 pr-11 h-[46px] sm:h-[48px] bg-white border border-[#E2E8F0] focus:border-[#633BFF] rounded-[12px] text-[#10163D] placeholder-[#A3AAC2] text-[14px] focus:outline-none focus:ring-4 focus:ring-[#633BFF]/10 transition-all"
                   placeholder="Contraseña o cédula"
                 />
                 <button 
@@ -285,15 +285,15 @@ export default function Login() {
               </div>
 
               {/* REMEMBER ME + FORGOT PASSWORD */}
-              <div className="flex justify-between items-center pt-1 pb-4">
+              <div className="flex flex-wrap justify-between items-center gap-2 pt-1 pb-2 sm:pb-4">
                 <label className="flex items-center gap-2.5 cursor-pointer group">
                   <div className={`w-4 h-4 rounded-[4px] border flex items-center justify-center transition-colors ${rememberMe ? 'bg-[#633BFF] border-[#633BFF]' : 'border-[#CBD5E1] bg-white group-hover:border-[#633BFF]'}`}>
                     {rememberMe && <Check size={12} className="text-white" strokeWidth={3} />}
                   </div>
                   <input type="checkbox" className="hidden" checked={rememberMe} onChange={() => setRememberMe(!rememberMe)} />
-                  <span className="text-[13px] text-[#475569] font-medium select-none">Recordarme</span>
+                  <span className="text-[12px] sm:text-[13px] text-[#475569] font-medium select-none">Recordarme</span>
                 </label>
-                <a href="#" className="text-[13px] font-semibold text-[#633BFF] hover:text-[#5535F5] transition-colors">
+                <a href="#" className="text-[12px] sm:text-[13px] font-semibold text-[#633BFF] hover:text-[#5535F5] transition-colors">
                   ¿Olvidaste tu contraseña?
                 </a>
               </div>
@@ -302,7 +302,7 @@ export default function Login() {
               <button
                 type="submit"
                 disabled={isLoading}
-                className="w-full bg-gradient-to-r from-[#5636F5] to-[#633BFF] hover:opacity-90 text-white h-[50px] rounded-[12px] font-bold text-[15px] transition-all shadow-[0_8px_20px_rgba(99,59,255,0.25)] flex justify-center items-center gap-2 group cursor-pointer disabled:opacity-60"
+                className="w-full bg-gradient-to-r from-[#5636F5] to-[#633BFF] hover:opacity-90 text-white h-[48px] sm:h-[50px] rounded-[12px] font-bold text-[14px] sm:text-[15px] transition-all shadow-[0_8px_20px_rgba(99,59,255,0.25)] flex justify-center items-center gap-2 group cursor-pointer disabled:opacity-60"
               >
                 {isLoading ? (
                   <>
@@ -320,12 +320,12 @@ export default function Login() {
           </div>
         </motion.div>
 
-        {/* RIGHT-SIDE MASCOT */}
+        {/* RIGHT-SIDE MASCOT (Desktop) */}
         <motion.div 
           initial={{ opacity: 0, x: 30 }}
           animate={{ opacity: 1, x: 0 }}
           transition={{ duration: 0.6, delay: 0.2 }}
-          className="flex justify-end items-center"
+          className="hidden lg:flex justify-end items-center"
         >
           <div className="relative transform translate-x-12 xl:translate-x-20">
             {/* Sparkles around the raised hand */}
