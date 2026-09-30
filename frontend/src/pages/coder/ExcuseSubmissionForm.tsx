@@ -31,6 +31,7 @@ import { getCoderSession } from '../../utils/coderSession';
 import { saveNewCoderJustification } from '../../utils/coderJustifications';
 import { useAuth } from '../../context/AuthContext';
 import { CoderProfileMenu } from '../../components/coder/CoderProfileMenu';
+import { api } from '../../services/api';
 
 export default function ExcuseSubmissionForm() {
   const navigate = useNavigate();
@@ -137,6 +138,7 @@ export default function ExcuseSubmissionForm() {
           filename: f.name,
           size_bytes: f.size,
           mime_type: f.type,
+          preview_url: f.previewUrl || f.presignedUrl || undefined,
           legibility_status: f.legibility,
           legibility_reason: f.legibilityReason,
           // Estructura preparada para endpoints de carga o URLs prefirmadas de Supabase Storage
@@ -149,8 +151,13 @@ export default function ExcuseSubmissionForm() {
 
       console.log('Payload estructurado preparado para Supabase Storage / Backend:', payloadReadyForBackend);
 
-      // Persistir la justificación para el Coder en su historial
+      // Persistir la justificación para el Coder en su historial y emitir evento reactivo
       saveNewCoderJustification(payloadReadyForBackend);
+
+      // Despacho no bloqueante al backend REST
+      api.submitCoderExcuse(payloadReadyForBackend).catch((err) => {
+        console.debug('Aviso no bloqueante al enviar a /api/v1/coders/excuses:', err);
+      });
 
       setSubmissionSuccess({
         radicadoId: radNumber,

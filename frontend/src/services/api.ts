@@ -1,4 +1,9 @@
 import type { Request, Student, KPIStats } from '../types';
+import { mockRequests } from '../data/mock';
+import { 
+  getAllCoderJustificationsAsRequests, 
+  updateCoderJustificationStatus 
+} from '../utils/coderJustifications';
 
 const API_BASE = import.meta.env.VITE_API_URL?.replace(/\/$/, '') || '';
 
@@ -35,19 +40,28 @@ export const api = {
       const res = await fetch(`${API_BASE}/api/kpis`);
       if (res.ok) {
         const data = await res.json();
-        return data;
+        if (data && typeof data.total === 'number' && data.total > 0) {
+          return data;
+        }
       }
     } catch (e) {
       console.warn('Fallo al obtener KPIs del backend:', e);
     }
+
+    const allRequests = getAllCoderJustificationsAsRequests();
+    const approved = allRequests.filter((r) => r.status === 'approved').length;
+    const denied = allRequests.filter((r) => r.status === 'denied').length;
+    const pending = allRequests.filter((r) => r.status === 'pending_review').length;
+    const total = allRequests.length;
+
     return {
-      total: 0,
-      approved: 0,
-      denied: 0,
-      pending: 0,
-      revisadas: 0,
-      por_revisar: 0,
-      approval_rate: 0
+      total,
+      approved,
+      denied,
+      pending,
+      revisadas: approved + denied,
+      por_revisar: pending,
+      approval_rate: total > 0 ? Math.round((approved / total) * 100) : 0,
     };
   },
 
@@ -71,17 +85,25 @@ export const api = {
       const res = await fetch(`${API_BASE}/api/requests/recent?limit=10`);
       if (res.ok) {
         const data = await res.json();
-        if (Array.isArray(data)) {
+        if (Array.isArray(data) && data.length > 0) {
           return data;
         }
       }
     } catch (e) {
       console.warn('Fallo al obtener correos recientes:', e);
     }
-    return [];
+    const all = getAllCoderJustificationsAsRequests();
+    return all.slice(0, 10).map((r) => ({
+      id: r.id,
+      from: r.emailInfo?.senderName || 'Coder',
+      subject: r.emailInfo?.subject || 'Justificación',
+      date: r.emailInfo?.date || new Date().toISOString(),
+      status: r.status,
+    }));
   },
 
   getRequests: async (filters?: any): Promise<Request[]> => {
+    let backendRequests: Request[] = [];
     try {
       const queryParams = new URLSearchParams();
       if (filters?.status) queryParams.set('status', filters.status);
@@ -91,13 +113,42 @@ export const api = {
       if (res.ok) {
         const data = await res.json();
         if (Array.isArray(data)) {
-          return data;
+          backendRequests = data;
         }
       }
     } catch (e) {
-      console.warn('Fallo al obtener solicitudes reales:', e);
+      console.warn('Fallo al obtener solicitudes del backend:', e);
     }
-    return [];
+
+    // Obtener solicitudes radicadas por Coders en el cliente
+    const coderRequests = getAllCoderJustificationsAsRequests();
+
+    // Base de datos o mock en caso de offline
+    const baseList = backendRequests.length > 0 ? backendRequests : mockRequests;
+
+    // Fusionar deduplicando por ID o radicado, priorizando las justificaciones del Coder
+    const seenIds = new Set<string>();
+    const merged: Request[] = [];
+
+    for (const req of coderRequests) {
+      if (!seenIds.has(req.id)) {
+        seenIds.add(req.id);
+        merged.push(req);
+      }
+    }
+
+    for (const req of baseList) {
+      if (!seenIds.has(req.id)) {
+        seenIds.add(req.id);
+        merged.push(req);
+      }
+    }
+
+    if (filters?.status) {
+      return merged.filter((r) => r.status === filters.status);
+    }
+
+    return merged;
   },
 
   getStudents: async (): Promise<Student[]> => {
@@ -218,11 +269,59 @@ export const api = {
       },
     };
 
+    // Sincronizar en almacenamiento local si corresponde a una justificación del Coder
+    const normalizedCoderStatus =
+      normalizedAction === 'APPROVE' ? 'APPROVED' :
+      normalizedAction === 'DISAPPROVE' ? 'DISAPPROVED' :
+      normalizedAction === 'REQUEST_MORE_INFO' ? 'REQUEST_CORRECTION' :
+      (normalizedAction as any);
+
+    updateCoderJustificationStatus(
+      id,
+      normalizedCoderStatus,
+      payload.notes,
+      payload.reviewer_name || 'Paola Admin (HSE)'
+    );
+
     return {
       success: isSuccess,
       data: serverResponse,
       updatedRequest,
     };
+  },
+
+  /**
+   * Envía la radicación del Coder al backend REST unificado (/api/v1/coders/excuses).
+   */
+  submitCoderExcuse: async (payload: any) => {
+    try {
+      const backendBody = {
+        coder_name: payload.coder_name,
+        coder_email: payload.coder_email,
+        document_id: String(payload.coder_cedula || ''),
+        clan: payload.academic_route || 'Desarrollo de Software',
+        shift: 'Mañana (6:00 AM - 2:00 PM)',
+        category: payload.novelty_type,
+        start_date: payload.start_date,
+        end_date: payload.end_date,
+        reason: payload.description,
+        attachment_filename: payload.attachments?.[0]?.filename,
+        attachment_mime_type: payload.attachments?.[0]?.mime_type,
+      };
+
+      const res = await fetch(`${API_BASE}/api/v1/coders/excuses`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(backendBody),
+      });
+
+      if (res.ok) {
+        return await res.json();
+      }
+    } catch (e) {
+      console.debug('Fallo envío directo a /api/v1/coders/excuses, sincronizado en cliente:', e);
+    }
+    return null;
   },
 
   /**

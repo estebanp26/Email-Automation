@@ -1,4 +1,4 @@
-import type { CoderJustification, CoderAttachment } from '../types';
+import type { CoderJustification, CoderAttachment, Request, CoderJustificationStatus } from '../types';
 
 const STORAGE_KEY = 'hse_coder_justifications';
 
@@ -191,6 +191,9 @@ export function saveNewCoderJustification(item: Partial<CoderJustification>): Co
   const updated = [newItem, ...current];
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('hse_justification_created', { detail: { justification: newItem } }));
+    }
   } catch (e) {
     console.warn('Error guardando nueva justificación:', e);
   }
@@ -227,9 +230,144 @@ export function updateCoderJustificationWithCorrection(
 
     list[index] = updatedTarget;
     localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
+
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('hse_justifications_updated', { detail: { justification: updatedTarget } }));
+    }
+
     return updatedTarget;
   } catch (e) {
     console.warn('Error actualizando con subsanación:', e);
+    return null;
+  }
+}
+
+/**
+ * Convierte una Justificación del Coder al modelo canónico Request consumido por la TL (Requests.tsx y Dashboard)
+ */
+export function convertCoderJustificationToRequest(j: CoderJustification): Request {
+  const isApproved = j.status === 'APPROVED';
+  const isDisapproved = j.status === 'DISAPPROVED';
+  const isCorrection = j.status === 'REQUEST_CORRECTION';
+  const hasDecision = isApproved || isDisapproved || isCorrection;
+
+  const mappedStatus = isApproved ? 'approved' : isDisapproved ? 'denied' : 'pending_review';
+  const mappedCategory = isApproved ? 'POSIBLEMENTE_VALIDO' : isDisapproved ? 'POSIBLEMENTE_INVALIDO' : 'REVISION_MANUAL';
+
+  const attachmentsList = (j.attachments || []).map((att) => ({
+    name: att.filename || 'Evidencia.pdf',
+    url: att.preview_url || att.storage_path || '#',
+  }));
+
+  const structuredBody = [
+    `Radicado Oficial: ${j.radicado}`,
+    `Coder: ${j.coder_name} (Documento: CC ${j.coder_cedula})`,
+    `Ruta Académica: ${j.academic_route || 'Desarrollo de Software'}`,
+    `Tipo de Novedad: ${j.novelty_label || NOVELTY_LABELS[j.novelty_type] || j.novelty_type}`,
+    `Período de Ausencia: ${j.start_date} al ${j.end_date}`,
+    `\nMotivo Declarado por el Coder:\n${j.description}`,
+    j.coder_correction_reply ? `\n\nRespuesta de Subsanación del Coder:\n${j.coder_correction_reply}` : '',
+  ].filter(Boolean).join('\n');
+
+  return {
+    id: j.id || j.radicado,
+    studentId: j.coder_id || `coder-${j.coder_cedula}`,
+    route: j.academic_route || 'Desarrollo de Software',
+    status: mappedStatus,
+    category: mappedCategory,
+    recommendation: mappedCategory,
+    hasHumanIntervention: hasDecision,
+    hseDecision: hasDecision ? j.status : null,
+    hseNotes: j.hse_notes || null,
+    hseReviewedAt: j.hse_reviewed_at || null,
+    isResponded: hasDecision,
+    emailInfo: {
+      senderName: j.coder_name || 'Coder Estudiante',
+      senderEmail: j.coder_email || `${j.coder_cedula}@riwi.io`,
+      subject: `[Radicado ${j.radicado}] ${j.novelty_label || NOVELTY_LABELS[j.novelty_type] || 'Justificación de Inasistencia'} - ${j.coder_name}`,
+      body: structuredBody,
+      date: j.submitted_at || new Date().toISOString(),
+      attachments: attachmentsList,
+    },
+    decision: {
+      source: hasDecision ? 'human' : 'ai',
+      confidence: 0.95,
+      reasoning: j.hse_notes || 'Radicado directo vía Portal del Coder. Documentación de soporte y declaración juramentada adjuntas.',
+      modifiedBy: j.hse_reviewer,
+      modifiedAt: j.hse_reviewed_at,
+    },
+  } as any;
+}
+
+/**
+ * Obtiene todas las justificaciones de Coders persistidas en el cliente
+ */
+export function getAllCoderJustifications(): CoderJustification[] {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        return parsed;
+      }
+    }
+  } catch (e) {
+    console.warn('Error al leer justificaciones de Coder:', e);
+  }
+  return [];
+}
+
+/**
+ * Obtiene todas las justificaciones de Coders adaptadas como Requests para la bandeja TL
+ */
+export function getAllCoderJustificationsAsRequests(): Request[] {
+  const justifications = getAllCoderJustifications();
+  return justifications.map(convertCoderJustificationToRequest);
+}
+
+/**
+ * Actualiza el estado y observaciones de una justificación por parte de la Team Leader / HSE
+ */
+export function updateCoderJustificationStatus(
+  idOrRadicado: string,
+  newStatus: 'APPROVED' | 'DISAPPROVED' | 'REQUEST_CORRECTION' | 'REVISION_MANUAL',
+  notes?: string,
+  reviewerName?: string
+): CoderJustification | null {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return null;
+    const list: CoderJustification[] = JSON.parse(raw);
+
+    const index = list.findIndex(
+      (j) => j.id === idOrRadicado || j.radicado === idOrRadicado
+    );
+    if (index === -1) return null;
+
+    const target = list[index];
+    const updatedTarget: CoderJustification = {
+      ...target,
+      status: newStatus as CoderJustificationStatus,
+      hse_notes: notes !== undefined ? notes : target.hse_notes,
+      hse_reviewer: reviewerName || target.hse_reviewer || 'Paola Admin (HSE)',
+      hse_reviewed_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+
+    list[index] = updatedTarget;
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
+
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(
+        new CustomEvent('hse_justifications_updated', {
+          detail: { justification: updatedTarget },
+        })
+      );
+    }
+
+    return updatedTarget;
+  } catch (e) {
+    console.warn('Error al actualizar estado de justificación de Coder:', e);
     return null;
   }
 }
