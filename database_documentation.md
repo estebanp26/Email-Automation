@@ -1325,3 +1325,49 @@ Para garantizar tiempos de respuesta inferiores a **50 ms** en las consultas del
    - `idx_justifications_unreviewed`: Indexa solicitudes pendientes de primera intervención humana (`has_human_intervention = FALSE`).
    - `idx_attendance_unjustified_active ON attendance_records (attendance_date DESC, coder_id) WHERE status = 'AUSENTE' AND justification_id IS NULL`: Optimiza drásticamente la vista `v_unjustified_absences` al ignorar registros de asistencia normales o ya justificados.
 
+---
+
+## 9. Generador y Exportador de Reportes de Ausentismo y Vista Analítica Semanal (DB-EXT-01)
+
+### 9.1. Vista Analítica: `v_hse_weekly_summary`
+Diseñada específicamente para los comités semanales de permanencia y comités de seguimiento del área de HSE, esta vista consolida dinámicamente las inasistencias y justificaciones agrupadas por **Ruta Formativa** (ej. *Node.js Backend*, *Java Spring Boot*, *Desarrollo Web*, *TypeScript Fullstack*) y semana académica:
+
+```sql
+SELECT 
+    route,
+    week_start,
+    week_number,
+    year,
+    total_requests,
+    total_approved,
+    total_disapproved,
+    total_pending,
+    total_absence_days,
+    unique_coders_count
+FROM public.v_hse_weekly_summary;
+```
+
+**Beneficios para el Comité:**
+- Provee de inmediato el volumen consolidado por cohorte y clan.
+- Monitorea el ratio de aprobación vs reprobación por ruta técnica.
+- Identifica picos epidemiológicos de incapacidades o ausencias por motivos recurrentes en una misma ruta.
+- Ejecuta con `security_invoker = true` respetando las directivas RLS de la sesión activa.
+
+### 9.2. Exportador Consolidado de Ausentismo a CSV/Excel
+Para responder a los requerimientos normativos y auditorías institucionales de Riwi, se habilitó el exportador oficial que genera reportes estructurados con las 9 columnas mandatorias:
+1. `Cédula`
+2. `Nombre Coder`
+3. `Ruta Formativa`
+4. `Tipo de Novedad`
+5. `Fecha Inicio`
+6. `Fecha Fin`
+7. `Días Ausente`
+8. `Estado HSE`
+9. `Número de Radicado`
+
+- **Endpoint REST:** `GET /api/v1/reports/export-csv` con headers:
+  `Content-Disposition: attachment; filename=reporte_hse_barranquilla.csv`
+- **Streaming y Buffer en Memoria:** Implementado con `StreamingResponse` y `io.StringIO` / `io.BytesIO` con UTF-8 BOM (`\ufeff`) para máxima compatibilidad con Microsoft Excel en español sin generar archivos huérfanos en disco.
+- **Herramienta CLI:** `scripts/export_hse_report.py` para exportación desatendida programable mediante cron jobs o pipelines de datos.
+
+
