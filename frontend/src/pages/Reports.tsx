@@ -65,9 +65,20 @@ export default function Reports() {
                  <p className="text-base sm:text-lg font-bold text-amber-600">{stats.por_revisar ?? stats.pending ?? 0} pendientes</p>
                </div>
             </div>
-            <button className="mt-4 sm:mt-6 w-full bg-[#5B3FF5] text-white py-2.5 sm:py-3 rounded-xl font-medium hover:bg-[#4a31d4] transition-colors cursor-pointer text-sm sm:text-base">
-              Descargar Informe Excel
-            </button>
+            <div className="mt-4 sm:mt-6 space-y-2">
+              <button 
+                onClick={() => api.exportHseReport('csv')}
+                className="w-full bg-[#5B3FF5] text-white py-2.5 sm:py-3 rounded-xl font-medium hover:bg-[#4a31d4] transition-colors cursor-pointer text-sm sm:text-base flex items-center justify-center gap-2 shadow-sm"
+              >
+                <span>Descargar Reporte CSV HSE</span>
+              </button>
+              <button 
+                onClick={() => api.exportHseReport('excel')}
+                className="w-full bg-white text-[#5B3FF5] border border-[#5B3FF5] py-2 sm:py-2.5 rounded-xl font-medium hover:bg-violet-50 transition-colors cursor-pointer text-xs sm:text-sm flex items-center justify-center gap-2"
+              >
+                <span>Descargar Informe Excel (.xlsx)</span>
+              </button>
+            </div>
           </motion.div>
       </div>
     </div>
