@@ -107,10 +107,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const recoveredUser: AuthUser = {
         id: payload.sub || coderData.id || 'user-id',
         email: payload.email || coderData.email || '',
-        name: payload.name || coderData.name || 'Usuario',
+        name: coderData.name || payload.name || 'Usuario',
         role: normalizedRole,
-        cedula: payload.cedula || coderData.cedula,
-        route: payload.route || coderData.route,
+        cedula: coderData.cedula || payload.cedula,
+        route: coderData.route || payload.route,
       };
 
       setToken(savedToken);
