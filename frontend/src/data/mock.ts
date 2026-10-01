@@ -5,14 +5,18 @@ export const mockStudents: Student[] = [
     id: 's1',
     name: 'Ana Gomez',
     email: 'ana@ejemplo.com',
+    cedula: '1000000101',
     route: 'Frontend',
+    status: 'Activo',
     attendance: { present: 40, late: 2, justifiedAbsence: 1, unjustifiedAbsence: 0 }
   },
   {
     id: 's2',
     name: 'Carlos Perez',
     email: 'carlos@ejemplo.com',
+    cedula: '1000000102',
     route: 'Backend',
+    status: 'Activo',
     attendance: { present: 35, late: 5, justifiedAbsence: 0, unjustifiedAbsence: 3 }
   }
 ];

@@ -1,5 +1,5 @@
 import type { Request, Student, KPIStats } from '../types';
-import { mockRequests } from '../data/mock';
+import { mockStudents, mockStats, mockRequests, mockRequestsPerWeek, mockEmails } from '../data/mock';
 import { 
   getAllCoderJustificationsAsRequests, 
   updateCoderJustificationStatus 
@@ -45,7 +45,7 @@ export const api = {
         }
       }
     } catch (e) {
-      console.warn('Fallo al obtener KPIs del backend:', e);
+      console.warn('Fallo al obtener KPIs del backend, usando respaldo offline:', e);
     }
 
     const allRequests = getAllCoderJustificationsAsRequests();
@@ -54,14 +54,19 @@ export const api = {
     const pending = allRequests.filter((r) => r.status === 'pending_review').length;
     const total = allRequests.length;
 
+    const totalCount = total > 0 ? total : mockStats.total;
+    const approvedCount = total > 0 ? approved : mockStats.approved;
+    const deniedCount = total > 0 ? denied : mockStats.denied;
+    const pendingCount = total > 0 ? pending : mockStats.pending;
+
     return {
-      total,
-      approved,
-      denied,
-      pending,
-      revisadas: approved + denied,
-      por_revisar: pending,
-      approval_rate: total > 0 ? Math.round((approved / total) * 100) : 0,
+      total: totalCount,
+      approved: approvedCount,
+      denied: deniedCount,
+      pending: pendingCount,
+      revisadas: approvedCount + deniedCount,
+      por_revisar: pendingCount,
+      approval_rate: totalCount > 0 ? Math.round((approvedCount / totalCount) * 100) : 85,
     };
   },
 
@@ -70,14 +75,14 @@ export const api = {
       const res = await fetch(`${API_BASE}/api/requests/weekly`);
       if (res.ok) {
         const data = await res.json();
-        if (Array.isArray(data)) {
+        if (Array.isArray(data) && data.length > 0) {
           return data;
         }
       }
     } catch (e) {
-      console.warn('Fallo al obtener datos semanales:', e);
+      console.warn('Fallo al obtener datos semanales, usando respaldo offline:', e);
     }
-    return [];
+    return mockRequestsPerWeek;
   },
 
   getRecentEmails: async () => {
@@ -90,16 +95,20 @@ export const api = {
         }
       }
     } catch (e) {
-      console.warn('Fallo al obtener correos recientes:', e);
+      console.warn('Fallo al obtener correos recientes, usando respaldo offline:', e);
     }
+
     const all = getAllCoderJustificationsAsRequests();
-    return all.slice(0, 10).map((r) => ({
-      id: r.id,
-      from: r.emailInfo?.senderName || 'Coder',
-      subject: r.emailInfo?.subject || 'Justificación',
-      date: r.emailInfo?.date || new Date().toISOString(),
-      status: r.status,
-    }));
+    if (all.length > 0) {
+      return all.slice(0, 10).map((r) => ({
+        id: r.id,
+        from: r.emailInfo?.senderName || 'Coder',
+        subject: r.emailInfo?.subject || 'Justificación',
+        date: r.emailInfo?.date || new Date().toISOString(),
+        status: r.status,
+      }));
+    }
+    return mockEmails;
   },
 
   getRequests: async (filters?: any): Promise<Request[]> => {
@@ -117,7 +126,7 @@ export const api = {
         }
       }
     } catch (e) {
-      console.warn('Fallo al obtener solicitudes del backend:', e);
+      console.warn('Fallo al obtener solicitudes del backend, usando respaldo offline:', e);
     }
 
     // Obtener solicitudes radicadas por Coders en el cliente
@@ -156,14 +165,14 @@ export const api = {
       const res = await fetch(`${API_BASE}/api/students`);
       if (res.ok) {
         const data = await res.json();
-        if (Array.isArray(data)) {
+        if (Array.isArray(data) && data.length > 0) {
           return data;
         }
       }
     } catch (e) {
-      console.warn('Fallo al obtener estudiantes reales:', e);
+      console.warn('Fallo al obtener estudiantes reales, usando respaldo offline:', e);
     }
-    return [];
+    return mockStudents;
   },
 
   updateRequestStatus: async (id: string, status: any) => {

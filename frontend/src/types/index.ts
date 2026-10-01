@@ -22,6 +22,7 @@ export interface Student {
   cedula?: string;
   route: string;
   attendance?: Attendance;
+  status?: string;
 }
 
 export interface EmailInfo {
