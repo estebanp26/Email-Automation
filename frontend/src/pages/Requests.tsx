@@ -4,7 +4,7 @@ import {
   Mail, Send, FileEdit, Trash, Reply, Inbox, Paperclip,
   CheckCircle2, XCircle, AlertCircle, Zap,
   Calendar, ShieldCheck, MessageSquare, AlertTriangle, RotateCw, Search,
-  ArrowLeft, Download, FileText, Image as ImageIcon, X
+  ArrowLeft, Download, FileText, Image as ImageIcon, X, Bot
 } from 'lucide-react';
 import clsx from 'clsx';
 import { api } from '../services/api';
@@ -608,7 +608,11 @@ export default function Requests() {
                 
                 <div className="flex items-center justify-between gap-2 mb-1.5">
                   <h4 className="text-[13px] font-semibold text-[#17203A] truncate">{subject}</h4>
-                  {(item.category || status) && (
+                  {item.isAutomatic ? (
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 flex items-center gap-1 bg-[#00B4D8]/15 text-[#007799] border border-[#00B4D8]/30">
+                      <Bot size={11} /> 100% Automática
+                    </span>
+                  ) : (item.category || status) ? (
                     <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 flex items-center gap-1 ${
                       (item.category === 'POSIBLEMENTE_VALIDO' || status === 'approved') ? 'bg-[#20B486]/10 text-[#20B486]' :
                       (item.category === 'POSIBLEMENTE_INVALIDO' || status === 'denied') ? 'bg-[#FF5C67]/10 text-[#FF5C67]' :
@@ -618,7 +622,7 @@ export default function Requests() {
                        (item.category === 'POSIBLEMENTE_INVALIDO' || status === 'denied') ? 'Posiblemente Inválido' :
                        'Revisión Manual'}
                     </span>
-                  )}
+                  ) : null}
                 </div>
 
                 {/* Sub-etiquetas de Clasificación y Soporte */}
@@ -978,15 +982,22 @@ export default function Requests() {
                         </p>
                       </div>
                     </div>
-                    <span className={`text-xs font-bold px-3 py-1 rounded-full ${
-                      (selectedEmail.hseDecision === 'APPROVED' || selectedEmail.status === 'approved') ? 'bg-[#20B486]/15 text-[#20B486]' :
-                      (selectedEmail.hseDecision === 'DISAPPROVED' || selectedEmail.status === 'denied') ? 'bg-[#FF5C67]/15 text-[#FF5C67]' :
-                      'bg-[#F5B83D]/15 text-[#F5B83D]'
-                    }`}>
-                      {(selectedEmail.hseDecision === 'APPROVED' || selectedEmail.status === 'approved') ? 'Aprobado' :
-                       (selectedEmail.hseDecision === 'DISAPPROVED' || selectedEmail.status === 'denied') ? 'Rechazado' :
-                       (selectedEmail.hseDecision === 'REQUEST_CORRECTION') ? 'Soporte Solicitado' : 'Respondido'}
-                    </span>
+                    <div className="flex items-center gap-2">
+                      {selectedEmail.isAutomatic && (
+                        <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-[#00B4D8]/15 text-[#007799] border border-[#00B4D8]/30 flex items-center gap-1">
+                          <Bot size={13} /> 100% Automática
+                        </span>
+                      )}
+                      <span className={`text-xs font-bold px-3 py-1 rounded-full ${
+                        (selectedEmail.hseDecision === 'APPROVED' || selectedEmail.status === 'approved') ? 'bg-[#20B486]/15 text-[#20B486]' :
+                        (selectedEmail.hseDecision === 'DISAPPROVED' || selectedEmail.status === 'denied') ? 'bg-[#FF5C67]/15 text-[#FF5C67]' :
+                        'bg-[#F5B83D]/15 text-[#F5B83D]'
+                      }`}>
+                        {(selectedEmail.hseDecision === 'APPROVED' || selectedEmail.status === 'approved') ? 'Aprobado' :
+                         (selectedEmail.hseDecision === 'DISAPPROVED' || selectedEmail.status === 'denied') ? 'Rechazado' :
+                         (selectedEmail.hseDecision === 'REQUEST_CORRECTION') ? 'Soporte Solicitado' : 'Respondido'}
+                      </span>
+                    </div>
                   </div>
 
                   <div className="bg-white p-4 rounded-xl border border-emerald-100 shadow-xs">
@@ -999,7 +1010,7 @@ export default function Requests() {
                   </div>
 
                   <div className="flex items-center justify-between text-xs text-[#7C8499] pt-1">
-                    <span>Revisor: <strong className="text-[#111827]">{selectedEmail.decision?.modifiedBy || 'Team Leader Paola'}</strong></span>
+                    <span>Revisor: <strong className="text-[#111827]">{selectedEmail.isAutomatic ? 'Sistema IA HSE (Sin intervención humana)' : (selectedEmail.decision?.modifiedBy || 'Team Leader Paola')}</strong></span>
                     {selectedEmail.decision?.modifiedAt && (
                       <span>Fecha de envío: <strong>{new Date(selectedEmail.decision.modifiedAt).toLocaleString('es-ES')}</strong></span>
                     )}
@@ -1022,6 +1033,31 @@ export default function Requests() {
                       </div>
                     </div>
                   </div>
+
+                  {/* Observación del Análisis Automático (IA) para casos pendientes */}
+                  {(selectedEmail.aiReason || selectedEmail.decision?.reasoning) && (
+                    <div className="bg-[#5B3FF5]/5 border border-[#5B3FF5]/20 rounded-xl p-4 flex items-start gap-3">
+                      <div className="w-8 h-8 rounded-lg bg-[#5B3FF5]/10 text-[#5B3FF5] flex items-center justify-center shrink-0 mt-0.5">
+                        <AlertCircle size={18} />
+                      </div>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2 mb-1">
+                          <h4 className="text-xs font-bold uppercase tracking-wider text-[#5B3FF5]">
+                            Observación de la IA
+                          </h4>
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#F5B83D]/15 text-[#855e09] border border-[#F5B83D]/30">
+                            Requiere decisión TL
+                          </span>
+                        </div>
+                        <p className="text-sm text-[#17203A] leading-relaxed">
+                          {selectedEmail.aiReason || selectedEmail.decision?.reasoning}
+                        </p>
+                        <p className="text-[11px] text-[#7C8499] mt-2 font-medium">
+                          Esta justificación requiere tu criterio como Team Leader porque no cumple con todos los requisitos para resolución automática inmediata.
+                        </p>
+                      </div>
+                    </div>
+                  )}
 
                   {/* Feedback de resultado */}
                   {resolutionStatus && (

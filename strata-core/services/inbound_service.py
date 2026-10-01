@@ -540,6 +540,28 @@ class InboundEmailService:
                 for a in dto.attachments
             ]
 
+            # Lógica de Respuesta 100% Automática de la IA:
+            # Si la IA tiene alta certidumbre (soporte formal EPS, dentro de plazo y evidencia adjunta):
+            is_auto = (
+                eval_result.get("ai_recommendation") == "POSIBLEMENTE_VALIDO" 
+                and float(eval_result.get("ai_confidence", 0)) >= 0.90
+            )
+
+            if is_auto:
+                val_status = "APPROVED"
+                hse_dec = "APPROVED"
+                has_human = False
+                res_mode = "AUTOMATIC_AI"
+                hse_rev_at = datetime.now(timezone.utc)
+                hse_notes = "Resolución 100% automática del Sistema HSE: Justificación médica validada con soporte reglamentario EPS adjunto sin intervención humana."
+            else:
+                val_status = "REVISION_MANUAL"
+                hse_dec = None
+                has_human = False
+                res_mode = "AUTOMATIC_AI"
+                hse_rev_at = None
+                hse_notes = None
+
             justification_id = str(uuid.uuid4())
             insert_sql = """
             INSERT INTO justifications (
@@ -547,13 +569,15 @@ class InboundEmailService:
                 message_id, conversation_id, received_at, intent, excuse_type,
                 start_date, end_date, ai_recommendation, ai_confidence, ai_reason,
                 ai_response, ai_model, coder_identification_status, validation_status,
-                resolution_mode, has_human_intervention, validation_notes, attachments
+                resolution_mode, has_human_intervention, validation_notes, attachments,
+                hse_decision, hse_notes, hse_reviewed_at
             ) VALUES (
                 %s, %s, %s, %s, %s, %s,
                 %s, %s, %s, %s, %s,
                 %s, %s, %s, %s, %s,
                 %s, %s, %s, %s,
-                %s, %s, %s, %s
+                %s, %s, %s, %s,
+                %s, %s, %s
             )
             ON CONFLICT (message_id) DO UPDATE SET
                 email_subject = EXCLUDED.email_subject,
@@ -565,6 +589,11 @@ class InboundEmailService:
                 ai_reason = EXCLUDED.ai_reason,
                 validation_status = EXCLUDED.validation_status,
                 attachments = EXCLUDED.attachments,
+                hse_decision = COALESCE(EXCLUDED.hse_decision, justifications.hse_decision),
+                hse_notes = COALESCE(EXCLUDED.hse_notes, justifications.hse_notes),
+                hse_reviewed_at = COALESCE(EXCLUDED.hse_reviewed_at, justifications.hse_reviewed_at),
+                resolution_mode = EXCLUDED.resolution_mode,
+                has_human_intervention = EXCLUDED.has_human_intervention,
                 updated_at = CURRENT_TIMESTAMP
             RETURNING id;
             """
@@ -590,11 +619,14 @@ class InboundEmailService:
                     json.dumps(eval_result),
                     "qwen2.5:1.5b",
                     ident_status,
-                    eval_result["validation_status"],
-                    "AUTOMATIC_AI",
-                    False,
+                    val_status,
+                    res_mode,
+                    has_human,
                     eval_result["ai_reason"],
-                    json.dumps(attachments_meta)
+                    json.dumps(attachments_meta),
+                    hse_dec,
+                    hse_notes,
+                    hse_rev_at
                 ))
                 res = cur.fetchone()
                 if res:

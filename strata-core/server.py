@@ -825,12 +825,14 @@ async def get_requests_list(status: Optional[str] = None, limit: int = 250):
                 "hseDecision": r["hse_decision"],
                 "hseNotes": r["hse_notes"],
                 "hseReviewedAt": r["hse_reviewed_at"].isoformat() if r["hse_reviewed_at"] else None,
+                "isAutomatic": (not bool(r["has_human_intervention"])) and (r["hse_decision"] == "APPROVED" or raw_status == "APPROVED"),
+                "aiReason": r["ai_reason"] or "",
                 "decision": {
-                    "source": "human" if r["has_human_intervention"] else "ai",
+                    "source": "ai" if (not bool(r["has_human_intervention"])) else "human",
                     "recommendation": r["ai_recommendation"] or raw_status,
                     "confidence": float(r["ai_confidence"]) if r["ai_confidence"] is not None else 0.85,
-                    "reasoning": r["hse_notes"] if r["has_human_intervention"] and r["hse_notes"] else (r["ai_reason"] or "Evaluación registrada"),
-                    "modifiedBy": "Team Leader Paola" if r["has_human_intervention"] else None,
+                    "reasoning": (r["hse_notes"] if bool(r["has_human_intervention"]) and r["hse_notes"] else (r["ai_reason"] or "Evaluación registrada")),
+                    "modifiedBy": ("Sistema IA HSE (Automático)" if (not bool(r["has_human_intervention"]) and r["hse_decision"]) else ("Team Leader Paola" if r["has_human_intervention"] else None)),
                     "modifiedAt": r["hse_reviewed_at"].isoformat() if r["hse_reviewed_at"] else None
                 }
             })
@@ -975,7 +977,8 @@ async def get_requests_weekly():
                 COUNT(*) as total,
                 COUNT(*) FILTER (WHERE validation_status IN ('POSIBLEMENTE_VALIDO', 'APPROVED')) as aprobados,
                 COUNT(*) FILTER (WHERE validation_status IN ('POSIBLEMENTE_INVALIDO', 'DISAPPROVED')) as denegados,
-                COUNT(*) FILTER (WHERE validation_status NOT IN ('POSIBLEMENTE_VALIDO', 'APPROVED', 'POSIBLEMENTE_INVALIDO', 'DISAPPROVED')) as pendientes
+                COUNT(*) FILTER (WHERE validation_status NOT IN ('POSIBLEMENTE_VALIDO', 'APPROVED', 'POSIBLEMENTE_INVALIDO', 'DISAPPROVED')) as pendientes,
+                COUNT(*) FILTER (WHERE has_human_intervention = FALSE AND (validation_status = 'APPROVED' OR hse_decision = 'APPROVED')) as automaticas
             FROM justifications
             GROUP BY TO_CHAR(received_at, 'Dy'), DATE(received_at)
             ORDER BY DATE(received_at) ASC;
@@ -995,16 +998,18 @@ async def get_requests_weekly():
                 "Denegados": r["denegados"],
                 "Pendientes": r["pendientes"],
                 "Por revisar": r["pendientes"],
+                "100% Automáticas": r["automaticas"],
+                "Automáticas": r["automaticas"],
                 "solicitudes": r["total"]
             })
         
         if not result:
             result = [
-                {"name": "Lun", "Total": 0, "Aprobados": 0, "Denegados": 0, "Pendientes": 0, "Por revisar": 0, "solicitudes": 0}
+                {"name": "Lun", "Total": 0, "Aprobados": 0, "Denegados": 0, "Pendientes": 0, "Por revisar": 0, "100% Automáticas": 0, "Automáticas": 0, "solicitudes": 0}
             ]
         return result
     except Exception as e:
-        return [{"name": "Lun", "Total": 0, "Aprobados": 0, "Denegados": 0, "Pendientes": 0, "Por revisar": 0, "solicitudes": 0}]
+        return [{"name": "Lun", "Total": 0, "Aprobados": 0, "Denegados": 0, "Pendientes": 0, "Por revisar": 0, "100% Automáticas": 0, "Automáticas": 0, "solicitudes": 0}]
 
 @app.get("/api/students")
 async def get_students_list():

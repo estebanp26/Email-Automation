@@ -19,11 +19,11 @@ export default function Dashboard() {
   });
 
   const [weeklyData, setWeeklyData] = useState<any[]>([
-    { name: 'Lun', Total: 200, Aprobados: 0, Denegados: 0, 'Por revisar': 200 },
-    { name: 'Mar', Total: 0, Aprobados: 0, Denegados: 0, 'Por revisar': 0 },
-    { name: 'Mié', Total: 0, Aprobados: 0, Denegados: 0, 'Por revisar': 0 },
-    { name: 'Jue', Total: 0, Aprobados: 0, Denegados: 0, 'Por revisar': 0 },
-    { name: 'Vie', Total: 0, Aprobados: 0, Denegados: 0, 'Por revisar': 0 },
+    { name: 'Lun', Total: 200, Aprobados: 0, Denegados: 0, 'Por revisar': 200, '100% Automáticas': 0 },
+    { name: 'Mar', Total: 0, Aprobados: 0, Denegados: 0, 'Por revisar': 0, '100% Automáticas': 0 },
+    { name: 'Mié', Total: 0, Aprobados: 0, Denegados: 0, 'Por revisar': 0, '100% Automáticas': 0 },
+    { name: 'Jue', Total: 0, Aprobados: 0, Denegados: 0, 'Por revisar': 0, '100% Automáticas': 0 },
+    { name: 'Vie', Total: 0, Aprobados: 0, Denegados: 0, 'Por revisar': 0, '100% Automáticas': 0 },
   ]);
 
   const [recentEmails, setRecentEmails] = useState<any[]>([]);
@@ -41,7 +41,8 @@ export default function Dashboard() {
       if (Array.isArray(data) && data.length > 0) {
         const formattedData = data.map((d: any) => ({
           ...d,
-          'Por revisar': d['Por revisar'] ?? d['Pendientes'] ?? d['pendientes'] ?? 0
+          'Por revisar': d['Por revisar'] ?? d['Pendientes'] ?? d['pendientes'] ?? 0,
+          '100% Automáticas': d['100% Automáticas'] ?? d['Automáticas'] ?? d['automaticas'] ?? 0
         }));
         setWeeklyData(formattedData);
       }
@@ -203,7 +204,7 @@ export default function Dashboard() {
               </div>
               <div>
                 <h3 className="font-bold text-sm sm:text-base text-[#11132C]">Solicitudes por semana</h3>
-                <p className="text-xs text-[#7C8499]">Total, aprobadas, denegadas y por revisar</p>
+                <p className="text-xs text-[#7C8499]">Total, aprobadas, denegadas, por revisar y 100% automáticas</p>
               </div>
             </div>
           </div>
@@ -215,10 +216,11 @@ export default function Dashboard() {
                 <YAxis axisLine={false} tickLine={false} tick={{ fill: '#7C8499', fontSize: 11 }} />
                 <Tooltip cursor={{ fill: 'transparent' }} contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 15px rgba(0,0,0,0.1)' }} />
                 <Legend iconType="circle" wrapperStyle={{ top: -35, right: 10, width: 'auto', fontSize: 11 }} />
-                <Bar dataKey="Total" fill="#5B3FF5" radius={[4, 4, 4, 4]} barSize={8} />
-                <Bar dataKey="Aprobados" fill="#20B486" radius={[4, 4, 4, 4]} barSize={8} />
-                <Bar dataKey="Denegados" fill="#FF5C67" radius={[4, 4, 4, 4]} barSize={8} />
-                <Bar dataKey="Por revisar" fill="#F5B83D" radius={[4, 4, 4, 4]} barSize={8} />
+                <Bar dataKey="Total" fill="#5B3FF5" radius={[4, 4, 4, 4]} barSize={7} />
+                <Bar dataKey="Aprobados" fill="#20B486" radius={[4, 4, 4, 4]} barSize={7} />
+                <Bar dataKey="Denegados" fill="#FF5C67" radius={[4, 4, 4, 4]} barSize={7} />
+                <Bar dataKey="Por revisar" fill="#F5B83D" radius={[4, 4, 4, 4]} barSize={7} />
+                <Bar dataKey="100% Automáticas" fill="#00B4D8" radius={[4, 4, 4, 4]} barSize={7} />
               </BarChart>
             </ResponsiveContainer>
           </div>
