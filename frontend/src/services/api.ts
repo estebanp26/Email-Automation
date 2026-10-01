@@ -1,4 +1,5 @@
 import type { Request, Student, KPIStats } from '../types';
+import { mockStudents, mockStats, mockRequests, mockRequestsPerWeek, mockEmails } from '../data/mock';
 
 const API_BASE = import.meta.env.VITE_API_URL?.replace(/\/$/, '') || '';
 
@@ -38,16 +39,16 @@ export const api = {
         return data;
       }
     } catch (e) {
-      console.warn('Fallo al obtener KPIs del backend:', e);
+      console.warn('Fallo al obtener KPIs del backend, usando respaldo offline:', e);
     }
     return {
-      total: 0,
-      approved: 0,
-      denied: 0,
-      pending: 0,
-      revisadas: 0,
-      por_revisar: 0,
-      approval_rate: 0
+      total: mockStats.total,
+      approved: mockStats.approved,
+      denied: mockStats.denied,
+      pending: mockStats.pending,
+      revisadas: mockStats.approved + mockStats.denied,
+      por_revisar: mockStats.pending,
+      approval_rate: 85
     };
   },
 
@@ -56,14 +57,14 @@ export const api = {
       const res = await fetch(`${API_BASE}/api/requests/weekly`);
       if (res.ok) {
         const data = await res.json();
-        if (Array.isArray(data)) {
+        if (Array.isArray(data) && data.length > 0) {
           return data;
         }
       }
     } catch (e) {
-      console.warn('Fallo al obtener datos semanales:', e);
+      console.warn('Fallo al obtener datos semanales, usando respaldo offline:', e);
     }
-    return [];
+    return mockRequestsPerWeek;
   },
 
   getRecentEmails: async () => {
@@ -71,14 +72,14 @@ export const api = {
       const res = await fetch(`${API_BASE}/api/requests/recent?limit=10`);
       if (res.ok) {
         const data = await res.json();
-        if (Array.isArray(data)) {
+        if (Array.isArray(data) && data.length > 0) {
           return data;
         }
       }
     } catch (e) {
-      console.warn('Fallo al obtener correos recientes:', e);
+      console.warn('Fallo al obtener correos recientes, usando respaldo offline:', e);
     }
-    return [];
+    return mockEmails;
   },
 
   getRequests: async (filters?: any): Promise<Request[]> => {
@@ -90,14 +91,14 @@ export const api = {
       const res = await fetch(`${API_BASE}/api/requests?${queryParams.toString()}`);
       if (res.ok) {
         const data = await res.json();
-        if (Array.isArray(data)) {
+        if (Array.isArray(data) && data.length > 0) {
           return data;
         }
       }
     } catch (e) {
-      console.warn('Fallo al obtener solicitudes reales:', e);
+      console.warn('Fallo al obtener solicitudes reales, usando respaldo offline:', e);
     }
-    return [];
+    return mockRequests;
   },
 
   getStudents: async (): Promise<Student[]> => {
@@ -105,14 +106,14 @@ export const api = {
       const res = await fetch(`${API_BASE}/api/students`);
       if (res.ok) {
         const data = await res.json();
-        if (Array.isArray(data)) {
+        if (Array.isArray(data) && data.length > 0) {
           return data;
         }
       }
     } catch (e) {
-      console.warn('Fallo al obtener estudiantes reales:', e);
+      console.warn('Fallo al obtener estudiantes reales, usando respaldo offline:', e);
     }
-    return [];
+    return mockStudents;
   },
 
   updateRequestStatus: async (id: string, status: any) => {

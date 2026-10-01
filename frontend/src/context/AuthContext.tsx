@@ -105,8 +105,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       const recoveredUser: AuthUser = {
-        id: payload.sub || coderData.id || 'user-id',
-        email: payload.email || coderData.email || '',
+        id: coderData.id || payload.sub || 'user-id',
+        email: coderData.email || payload.email || '',
         name: coderData.name || payload.name || 'Usuario',
         role: normalizedRole,
         cedula: coderData.cedula || payload.cedula,
