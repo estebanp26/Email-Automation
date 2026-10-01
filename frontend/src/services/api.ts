@@ -122,7 +122,17 @@ export const api = {
       if (res.ok) {
         const data = await res.json();
         if (Array.isArray(data)) {
-          backendRequests = data;
+          backendRequests = data.map((item: any) => {
+            if (item.emailInfo?.attachments && Array.isArray(item.emailInfo.attachments)) {
+              item.emailInfo.attachments = item.emailInfo.attachments.map((att: any) => {
+                if (att.url && att.url.startsWith('/api/') && API_BASE) {
+                  return { ...att, url: `${API_BASE}${att.url}` };
+                }
+                return att;
+              });
+            }
+            return item;
+          });
         }
       }
     } catch (e) {

@@ -6,6 +6,7 @@ import Dashboard from './pages/Dashboard';
 import Requests from './pages/Requests';
 import Reports from './pages/Reports';
 import Students from './pages/Students';
+import AttendanceRanking from './pages/AttendanceRanking';
 import Login from './pages/Login';
 import Settings from './pages/Settings';
 import Forbidden from './pages/Forbidden';
@@ -46,6 +47,7 @@ function App() {
             <Route path="/" element={<Dashboard />} />
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/requests" element={<Requests />} />
+            <Route path="/attendance-ranking" element={<AttendanceRanking />} />
             <Route path="/reports" element={<Reports />} />
             <Route path="/students" element={<Students />} />
             <Route path="/settings" element={<Settings />} />

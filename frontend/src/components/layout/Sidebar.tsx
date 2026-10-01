@@ -1,13 +1,14 @@
 import { useState } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { LayoutDashboard, Inbox, Settings, Users, X, Menu } from 'lucide-react';
+import { LayoutDashboard, Inbox, Settings, Users, X, Menu, ShieldAlert } from 'lucide-react';
 import clsx from 'clsx';
 import { useAuth } from '../../context/AuthContext';
 
 const navItems = [
   { path: '/', name: 'Panel de Control', icon: LayoutDashboard },
   { path: '/requests', name: 'Solicitudes', icon: Inbox },
+  { path: '/attendance-ranking', name: 'Top Inasistencias', icon: ShieldAlert },
   { path: '/students', name: 'Coders', icon: Users },
   { path: '/settings', name: 'Configuración HSE', icon: Settings },
 ];

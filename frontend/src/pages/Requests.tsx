@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
-  Mail, Send, FileEdit, Trash, Reply, Inbox, Paperclip, User, 
+  Mail, Send, FileEdit, Trash, Reply, Inbox, Paperclip,
   CheckCircle2, XCircle, AlertCircle, Zap,
   Calendar, ShieldCheck, MessageSquare, AlertTriangle, RotateCw, Search,
   ArrowLeft, Download, FileText, Image as ImageIcon, X
@@ -26,7 +26,19 @@ export default function Requests() {
     mime_type?: string;
   } | null>(null);
 
-  const isImageAttachment = (att: { name: string; url: string; mime_type?: string }) => {
+  // Lista de estudiantes para validar historial y umbrales de asistencia
+  const [students, setStudents] = useState<any[]>([]);
+
+  useEffect(() => {
+    api.getStudents().then((data: any) => {
+      if (Array.isArray(data) && data.length > 0) {
+        setStudents(data);
+      }
+    }).catch(() => {});
+  }, []);
+
+  const isImageAttachment = (att?: { name?: string; url?: string; mime_type?: string } | null) => {
+    if (!att) return false;
     const mime = (att.mime_type || '').toLowerCase();
     if (mime.startsWith('image/')) return true;
     if (att.url && att.url.startsWith('data:image/')) return true;
@@ -34,13 +46,94 @@ export default function Requests() {
     return ext.endsWith('.png') || ext.endsWith('.jpg') || ext.endsWith('.jpeg') || ext.endsWith('.gif') || ext.endsWith('.webp') || ext.endsWith('.svg');
   };
 
+  const getNoveltyDetails = (item: any) => {
+    if (!item) return { label: 'Inasistencia General', badge: 'General', icon: '📋', color: 'bg-slate-100 text-slate-700 border-slate-200' };
+    const typeKey = (item.noveltyType || item.category || '').toLowerCase();
+    const label = item.noveltyLabel || '';
+    const fullText = `${item.emailInfo?.subject || ''} ${item.emailInfo?.body || ''} ${item.subject || ''} ${label} ${typeKey}`.toLowerCase();
+
+    if (typeKey.includes('medic') || fullText.includes('medic') || fullText.includes('médic') || fullText.includes('incapacidad') || fullText.includes('sura') || fullText.includes('eps') || fullText.includes('salud') || fullText.includes('enfermedad')) {
+      return {
+        label: label || 'Incapacidad Médica / Salud',
+        badge: 'Médica',
+        icon: '🩺',
+        color: 'bg-emerald-50 text-emerald-700 border-emerald-200'
+      };
+    }
+    if (typeKey.includes('calamidad') || fullText.includes('calamidad') || fullText.includes('luto') || fullText.includes('falleci') || fullText.includes('urgencia') || fullText.includes('domestica') || fullText.includes('doméstica')) {
+      return {
+        label: label || 'Calamidad Doméstica',
+        badge: 'Calamidad',
+        icon: '🏠',
+        color: 'bg-amber-50 text-amber-700 border-amber-200'
+      };
+    }
+    if (typeKey.includes('falla') || fullText.includes('falla') || fullText.includes('conectividad') || fullText.includes('internet') || fullText.includes('luz') || fullText.includes('energia')) {
+      return {
+        label: label || 'Falla Técnica / Conectividad',
+        badge: 'Falla Técnica',
+        icon: '⚡',
+        color: 'bg-blue-50 text-blue-700 border-blue-200'
+      };
+    }
+    if (typeKey.includes('legal') || fullText.includes('legal') || fullText.includes('judicial') || fullText.includes('tramite') || fullText.includes('trámite')) {
+      return {
+        label: label || 'Trámite Legal / Judicial',
+        badge: 'Trámite Legal',
+        icon: '⚖️',
+        color: 'bg-indigo-50 text-indigo-700 border-indigo-200'
+      };
+    }
+    if (typeKey.includes('permiso') || fullText.includes('permiso') || fullText.includes('academico') || fullText.includes('académico') || fullText.includes('universidad')) {
+      return {
+        label: label || 'Permiso Académico / Otro',
+        badge: 'Permiso Académico',
+        icon: '🎓',
+        color: 'bg-purple-50 text-purple-700 border-purple-200'
+      };
+    }
+    return {
+      label: label || 'Novedad de Asistencia',
+      badge: 'Revisión General',
+      icon: '📋',
+      color: 'bg-slate-50 text-slate-700 border-slate-200'
+    };
+  };
+
+  const getCoderAttendanceInfo = (emailItem: any) => {
+    if (!emailItem) return { remaining: 1, hasRemaining: true, unjustifiedCount: 1 };
+    const senderEmail = (emailItem.emailInfo?.senderEmail || emailItem.sender_email || emailItem.to || '').toLowerCase().trim();
+    const senderName = (emailItem.emailInfo?.senderName || emailItem.sender_name || '').toLowerCase().trim();
+    
+    const student = students.find((s: any) => 
+      (s.email && s.email.toLowerCase().trim() === senderEmail) ||
+      (s.name && s.name.toLowerCase().trim() === senderName) ||
+      s.id === emailItem.studentId
+    );
+
+    const unjustifiedCount = student?.attendance?.unjustifiedAbsence ?? 1;
+    // Reglamento Riwi Barranquilla: tolerancia de 2 inasistencias injustificadas acumulables
+    const maxAllowedUnjustified = 2;
+    const remaining = Math.max(0, maxAllowedUnjustified - unjustifiedCount);
+
+    return {
+      student,
+      unjustifiedCount,
+      remaining,
+      hasRemaining: remaining > 0,
+    };
+  };
+
   const handleDownloadAttachment = (e: React.MouseEvent, att: { name: string; url: string }) => {
     e.stopPropagation();
     e.preventDefault();
     if (!att.url || att.url === '#') return;
     try {
+      const downloadUrl = att.url.includes('?') 
+        ? `${att.url}&download=1` 
+        : (att.url.startsWith('data:') ? att.url : `${att.url}?download=1`);
       const link = document.createElement('a');
-      link.href = att.url;
+      link.href = downloadUrl;
       link.download = att.name || 'documento_soporte';
       document.body.appendChild(link);
       link.click();
@@ -157,6 +250,14 @@ export default function Requests() {
       ? new Date(email.emailInfo.date).toISOString().split('T')[0] 
       : new Date().toISOString().split('T')[0];
     setStartDate(dateStr);
+
+    const rawType = (email.noveltyType || email.noveltyLabel || email.category || email.emailInfo?.subject || '').toLowerCase();
+    if (rawType.includes('calamidad')) setExcuseType('calamidad');
+    else if (rawType.includes('falla') || rawType.includes('conectividad') || rawType.includes('internet')) setExcuseType('falla_tecnica');
+    else if (rawType.includes('legal') || rawType.includes('judicial') || rawType.includes('tramite') || rawType.includes('trámite')) setExcuseType('tramite_legal');
+    else if (rawType.includes('fuerza')) setExcuseType('fuerza_mayor');
+    else if (rawType.includes('permiso') || rawType.includes('academico') || rawType.includes('académico')) setExcuseType('permiso_academico_otro');
+    else setExcuseType('inasistencia_medica');
   };
 
   const handleReply = () => {
@@ -284,7 +385,7 @@ export default function Requests() {
       }
 
       const actionLabel = action === 'APPROVED' ? 'Aprobado' : action === 'DISAPPROVED' ? 'Rechazado' : 'Notificado';
-      setToastMessage(`Caso ${actionLabel} exitosamente y registrado en backend`);
+      setToastMessage(`Caso ${actionLabel} exitosamente`);
       setShowToast(true);
       setTimeout(() => setShowToast(false), 3500);
 
@@ -426,18 +527,18 @@ export default function Requests() {
             />
           </div>
 
-          {/* Backend Status Badge */}
+          {/* Service Status Badge */}
           <div className="mt-auto pt-4 border-t border-[#E8EAF2]">
             <div className="p-3 bg-[#F8F9FE] border border-[#E8EAF2] rounded-[16px] text-xs">
               <div className="flex items-center gap-2 mb-1">
                 <span className="w-2 h-2 rounded-full bg-[#20B486] animate-pulse" />
-                <span className="font-bold text-[#111827]">Backend REST Nativo</span>
+                <span className="font-bold text-[#111827]">Servicio Central HSE</span>
               </div>
-              <p className="text-[11px] text-[#7C8499] truncate font-mono">
-                /api/v1/justifications
+              <p className="text-[11px] text-[#7C8499] truncate">
+                Conexión en línea activa
               </p>
               <div className="mt-1 flex items-center gap-1 text-[10px] font-semibold text-[#5B3FF5]">
-                <Zap size={11} /> Conexión Directa HSE
+                <Zap size={11} /> Plataforma Oficial Riwi
               </div>
             </div>
           </div>
@@ -505,7 +606,7 @@ export default function Requests() {
                   <span className="text-[11px] text-[#A3AAC2] whitespace-nowrap">{date}</span>
                 </div>
                 
-                <div className="flex items-center justify-between gap-2 mb-1">
+                <div className="flex items-center justify-between gap-2 mb-1.5">
                   <h4 className="text-[13px] font-semibold text-[#17203A] truncate">{subject}</h4>
                   {(item.category || status) && (
                     <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 flex items-center gap-1 ${
@@ -516,11 +617,45 @@ export default function Requests() {
                       {(item.category === 'POSIBLEMENTE_VALIDO' || status === 'approved') ? 'Posiblemente Válido' :
                        (item.category === 'POSIBLEMENTE_INVALIDO' || status === 'denied') ? 'Posiblemente Inválido' :
                        'Revisión Manual'}
-                      {typeof item.decision?.confidence === 'number' && item.decision.confidence > 0 && (
-                        <span className="font-semibold opacity-90">({(item.decision.confidence * 100).toFixed(0)}%)</span>
-                      )}
                     </span>
                   )}
+                </div>
+
+                {/* Sub-etiquetas de Clasificación y Soporte */}
+                <div className="flex flex-wrap items-center gap-1.5 mb-1.5">
+                  {(() => {
+                    const nov = getNoveltyDetails(item);
+                    const hasSupp = Boolean(
+                      (item.emailInfo?.attachments && item.emailInfo.attachments.length > 0) ||
+                      (item.emailInfo?.images && item.emailInfo.images.length > 0) ||
+                      item.hasAttachment
+                    );
+                    const attInfo = getCoderAttendanceInfo(item);
+                    return (
+                      <>
+                        <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border flex items-center gap-1 ${nov.color}`}>
+                          <span>{nov.icon}</span>
+                          <span>{nov.badge}</span>
+                        </span>
+                        {hasSupp ? (
+                          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded border bg-emerald-50 text-emerald-700 border-emerald-200 flex items-center gap-0.5">
+                            <Paperclip size={10} />
+                            <span>Con soporte</span>
+                          </span>
+                        ) : (
+                          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded border bg-amber-50 text-amber-800 border-amber-300 flex items-center gap-0.5">
+                            <AlertTriangle size={10} />
+                            <span>Sin soporte</span>
+                          </span>
+                        )}
+                        {!attInfo.hasRemaining && (
+                          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded border bg-red-50 text-red-700 border-red-300" title="Coder sin inasistencias disponibles sin justificar">
+                            0 disp.
+                          </span>
+                        )}
+                      </>
+                    );
+                  })()}
                 </div>
 
                 <p className="text-[12px] text-[#7C8499] line-clamp-2 leading-relaxed">{snippet}</p>
@@ -668,6 +803,7 @@ export default function Requests() {
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2 mb-3">
+                  {/* Estado oficial */}
                   {(selectedEmail.category || selectedEmail.status) && (
                     <span className={`text-[10px] sm:text-[11px] font-bold px-2.5 sm:px-3 py-1 rounded-full flex items-center gap-1.5 ${
                       (selectedEmail.category === 'POSIBLEMENTE_VALIDO' || selectedEmail.status === 'approved') ? 'bg-[#20B486]/15 text-[#20B486]' :
@@ -677,13 +813,56 @@ export default function Requests() {
                       {(selectedEmail.category === 'POSIBLEMENTE_VALIDO' || selectedEmail.status === 'approved') ? '● POSIBLEMENTE VÁLIDO' :
                        (selectedEmail.category === 'POSIBLEMENTE_INVALIDO' || selectedEmail.status === 'denied') ? '● POSIBLEMENTE INVÁLIDO' :
                        '● REVISIÓN MANUAL'}
-                      {typeof selectedEmail.decision?.confidence === 'number' && selectedEmail.decision.confidence > 0 && (
-                        <span className="font-mono bg-white/70 px-1.5 py-0.5 rounded text-[10px] text-gray-700">
-                          {(selectedEmail.decision.confidence * 100).toFixed(0)}%
-                        </span>
-                      )}
                     </span>
                   )}
+
+                  {/* Clasificación de Tema / Novedad */}
+                  {(() => {
+                    const novelty = getNoveltyDetails(selectedEmail);
+                    return (
+                      <span className={`text-[10px] sm:text-[11px] font-bold px-2.5 sm:px-3 py-1 rounded-full border flex items-center gap-1.5 ${novelty.color}`}>
+                        <span>{novelty.icon}</span>
+                        <span>Tipo: {novelty.label}</span>
+                      </span>
+                    );
+                  })()}
+
+                  {/* Indicador de Soporte Adjunto */}
+                  {(() => {
+                    const hasSupport = Boolean(
+                      (selectedEmail.emailInfo?.attachments && selectedEmail.emailInfo.attachments.length > 0) ||
+                      (selectedEmail.emailInfo?.images && selectedEmail.emailInfo.images.length > 0) ||
+                      selectedEmail.hasAttachment
+                    );
+                    const count = (selectedEmail.emailInfo?.attachments?.length || 0) + (selectedEmail.emailInfo?.images?.length || 0);
+                    return hasSupport ? (
+                      <span className="text-[10px] sm:text-[11px] font-bold px-2.5 sm:px-3 py-1 rounded-full border bg-emerald-50 text-emerald-700 border-emerald-200 flex items-center gap-1">
+                        <Paperclip size={12} />
+                        <span>Con soporte adjunto{count > 0 ? ` (${count})` : ''}</span>
+                      </span>
+                    ) : (
+                      <span className="text-[10px] sm:text-[11px] font-bold px-2.5 sm:px-3 py-1 rounded-full border bg-amber-50 text-amber-800 border-amber-300 flex items-center gap-1">
+                        <AlertTriangle size={12} />
+                        <span>Sin soporte adjunto</span>
+                      </span>
+                    );
+                  })()}
+
+                  {/* Semáforo de Inasistencias Disponibles sin Justificar del Coder */}
+                  {(() => {
+                    const attInfo = getCoderAttendanceInfo(selectedEmail);
+                    return attInfo.hasRemaining ? (
+                      <span className="text-[10px] sm:text-[11px] font-bold px-2.5 sm:px-3 py-1 rounded-full border bg-emerald-50 text-emerald-700 border-emerald-200 flex items-center gap-1">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                        <span>{attInfo.remaining} inasistencia{attInfo.remaining > 1 ? 's' : ''} disponible{attInfo.remaining > 1 ? 's' : ''} sin justificar</span>
+                      </span>
+                    ) : (
+                      <span className="text-[10px] sm:text-[11px] font-bold px-2.5 sm:px-3 py-1 rounded-full border bg-red-50 text-red-700 border-red-300 flex items-center gap-1">
+                        <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse"></span>
+                        <span>Sin inasistencias disponibles (Límite excedido)</span>
+                      </span>
+                    );
+                  })()}
                 </div>
 
                 <div className="flex items-center gap-3">
@@ -740,10 +919,16 @@ export default function Requests() {
                           }`}
                         >
                           <div className="flex items-center gap-2.5 min-w-0">
-                            <div className={`w-8 h-8 rounded-lg flex items-center justify-center group-hover:scale-105 transition-transform shrink-0 ${
+                            <div className={`w-9 h-9 rounded-lg flex items-center justify-center group-hover:scale-105 transition-transform shrink-0 overflow-hidden ${
                               isImg ? 'bg-[#5B3FF5]/10 text-[#5B3FF5]' : 'bg-red-100 text-red-500'
                             }`}>
-                              {isImg ? <ImageIcon size={16} /> : <FileText size={16} />}
+                              {isImg && hasValidUrl ? (
+                                <img src={att.url} alt="" className="w-full h-full object-cover rounded-lg" onError={(e) => { (e.target as any).style.display = 'none'; }} />
+                              ) : isImg ? (
+                                <ImageIcon size={16} />
+                              ) : (
+                                <FileText size={16} />
+                              )}
                             </div>
                             <div className="flex flex-col min-w-0">
                               <span className="text-sm font-medium text-[#111827] group-hover:text-[#5B3FF5] transition-colors truncate max-w-[200px]">
@@ -768,50 +953,6 @@ export default function Requests() {
                       );
                     })}
                   </div>
-                </div>
-              )}
-
-              {/* Caja de Análisis Asistido de IA HSE */}
-              {selectedEmail.decision && (
-                <div className="p-5 bg-gradient-to-br from-[#F2F0FF] to-[#FAF8FF] border border-[#5B3FF5]/25 rounded-2xl shadow-xs">
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center gap-2">
-                      <div className="w-7 h-7 rounded-lg bg-[#5B3FF5] flex items-center justify-center text-white shadow-xs">
-                        <User size={15} />
-                      </div>
-                      <span className="font-bold text-[14px] text-[#5B3FF5]">
-                        {selectedEmail.decision.source === 'human' ? 'Resolución Humana Registrada' : 'Recomendación Asistida para la Team Leader (Strata Core)'}
-                      </span>
-                    </div>
-                    {typeof selectedEmail.decision?.confidence === 'number' && selectedEmail.decision.confidence > 0 && (
-                      <span className="text-[12px] font-bold text-[#5B3FF5] bg-[#5B3FF5]/10 px-3 py-1 rounded-full border border-[#5B3FF5]/20">
-                        {(selectedEmail.decision.confidence * 100).toFixed(0)}% de Certidumbre
-                      </span>
-                    )}
-                  </div>
-
-                  {/* Indicador de categoría sugerida */}
-                  <div className="mb-2.5 flex items-center gap-2">
-                    <span className="text-xs font-semibold text-[#7C8499] uppercase tracking-wider">Categoría Asistida:</span>
-                    <span className={`text-xs font-bold px-2.5 py-0.5 rounded-full ${
-                      (selectedEmail.category === 'POSIBLEMENTE_VALIDO' || selectedEmail.status === 'approved') ? 'bg-[#20B486]/15 text-[#20B486]' :
-                      (selectedEmail.category === 'POSIBLEMENTE_INVALIDO' || selectedEmail.status === 'denied') ? 'bg-[#FF5C67]/15 text-[#FF5C67]' :
-                      'bg-[#F5B83D]/15 text-[#F5B83D]'
-                    }`}>
-                      {(selectedEmail.category === 'POSIBLEMENTE_VALIDO' || selectedEmail.status === 'approved') ? 'POSIBLEMENTE VÁLIDO' :
-                       (selectedEmail.category === 'POSIBLEMENTE_INVALIDO' || selectedEmail.status === 'denied') ? 'POSIBLEMENTE INVÁLIDO' :
-                       'REVISIÓN MANUAL'}
-                    </span>
-                  </div>
-
-                  <p className="text-sm text-[#17203A] mb-2 leading-relaxed bg-white/70 p-3.5 rounded-xl border border-gray-100">
-                    {selectedEmail.decision.reasoning}
-                  </p>
-                  {selectedEmail.decision.modifiedBy && (
-                    <p className="text-xs text-[#7C8499] font-medium">
-                      Modificado por: <strong className="text-[#111827]">{selectedEmail.decision.modifiedBy}</strong> · {new Date(selectedEmail.decision.modifiedAt).toLocaleTimeString('es-ES')}
-                    </p>
-                  )}
                 </div>
               )}
 
@@ -873,16 +1014,13 @@ export default function Requests() {
                       </div>
                       <div>
                         <h3 className="text-[15px] font-bold text-[#111827]">
-                          Resolución Oficial HSE (Backend API Nativo)
+                          Resolución Oficial HSE
                         </h3>
                         <p className="text-xs text-[#7C8499]">
                           Al confirmar la decisión, el mensaje se responderá formalmente y se moverá a <strong>Enviados</strong>.
                         </p>
                       </div>
                     </div>
-                    <span className="text-[11px] font-mono text-[#7C8499] hidden sm:block">
-                      POST /api/v1/justifications/resolve
-                    </span>
                   </div>
 
                   {/* Feedback de resultado */}
@@ -1004,9 +1142,8 @@ export default function Requests() {
               </button>
 
               <div className="flex items-center gap-2 text-xs text-[#7C8499]">
-                <Zap size={14} className="text-[#5B3FF5]" />
-                <span>Servicio destino:</span>
-                <span className="font-mono text-[#111827]">API REST Nativa</span>
+                <ShieldCheck size={14} className="text-[#20B486]" />
+                <span className="font-medium text-[#7C8499]">Gestión HSE Riwi</span>
               </div>
             </div>
           </div>

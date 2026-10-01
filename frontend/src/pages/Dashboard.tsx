@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Mail, CheckCircle, XCircle, Clock, ChevronDown, Maximize2, BarChart2, PieChart as PieChartIcon, Download, Settings as SettingsIcon, Bell, LogOut } from 'lucide-react';
+import { Mail, CheckCircle, XCircle, Clock, ChevronDown, Maximize2, BarChart2, PieChart as PieChartIcon, Download, Settings as SettingsIcon, Bell, LogOut, ShieldAlert } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { api } from '../services/api';
 
@@ -19,11 +19,11 @@ export default function Dashboard() {
   });
 
   const [weeklyData, setWeeklyData] = useState<any[]>([
-    { name: 'Lun', Total: 200, Aprobados: 0, Denegados: 0 },
-    { name: 'Mar', Total: 0, Aprobados: 0, Denegados: 0 },
-    { name: 'Mié', Total: 0, Aprobados: 0, Denegados: 0 },
-    { name: 'Jue', Total: 0, Aprobados: 0, Denegados: 0 },
-    { name: 'Vie', Total: 0, Aprobados: 0, Denegados: 0 },
+    { name: 'Lun', Total: 200, Aprobados: 0, Denegados: 0, 'Por revisar': 200 },
+    { name: 'Mar', Total: 0, Aprobados: 0, Denegados: 0, 'Por revisar': 0 },
+    { name: 'Mié', Total: 0, Aprobados: 0, Denegados: 0, 'Por revisar': 0 },
+    { name: 'Jue', Total: 0, Aprobados: 0, Denegados: 0, 'Por revisar': 0 },
+    { name: 'Vie', Total: 0, Aprobados: 0, Denegados: 0, 'Por revisar': 0 },
   ]);
 
   const [recentEmails, setRecentEmails] = useState<any[]>([]);
@@ -39,7 +39,11 @@ export default function Dashboard() {
     // 2. Obtener tendencia semanal real
     api.getRequestsPerWeek().then((data: any) => {
       if (Array.isArray(data) && data.length > 0) {
-        setWeeklyData(data);
+        const formattedData = data.map((d: any) => ({
+          ...d,
+          'Por revisar': d['Por revisar'] ?? d['Pendientes'] ?? d['pendientes'] ?? 0
+        }));
+        setWeeklyData(formattedData);
       }
     });
 
@@ -61,14 +65,14 @@ export default function Dashboard() {
 
   const kpiCards = [
     { 
-      label: 'Total recibidos', 
+      label: 'Total Recibidos', 
       value: String(stats.total), 
       growth: '+100%', 
       text: 'radicados en el sistema', 
       icon: Mail, 
-      color: 'text-[#20B486]', 
-      bg: 'bg-[#20B486]', 
-      wave: 'from-[#20B486]/5 to-transparent' 
+      color: 'text-[#5B3FF5]', 
+      bg: 'bg-[#5B3FF5]', 
+      wave: 'from-[#5B3FF5]/5 to-transparent' 
     },
     { 
       label: 'Aprobados', 
@@ -76,9 +80,9 @@ export default function Dashboard() {
       growth: `${stats.approval_rate || 0}%`, 
       text: 'tasa de aprobación', 
       icon: CheckCircle, 
-      color: 'text-[#5B3FF5]', 
-      bg: 'bg-[#5B3FF5]', 
-      wave: 'from-[#5B3FF5]/5 to-transparent' 
+      color: 'text-[#20B486]', 
+      bg: 'bg-[#20B486]', 
+      wave: 'from-[#20B486]/5 to-transparent' 
     },
     { 
       label: 'Denegados', 
@@ -120,6 +124,13 @@ export default function Dashboard() {
         
         <div className="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-end relative">
           <button 
+            onClick={() => navigate('/attendance-ranking')}
+            className="hidden sm:flex items-center justify-center gap-1.5 bg-red-50 hover:bg-red-100 text-[#FF5C67] px-3.5 py-2.5 rounded-full border border-red-200 text-xs font-bold transition-colors cursor-pointer shadow-xs"
+          >
+            <ShieldAlert size={15} /> Top Inasistencias
+          </button>
+
+          <button 
             onClick={() => navigate('/requests')}
             className="flex-1 sm:flex-none flex items-center justify-center gap-2 bg-[#5B3FF5] hover:bg-[#4a32cc] px-4 py-2.5 rounded-full shadow-lg shadow-[#5B3FF5]/30 text-xs sm:text-sm font-semibold text-white transition-colors cursor-pointer"
           >
@@ -133,7 +144,11 @@ export default function Dashboard() {
             PA
           </div>
           {showProfileMenu && (
-            <div className="absolute top-12 right-0 w-48 bg-white rounded-xl shadow-lg border border-gray-100 py-2 z-50">
+            <div className="absolute top-12 right-0 w-52 bg-white rounded-xl shadow-lg border border-gray-100 py-2 z-50">
+              <button onClick={() => navigate('/attendance-ranking')} className="w-full text-left px-4 py-2 text-sm text-[#FF5C67] hover:bg-red-50 flex items-center gap-3 transition-colors cursor-pointer font-medium">
+                <ShieldAlert size={16} className="text-[#FF5C67]" />
+                Top Inasistencias
+              </button>
               <button onClick={() => navigate('/requests')} className="w-full text-left px-4 py-2 text-sm text-[#11132C] hover:bg-gray-50 flex items-center gap-3 transition-colors cursor-pointer">
                 <Bell size={16} className="text-[#7C8499]" />
                 Bandeja de Solicitudes
@@ -188,7 +203,7 @@ export default function Dashboard() {
               </div>
               <div>
                 <h3 className="font-bold text-sm sm:text-base text-[#11132C]">Solicitudes por semana</h3>
-                <p className="text-xs text-[#7C8499]">Total, aprobadas y denegadas</p>
+                <p className="text-xs text-[#7C8499]">Total, aprobadas, denegadas y por revisar</p>
               </div>
             </div>
           </div>
@@ -200,9 +215,10 @@ export default function Dashboard() {
                 <YAxis axisLine={false} tickLine={false} tick={{ fill: '#7C8499', fontSize: 11 }} />
                 <Tooltip cursor={{ fill: 'transparent' }} contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 15px rgba(0,0,0,0.1)' }} />
                 <Legend iconType="circle" wrapperStyle={{ top: -35, right: 10, width: 'auto', fontSize: 11 }} />
-                <Bar dataKey="Total" fill="#7B61FF" radius={[4, 4, 4, 4]} barSize={10} />
-                <Bar dataKey="Aprobados" fill="#20B486" radius={[4, 4, 4, 4]} barSize={10} />
-                <Bar dataKey="Denegados" fill="#FF5C67" radius={[4, 4, 4, 4]} barSize={10} />
+                <Bar dataKey="Total" fill="#5B3FF5" radius={[4, 4, 4, 4]} barSize={8} />
+                <Bar dataKey="Aprobados" fill="#20B486" radius={[4, 4, 4, 4]} barSize={8} />
+                <Bar dataKey="Denegados" fill="#FF5C67" radius={[4, 4, 4, 4]} barSize={8} />
+                <Bar dataKey="Por revisar" fill="#F5B83D" radius={[4, 4, 4, 4]} barSize={8} />
               </BarChart>
             </ResponsiveContainer>
           </div>
