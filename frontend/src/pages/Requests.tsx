@@ -80,7 +80,21 @@ export default function Requests() {
     const interval = setInterval(() => {
       fetchRequests(false);
     }, 3500);
-    return () => clearInterval(interval);
+
+    const handleSync = () => {
+      fetchRequests(false);
+    };
+
+    window.addEventListener('hse_justification_created', handleSync);
+    window.addEventListener('hse_justifications_updated', handleSync);
+    window.addEventListener('storage', handleSync);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('hse_justification_created', handleSync);
+      window.removeEventListener('hse_justifications_updated', handleSync);
+      window.removeEventListener('storage', handleSync);
+    };
   }, []);
 
   const handleFolderChange = (folder: 'inbox' | 'sent' | 'drafts') => {
@@ -667,14 +681,35 @@ export default function Requests() {
                 <div className="pt-2">
                   <p className="text-xs font-bold uppercase tracking-wider text-[#7C8499] mb-3">Adjuntos y Documentos</p>
                   <div className="flex flex-wrap gap-3">
-                    {selectedEmail.emailInfo.attachments.map((att: any, i: number) => (
-                      <div key={i} className="flex items-center gap-2 border border-[#E2E8F0] p-2.5 pr-4 rounded-xl hover:bg-gray-50 transition-colors cursor-pointer bg-white shadow-xs">
-                        <div className="w-8 h-8 bg-red-100 text-red-500 rounded-lg flex items-center justify-center">
-                          <Paperclip size={16} />
-                        </div>
-                        <span className="text-sm font-medium text-[#111827]">{att.name}</span>
-                      </div>
-                    ))}
+                    {selectedEmail.emailInfo.attachments.map((att: any, i: number) => {
+                      const hasValidUrl = Boolean(att.url && att.url !== '#');
+                      return (
+                        <a
+                          key={i}
+                          href={hasValidUrl ? att.url : undefined}
+                          target={hasValidUrl ? '_blank' : undefined}
+                          rel={hasValidUrl ? 'noopener noreferrer' : undefined}
+                          title={hasValidUrl ? 'Click para abrir o previsualizar el documento' : 'Documento adjunto'}
+                          className={`flex items-center gap-2.5 border border-[#E2E8F0] p-2.5 pr-4 rounded-xl transition-all bg-white shadow-xs ${
+                            hasValidUrl
+                              ? 'hover:border-[#5B3FF5] hover:bg-[#F2F0FF]/30 hover:shadow-sm cursor-pointer group'
+                              : 'cursor-default'
+                          }`}
+                        >
+                          <div className="w-8 h-8 bg-red-100 text-red-500 rounded-lg flex items-center justify-center group-hover:scale-105 transition-transform shrink-0">
+                            <Paperclip size={16} />
+                          </div>
+                          <div className="flex flex-col min-w-0">
+                            <span className="text-sm font-medium text-[#111827] group-hover:text-[#5B3FF5] transition-colors truncate max-w-[200px]">
+                              {att.name}
+                            </span>
+                            {hasValidUrl && (
+                              <span className="text-[10px] text-[#5B3FF5] font-bold">Ver evidencia ↗</span>
+                            )}
+                          </div>
+                        </a>
+                      );
+                    })}
                   </div>
                 </div>
               )}
