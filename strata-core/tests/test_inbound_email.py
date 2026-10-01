@@ -37,12 +37,34 @@ from services.inbound_service import inbound_service
 
 @pytest.fixture(autouse=True)
 def reset_service_state():
-    """Limpia el registro en memoria y cola de eventos antes de cada prueba."""
+    """Limpia el registro en memoria y registros de prueba en BD antes y después de cada prueba."""
     inbound_service._memory_registry.clear()
     inbound_service.event_queue.clear()
+    conn = inbound_service.get_db_connection()
+    if conn:
+        try:
+            with conn.cursor() as cur:
+                cur.execute("DELETE FROM inbound_emails WHERE message_id LIKE '%TEST%' OR message_id = 'MSG-12345' OR message_id = '18ac2fe34a012345';")
+                cur.execute("DELETE FROM justifications WHERE message_id LIKE '%TEST%' OR message_id = 'MSG-12345' OR message_id = '18ac2fe34a012345';")
+            conn.commit()
+        except Exception:
+            conn.rollback()
+        finally:
+            conn.close()
     yield
     inbound_service._memory_registry.clear()
     inbound_service.event_queue.clear()
+    conn = inbound_service.get_db_connection()
+    if conn:
+        try:
+            with conn.cursor() as cur:
+                cur.execute("DELETE FROM inbound_emails WHERE message_id LIKE '%TEST%' OR message_id = 'MSG-12345' OR message_id = '18ac2fe34a012345';")
+                cur.execute("DELETE FROM justifications WHERE message_id LIKE '%TEST%' OR message_id = 'MSG-12345' OR message_id = '18ac2fe34a012345';")
+            conn.commit()
+        except Exception:
+            conn.rollback()
+        finally:
+            conn.close()
 
 
 @pytest.fixture

@@ -60,6 +60,7 @@ if BASE_DIR not in sys.path:
     sys.path.insert(0, BASE_DIR)
 
 from routers.inbound_email import router as inbound_email_router
+from services.inbound_service import inbound_service
 app.include_router(inbound_email_router)
 
 TEMP_DIR = os.path.join(BASE_DIR, "temp_processing")
@@ -707,6 +708,11 @@ async def get_dashboard_kpis():
 @app.get("/api/requests")
 async def get_requests_list(status: Optional[str] = None, limit: int = 250):
     """Lista de justificaciones con formato adaptado para el frontend de Requests y Dashboard."""
+    try:
+        inbound_service.sync_unprocessed_inbounds()
+    except Exception as sync_err:
+        print(f"Warning sincronizando correos entrantes: {sync_err}")
+
     try:
         conn = get_db_connection()
         cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
