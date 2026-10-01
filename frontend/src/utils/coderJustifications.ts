@@ -140,9 +140,9 @@ function getInitialSeedData(coderName: string, coderCedula: string, coderEmail: 
 export function getCoderJustifications(coderCedula: string, coderName: string, coderEmail: string, route: string): CoderJustification[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) {
+    if (raw !== null) {
       const parsed: CoderJustification[] = JSON.parse(raw);
-      if (Array.isArray(parsed) && parsed.length > 0) {
+      if (Array.isArray(parsed)) {
         return parsed;
       }
     }
@@ -150,7 +150,7 @@ export function getCoderJustifications(coderCedula: string, coderName: string, c
     console.warn('Error leyendo justificaciones de localStorage:', e);
   }
 
-  // Si no hay datos, inicializar con las semillas y persistir
+  // Si no hay datos en localStorage en la primera carga total, inicializar con las semillas
   const initial = getInitialSeedData(coderName, coderCedula, coderEmail, route);
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(initial));
@@ -158,6 +158,27 @@ export function getCoderJustifications(coderCedula: string, coderName: string, c
     console.warn('Error guardando semillas iniciales:', e);
   }
   return initial;
+}
+
+/**
+ * Resetea y limpia todas las justificaciones en localStorage asociadas a una cédula para pruebas limpias
+ */
+export function resetCoderAccount(cedula: string): void {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) {
+      const parsed: CoderJustification[] = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        const filtered = parsed.filter(j => j.coder_cedula !== cedula && !j.coder_cedula?.includes(cedula));
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(filtered));
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('hse_justifications_updated'));
+        }
+      }
+    }
+  } catch (e) {
+    console.warn('Error reseteando cuenta en localStorage:', e);
+  }
 }
 
 /**

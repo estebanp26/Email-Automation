@@ -1129,3 +1129,48 @@ async def resolve_justification_in_db(justification_id: str, payload: ResolveReq
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.post("/api/coders/{cedula}/reset")
+async def reset_coder_data(cedula: str):
+    """Resetea completamente el historial de justificaciones e inasistencias de un coder para pruebas."""
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        cur.execute("SELECT id, email, full_name FROM coders WHERE cedula = %s LIMIT 1;", (cedula,))
+        coder = cur.fetchone()
+        if not coder:
+            cur.close()
+            conn.close()
+            raise HTTPException(status_code=404, detail="Coder no encontrado")
+
+        coder_id = str(coder["id"])
+        cur.execute("""
+            SELECT id FROM justifications 
+            WHERE coder_id = %s::uuid 
+               OR sender_email IN (%s, 'andresteheranr@gmail.com')
+               OR email_body LIKE %s;
+        """, (coder_id, coder["email"], f"%{cedula}%"))
+        just_ids = [str(r["id"]) for r in cur.fetchall()]
+
+        if just_ids:
+            cur.execute("DELETE FROM justifications_approved WHERE justificacion_id::text = ANY(%s) OR identificador_coder::text = %s;", (just_ids, coder_id))
+            cur.execute("DELETE FROM justifications_not_approved WHERE justificacion_id::text = ANY(%s) OR identificador_coder::text = %s;", (just_ids, coder_id))
+            cur.execute("DELETE FROM justification_audit_logs WHERE justification_id::text = ANY(%s);", (just_ids,))
+            cur.execute("DELETE FROM justification_attachments WHERE justification_id::text = ANY(%s);", (just_ids,))
+            cur.execute("DELETE FROM justifications WHERE id::text = ANY(%s);", (just_ids,))
+
+        cur.execute("DELETE FROM inbound_emails WHERE sender_email IN (%s, 'andresteheranr@gmail.com');", (coder["email"],))
+        cur.execute("UPDATE coders SET is_active = true, updated_at = CURRENT_TIMESTAMP WHERE id = %s::uuid;", (coder_id,))
+        conn.commit()
+        cur.close()
+        conn.close()
+        return {
+            "status": "success",
+            "message": f"Cuenta {cedula} ({coder['full_name']}) reseteada con éxito",
+            "deleted_justifications": len(just_ids)
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+

@@ -2,7 +2,8 @@ import type { Request, Student, KPIStats } from '../types';
 import { mockStudents, mockStats, mockRequests, mockRequestsPerWeek, mockEmails } from '../data/mock';
 import { 
   getAllCoderJustificationsAsRequests, 
-  updateCoderJustificationStatus 
+  updateCoderJustificationStatus,
+  resetCoderAccount
 } from '../utils/coderJustifications';
 
 const API_BASE = import.meta.env.VITE_API_URL?.replace(/\/$/, '') || '';
@@ -203,6 +204,15 @@ export const api = {
 
   modifyAiDecision: async (id: string, decision: any) => {
     return { id, decision };
+  },
+
+  resetCoder: async (cedula: string) => {
+    try {
+      await fetch(`${API_BASE}/api/coders/${cedula}/reset`, { method: 'POST' });
+    } catch (e) {
+      console.warn('Error en resetCoder:', e);
+    }
+    resetCoderAccount(cedula);
   },
 
   /**
