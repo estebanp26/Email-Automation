@@ -1000,16 +1000,17 @@ async def get_requests_weekly():
                 "Por revisar": r["pendientes"],
                 "100% Automáticas": r["automaticas"],
                 "Automáticas": r["automaticas"],
+                "Automatizadas": r["automaticas"],
                 "solicitudes": r["total"]
             })
         
         if not result:
             result = [
-                {"name": "Lun", "Total": 0, "Aprobados": 0, "Denegados": 0, "Pendientes": 0, "Por revisar": 0, "100% Automáticas": 0, "Automáticas": 0, "solicitudes": 0}
+                {"name": "Lun", "Total": 0, "Aprobados": 0, "Denegados": 0, "Pendientes": 0, "Por revisar": 0, "100% Automáticas": 0, "Automáticas": 0, "Automatizadas": 0, "solicitudes": 0}
             ]
         return result
     except Exception as e:
-        return [{"name": "Lun", "Total": 0, "Aprobados": 0, "Denegados": 0, "Pendientes": 0, "Por revisar": 0, "100% Automáticas": 0, "Automáticas": 0, "solicitudes": 0}]
+        return [{"name": "Lun", "Total": 0, "Aprobados": 0, "Denegados": 0, "Pendientes": 0, "Por revisar": 0, "100% Automáticas": 0, "Automáticas": 0, "Automatizadas": 0, "solicitudes": 0}]
 
 @app.get("/api/students")
 async def get_students_list():

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Mail, CheckCircle, XCircle, Clock, ChevronDown, Maximize2, BarChart2, PieChart as PieChartIcon, Download, Settings as SettingsIcon, Bell, LogOut, ShieldAlert } from 'lucide-react';
-import { BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { api } from '../services/api';
 
 export default function Dashboard() {
@@ -19,11 +19,11 @@ export default function Dashboard() {
   });
 
   const [weeklyData, setWeeklyData] = useState<any[]>([
-    { name: 'Lun', Total: 200, Aprobados: 0, Denegados: 0, 'Por revisar': 200, '100% Automáticas': 0 },
-    { name: 'Mar', Total: 0, Aprobados: 0, Denegados: 0, 'Por revisar': 0, '100% Automáticas': 0 },
-    { name: 'Mié', Total: 0, Aprobados: 0, Denegados: 0, 'Por revisar': 0, '100% Automáticas': 0 },
-    { name: 'Jue', Total: 0, Aprobados: 0, Denegados: 0, 'Por revisar': 0, '100% Automáticas': 0 },
-    { name: 'Vie', Total: 0, Aprobados: 0, Denegados: 0, 'Por revisar': 0, '100% Automáticas': 0 },
+    { name: 'Lun', Total: 200, Aprobados: 0, Denegados: 0, 'Por revisar': 200, 'Automatizadas': 0 },
+    { name: 'Mar', Total: 0, Aprobados: 0, Denegados: 0, 'Por revisar': 0, 'Automatizadas': 0 },
+    { name: 'Mié', Total: 0, Aprobados: 0, Denegados: 0, 'Por revisar': 0, 'Automatizadas': 0 },
+    { name: 'Jue', Total: 0, Aprobados: 0, Denegados: 0, 'Por revisar': 0, 'Automatizadas': 0 },
+    { name: 'Vie', Total: 0, Aprobados: 0, Denegados: 0, 'Por revisar': 0, 'Automatizadas': 0 },
   ]);
 
   const [recentEmails, setRecentEmails] = useState<any[]>([]);
@@ -42,7 +42,7 @@ export default function Dashboard() {
         const formattedData = data.map((d: any) => ({
           ...d,
           'Por revisar': d['Por revisar'] ?? d['Pendientes'] ?? d['pendientes'] ?? 0,
-          '100% Automáticas': d['100% Automáticas'] ?? d['Automáticas'] ?? d['automaticas'] ?? 0
+          'Automatizadas': d['Automatizadas'] ?? d['100% Automáticas'] ?? d['Automáticas'] ?? d['automaticas'] ?? 0
         }));
         setWeeklyData(formattedData);
       }
@@ -126,14 +126,14 @@ export default function Dashboard() {
         <div className="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-end relative">
           <button 
             onClick={() => navigate('/attendance-ranking')}
-            className="hidden sm:flex items-center justify-center gap-1.5 bg-red-50 hover:bg-red-100 text-[#FF5C67] px-3.5 py-2.5 rounded-full border border-red-200 text-xs font-bold transition-colors cursor-pointer shadow-xs"
+            className="flex items-center justify-center gap-1.5 bg-red-50 hover:bg-red-100 text-[#FF5C67] px-3 sm:px-3.5 py-2 sm:py-2.5 rounded-full border border-red-200 text-xs font-bold transition-colors cursor-pointer shadow-xs shrink-0"
           >
             <ShieldAlert size={15} /> Top Inasistencias
           </button>
 
           <button 
             onClick={() => navigate('/requests')}
-            className="flex-1 sm:flex-none flex items-center justify-center gap-2 bg-[#5B3FF5] hover:bg-[#4a32cc] px-4 py-2.5 rounded-full shadow-lg shadow-[#5B3FF5]/30 text-xs sm:text-sm font-semibold text-white transition-colors cursor-pointer"
+            className="flex-1 sm:flex-none flex items-center justify-center gap-2 bg-[#5B3FF5] hover:bg-[#4a32cc] px-3.5 sm:px-4 py-2 sm:py-2.5 rounded-full shadow-lg shadow-[#5B3FF5]/30 text-xs sm:text-sm font-semibold text-white transition-colors cursor-pointer shrink-0"
           >
             <Download size={15} /> Ver Solicitudes ({stats.total})
           </button>
@@ -196,31 +196,39 @@ export default function Dashboard() {
       {/* Charts Row (1 columna en móvil/tablet, 2fr_1fr en desktop) */}
       <div className="grid grid-cols-1 lg:grid-cols-[2fr_1fr] gap-4 sm:gap-6">
         {/* Bar Chart */}
-        <div className="bg-white rounded-3xl p-4 sm:p-6 shadow-[0_4px_20px_-10px_rgba(0,0,0,0.05)] border border-gray-50">
-          <div className="flex justify-between items-start mb-4 sm:mb-6">
+        <div className="bg-white rounded-3xl p-4 sm:p-6 shadow-[0_4px_20px_-10px_rgba(0,0,0,0.05)] border border-gray-50 flex flex-col justify-between">
+          <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-3 mb-4 sm:mb-6">
             <div className="flex items-center gap-3">
-              <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-[#5B3FF5]/10 flex items-center justify-center text-[#5B3FF5]">
+              <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-[#5B3FF5]/10 flex items-center justify-center text-[#5B3FF5] shrink-0">
                 <BarChart2 size={18} />
               </div>
               <div>
                 <h3 className="font-bold text-sm sm:text-base text-[#11132C]">Solicitudes por semana</h3>
-                <p className="text-xs text-[#7C8499]">Total, aprobadas, denegadas, por revisar y 100% automáticas</p>
+                <p className="text-xs text-[#7C8499]">Historial de resoluciones automáticas y manuales</p>
               </div>
+            </div>
+
+            {/* Badges de leyenda responsivos (sin superposición) */}
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[11px] font-medium text-[#7C8499]">
+              <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-[#5B3FF5] shrink-0" />Total</span>
+              <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-[#20B486] shrink-0" />Aprobados</span>
+              <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-[#FF5C67] shrink-0" />Denegados</span>
+              <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-[#F5B83D] shrink-0" />Por revisar</span>
+              <span className="flex items-center gap-1.5 text-[#007799] font-bold bg-[#00B4D8]/10 px-2 py-0.5 rounded-full shrink-0"><span className="w-2 h-2 rounded-full bg-[#00B4D8] shrink-0" />Automatizadas</span>
             </div>
           </div>
           
           <div className="h-[240px] sm:h-[280px] w-full">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={weeklyData} margin={{ top: 20, right: 0, left: -20, bottom: 0 }}>
+              <BarChart data={weeklyData} margin={{ top: 10, right: 5, left: -20, bottom: 0 }}>
                 <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#7C8499', fontSize: 11 }} dy={10} />
                 <YAxis axisLine={false} tickLine={false} tick={{ fill: '#7C8499', fontSize: 11 }} />
                 <Tooltip cursor={{ fill: 'transparent' }} contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 15px rgba(0,0,0,0.1)' }} />
-                <Legend iconType="circle" wrapperStyle={{ top: -35, right: 10, width: 'auto', fontSize: 11 }} />
                 <Bar dataKey="Total" fill="#5B3FF5" radius={[4, 4, 4, 4]} barSize={7} />
                 <Bar dataKey="Aprobados" fill="#20B486" radius={[4, 4, 4, 4]} barSize={7} />
                 <Bar dataKey="Denegados" fill="#FF5C67" radius={[4, 4, 4, 4]} barSize={7} />
                 <Bar dataKey="Por revisar" fill="#F5B83D" radius={[4, 4, 4, 4]} barSize={7} />
-                <Bar dataKey="100% Automáticas" fill="#00B4D8" radius={[4, 4, 4, 4]} barSize={7} />
+                <Bar dataKey="Automatizadas" fill="#00B4D8" radius={[4, 4, 4, 4]} barSize={7} />
               </BarChart>
             </ResponsiveContainer>
           </div>
