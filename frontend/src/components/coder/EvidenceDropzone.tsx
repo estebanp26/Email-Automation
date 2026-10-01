@@ -24,6 +24,7 @@ export interface SelectedFile {
   size: number;
   type: string;
   previewUrl: string;
+  dataUrl?: string;
   progress: number;
   status: 'uploading' | 'ready' | 'error';
   legibility: 'optimal' | 'standard' | 'warning';
@@ -219,9 +220,21 @@ export function EvidenceDropzone({
         // 4. Evaluación de legibilidad en cliente
         const legibilityResult = await evaluateLegibility(file, magicType);
 
-        // 5. Creación del objeto de soporte con estructura para Supabase Storage
+        // 5. Creación del objeto de soporte con estructura para Supabase Storage y persistencia en cliente
         const fileId = `${file.name}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
         const objectUrl = URL.createObjectURL(file);
+
+        let fileDataUrl = '';
+        try {
+          fileDataUrl = await new Promise<string>((resolve) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(typeof reader.result === 'string' ? reader.result : '');
+            reader.onerror = () => resolve('');
+            reader.readAsDataURL(file);
+          });
+        } catch {
+          fileDataUrl = '';
+        }
 
         const newSelectedFile: SelectedFile = {
           id: fileId,
@@ -229,7 +242,8 @@ export function EvidenceDropzone({
           name: file.name,
           size: file.size,
           type: magicType === 'pdf' ? 'application/pdf' : `image/${magicType}`,
-          previewUrl: objectUrl,
+          previewUrl: fileDataUrl || objectUrl,
+          dataUrl: fileDataUrl || objectUrl,
           progress: 15,
           status: 'uploading',
           legibility: legibilityResult.legibility,
@@ -304,6 +318,18 @@ export function EvidenceDropzone({
     const legibilityResult = await evaluateLegibility(targetFile, magicType);
     const objectUrl = URL.createObjectURL(targetFile);
 
+    let replacementDataUrl = '';
+    try {
+      replacementDataUrl = await new Promise<string>((resolve) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(typeof reader.result === 'string' ? reader.result : '');
+        reader.onerror = () => resolve('');
+        reader.readAsDataURL(targetFile);
+      });
+    } catch {
+      replacementDataUrl = '';
+    }
+
     const updated = filesRef.current.map((f) => {
       if (f.id === targetId) {
         URL.revokeObjectURL(f.previewUrl);
@@ -313,7 +339,8 @@ export function EvidenceDropzone({
           name: targetFile.name,
           size: targetFile.size,
           type: magicType === 'pdf' ? 'application/pdf' : `image/${magicType}`,
-          previewUrl: objectUrl,
+          previewUrl: replacementDataUrl || objectUrl,
+          dataUrl: replacementDataUrl || objectUrl,
           progress: 10,
           status: 'uploading' as const,
           legibility: legibilityResult.legibility,

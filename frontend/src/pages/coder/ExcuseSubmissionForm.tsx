@@ -133,19 +133,28 @@ export default function ExcuseSubmissionForm() {
         end_date: data.end_date,
         description: data.description,
         truth_declaration: data.truth_declaration,
-        attachments: selectedFiles.map((f) => ({
-          file_id: f.id,
-          filename: f.name,
-          size_bytes: f.size,
-          mime_type: f.type,
-          preview_url: f.previewUrl || f.presignedUrl || undefined,
-          legibility_status: f.legibility,
-          legibility_reason: f.legibilityReason,
-          // Estructura preparada para endpoints de carga o URLs prefirmadas de Supabase Storage
-          storage_bucket: 'hse-evidences',
-          storage_path: f.storagePath || `evidences/coder/${f.id}/${f.name}`,
-          upload_status: f.status,
-        })),
+        attachments: selectedFiles.map((f) => {
+          const effectiveDataUrl = f.dataUrl || (f.previewUrl?.startsWith('data:') ? f.previewUrl : undefined);
+          const base64Data = effectiveDataUrl && effectiveDataUrl.includes(',') 
+            ? effectiveDataUrl.split(',')[1] 
+            : undefined;
+
+          return {
+            file_id: f.id,
+            filename: f.name,
+            size_bytes: f.size,
+            mime_type: f.type,
+            preview_url: effectiveDataUrl || f.previewUrl || f.presignedUrl || undefined,
+            data_url: effectiveDataUrl,
+            data_base64: base64Data,
+            legibility_status: f.legibility,
+            legibility_reason: f.legibilityReason,
+            // Estructura preparada para endpoints de carga o URLs prefirmadas de Supabase Storage
+            storage_bucket: 'hse-evidences',
+            storage_path: f.storagePath || `evidences/coder/${f.id}/${f.name}`,
+            upload_status: f.status,
+          };
+        }),
         submitted_at: new Date().toISOString(),
       };
 

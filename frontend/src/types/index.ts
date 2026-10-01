@@ -31,7 +31,7 @@ export interface EmailInfo {
   subject: string;
   body: string;
   date: string;
-  attachments?: { name: string; url: string }[];
+  attachments?: { name: string; url: string; mime_type?: string; data_base64?: string }[];
   images?: string[];
 }
 
@@ -63,6 +63,8 @@ export interface CoderAttachment {
   size_bytes: number;
   mime_type: string;
   preview_url?: string;
+  data_url?: string;
+  data_base64?: string;
   legibility_status?: 'optimal' | 'standard' | 'warning';
   legibility_reason?: string;
   storage_path?: string;

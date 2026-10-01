@@ -43,6 +43,7 @@ function getInitialSeedData(coderName: string, coderCedula: string, coderEmail: 
           filename: 'foto_evidencia_inicial.jpg',
           size_bytes: 1420500,
           mime_type: 'image/jpeg',
+          data_url: 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="600" height="400" viewBox="0 0 600 400"><rect width="100%" height="100%" fill="%23f1f5f9"/><rect x="20" y="20" width="560" height="360" rx="12" fill="%23ffffff" stroke="%23cbd5e1" stroke-width="2"/><text x="300" y="190" font-family="sans-serif" font-size="18" font-weight="bold" fill="%23334155" text-anchor="middle">Soporte Evidencia Fotográfica</text><text x="300" y="225" font-family="sans-serif" font-size="13" fill="%2364748b" text-anchor="middle">Calamidad Doméstica - Barranquilla</text></svg>',
           legibility_status: 'warning',
           legibility_reason: 'Baja resolución. El texto y metadatos no son completamente legibles.',
         }
@@ -73,6 +74,7 @@ function getInitialSeedData(coderName: string, coderCedula: string, coderEmail: 
           filename: 'incapacidad_eps_sura.pdf',
           size_bytes: 524288,
           mime_type: 'application/pdf',
+          data_url: 'data:application/pdf;base64,JVBERi0xLjQKJcOkw7zDtsOfCjEgMCBvYmoKPDwKL1R5cGUgL0NhdGFsb2cKL1BhZ2VzIDIgMCBSCj4+CmVuZG9iagoyIDAgb2JqCjw8Ci9UeXBlIC9QYWdlcwovS2lkcyBbMyAwIFJdCi9Db3VudCAxCj4+CmVuZG9iagozIDAgb2JqCjw8Ci9UeXBlIC9QYWdlCi9QYXJlbnQgMiAwIFIKL01lZGlhQm94IFswIDAgNjEyIDc5Ml0KL0NvbnRlbnRzIDQgMCBSCj4+CmVuZG9iago0IDAgb2JqCjw8Ci9MZW5ndGggODAKPj4Kc3RyZWFtCkJUCi9GMSAxMiBUZgoxMDAgNzAwIFREClsoQ2VydGlmaWNhZG8gZGUgSW5jYXBhY2lkYWQgTWVkaWNhIC0gUml3aSBFZHVjYXRpb24pXSBUSgpFVAplbmRzdHJlYW0KZW5kb2JqCnhyZWYKMCA1CjAwMDAwMDAwMDAgNjU1MzUgZiAKMDAwMDAwMDAxNSAwMDAwMCBuIAowMDAwMDAwMDY4IDAwMDAwIG4gCjAwMDAwMDAxMjUgMDAwMDAgbiAKMDAwMDAwMDIxMyAwMDAwMCBuIAp0cmFpbGVyCjw8Ci9TaXplIDUKL1Jvb3QgMSAwIFIKPj4Kc3RhcnR4cmVmCjM0MgolJUVPRg==',
           legibility_status: 'optimal',
           legibility_reason: 'Documento vectorial digital legible.',
         }
@@ -101,6 +103,7 @@ function getInitialSeedData(coderName: string, coderCedula: string, coderEmail: 
           filename: 'reporte_incidencia_aire.png',
           size_bytes: 840100,
           mime_type: 'image/png',
+          data_url: 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="600" height="400" viewBox="0 0 600 400"><rect width="100%" height="100%" fill="%230f172a"/><rect x="20" y="20" width="560" height="360" rx="12" fill="%231e293b" stroke="%23334155" stroke-width="2"/><text x="300" y="190" font-family="sans-serif" font-size="18" font-weight="bold" fill="%2338bdf8" text-anchor="middle">Reporte de Incidencia de Energía</text><text x="300" y="225" font-family="sans-serif" font-size="13" fill="%2394a3b8" text-anchor="middle">Air-e - Circuito Barranquilla Norte</text></svg>',
           legibility_status: 'standard',
           legibility_reason: 'Captura con resolución estándar.',
         }
@@ -256,7 +259,9 @@ export function convertCoderJustificationToRequest(j: CoderJustification): Reque
 
   const attachmentsList = (j.attachments || []).map((att) => ({
     name: att.filename || 'Evidencia.pdf',
-    url: att.preview_url || att.storage_path || '#',
+    url: att.data_url || att.preview_url || att.storage_path || '#',
+    mime_type: att.mime_type,
+    data_base64: att.data_base64,
   }));
 
   const structuredBody = [
