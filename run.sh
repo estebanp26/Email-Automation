@@ -25,7 +25,7 @@ echo "  ================================================================"
 echo -e "${NC}"
 
 # 1. Comprobación y activación de contenedores Docker (PostgreSQL y n8n)
-echo -e "${CYAN}[1/4] Verificando contenedores Docker...${NC}"
+echo -e "${CYAN}[1/6] Verificando contenedores Docker...${NC}"
 
 if command -v docker &>/dev/null; then
     # PostgreSQL
@@ -53,9 +53,13 @@ else
     echo -e "  ${YELLOW}Aviso: Docker no detectado directamente en PATH; asumiendo servicios externos activos.${NC}"
 fi
 
-# 2. Detección del intérprete Python para Strata Core
-echo -e "${CYAN}[2/5] Configurando entorno Python para Backend Strata Core...${NC}"
-if [ -f "$PROJECT_ROOT/strata-core/.venv/bin/python3" ]; then
+# 2. Detección del intérprete Python
+echo -e "${CYAN}[2/6] Configurando entorno Python para Backend y Servicios...${NC}"
+if [ -f "$PROJECT_ROOT/.venv/bin/python3" ]; then
+    PYTHON_CMD="$PROJECT_ROOT/.venv/bin/python3"
+elif [ -f "$PROJECT_ROOT/.venv/bin/python" ]; then
+    PYTHON_CMD="$PROJECT_ROOT/.venv/bin/python"
+elif [ -f "$PROJECT_ROOT/strata-core/.venv/bin/python3" ]; then
     PYTHON_CMD="$PROJECT_ROOT/strata-core/.venv/bin/python3"
 elif [ -f "$PROJECT_ROOT/strata-core/.venv/bin/python" ]; then
     PYTHON_CMD="$PROJECT_ROOT/strata-core/.venv/bin/python"
@@ -72,6 +76,7 @@ echo -e "  ${GREEN}✓ Intérprete Python: $PYTHON_CMD${NC}"
 
 # Variables de proceso para limpieza
 BACKEND_PID=""
+BACKEND_NATIVE_PID=""
 FRONTEND_PID=""
 LISTENER_PID=""
 
@@ -81,6 +86,10 @@ cleanup() {
         echo -e "  Deteniendo Escuchador de Gmail (PID: $LISTENER_PID)..."
         kill "$LISTENER_PID" 2>/dev/null || true
     fi
+    if [ -n "$BACKEND_NATIVE_PID" ] && kill -0 "$BACKEND_NATIVE_PID" 2>/dev/null; then
+        echo -e "  Deteniendo Backend Nativo (PID: $BACKEND_NATIVE_PID)..."
+        kill "$BACKEND_NATIVE_PID" 2>/dev/null || true
+    fi
     if [ -n "$BACKEND_PID" ] && kill -0 "$BACKEND_PID" 2>/dev/null; then
         echo -e "  Deteniendo Backend Strata Core (PID: $BACKEND_PID)..."
         kill "$BACKEND_PID" 2>/dev/null || true
@@ -89,7 +98,8 @@ cleanup() {
         echo -e "  Deteniendo Frontend Vite (PID: $FRONTEND_PID)..."
         kill "$FRONTEND_PID" 2>/dev/null || true
     fi
-    # Limpieza de procesos residuales en puertos 8001 y 5173
+    # Limpieza de procesos residuales en puertos 8000, 8001 y 5173
+    fuser -k 8000/tcp 2>/dev/null || true
     fuser -k 8001/tcp 2>/dev/null || true
     fuser -k 5173/tcp 2>/dev/null || true
     echo -e "${GREEN}✓ Todos los servicios se han detenido correctamente.${NC}\n"
@@ -99,22 +109,28 @@ cleanup() {
 trap cleanup SIGINT SIGTERM EXIT
 
 # Liberar puertos por si estaban ocupados previamente
+fuser -k 8000/tcp 2>/dev/null || true
 fuser -k 8001/tcp 2>/dev/null || true
 fuser -k 5173/tcp 2>/dev/null || true
 sleep 1
 
-# 3. Iniciar Backend Strata Core (FastAPI en puerto 8001)
-echo -e "${CYAN}[3/5] Levantando Backend Strata Core en puerto 8001...${NC}"
+# 3. Iniciar Backend Nativo FastAPI (puerto 8000)
+echo -e "${CYAN}[3/6] Levantando Backend Nativo en puerto 8000...${NC}"
+$PYTHON_CMD -m uvicorn backend.app.main:app --host 0.0.0.0 --port 8000 &
+BACKEND_NATIVE_PID=$!
+
+# 4. Iniciar Backend Strata Core (FastAPI en puerto 8001)
+echo -e "${CYAN}[4/6] Levantando Backend Strata Core en puerto 8001...${NC}"
 cd "$PROJECT_ROOT/strata-core"
 $PYTHON_CMD -m uvicorn server:app --host 0.0.0.0 --port 8001 --reload &
 BACKEND_PID=$!
 cd "$PROJECT_ROOT"
 
-# Esperar a que el backend responda
+# Esperar a que los backends respondan
 sleep 2
 
-# 4. Iniciar Frontend (Vite en puerto 5173)
-echo -e "${CYAN}[4/5] Levantando Frontend (Vite + React) en puerto 5173...${NC}"
+# 5. Iniciar Frontend (Vite en puerto 5173)
+echo -e "${CYAN}[5/6] Levantando Frontend (Vite + React) en puerto 5173...${NC}"
 cd "$PROJECT_ROOT/frontend"
 npm run dev -- --host 0.0.0.0 --port 5173 &
 FRONTEND_PID=$!
@@ -123,23 +139,29 @@ cd "$PROJECT_ROOT"
 # Esperar que los servicios se estabilicen
 sleep 2
 
-# 5. Iniciar Escuchador en vivo de Gmail (IMAP)
-echo -e "${CYAN}[5/5] Levantando Escuchador en vivo de Gmail (IMAP)...${NC}"
+# 6. Iniciar Escuchador en vivo de Gmail (IMAP)
+echo -e "${CYAN}[6/6] Levantando Escuchador en vivo de Gmail (IMAP)...${NC}"
 $PYTHON_CMD "$PROJECT_ROOT/scripts/gmail_live_listener.py" &
 LISTENER_PID=$!
 
 echo -e "\n${GREEN}${BOLD}================================================================${NC}"
-echo -e "${GREEN}${BOLD}  ✓ ECOSISTEMA RIWI HSE LEVANTADO Y LISTO PARA PRUEBAS          ${NC}"
+echo -e "${GREEN}${BOLD}  ✓ ECOSISTEMA RIWI HSE LEVANTADO Y LISTO PARA LA PRESENTACIÓN  ${NC}"
 echo -e "${GREEN}${BOLD}================================================================${NC}"
 echo -e "  ${BOLD}🖥️  Frontend Tablero HSE:${NC}    ${BLUE}http://localhost:5173${NC}"
 echo -e "  ${BOLD}📋 Bandeja de Solicitudes:${NC}  ${BLUE}http://localhost:5173/requests${NC}"
 echo -e "  ${BOLD}👥 Directorio de Coders:${NC}    ${BLUE}http://localhost:5173/students${NC}"
 echo -e "  ${BOLD}⚡ Backend Strata Core API:${NC} ${BLUE}http://localhost:8001/docs${NC}"
+echo -e "  ${BOLD}🛠️  Backend Nativo API:${NC}     ${BLUE}http://localhost:8000/docs${NC}"
 echo -e "  ${BOLD}🔄 Orquestador n8n:${NC}         ${BLUE}http://localhost:5678${NC}"
 echo -e "  ${BOLD}🗄️  PostgreSQL Database:${NC}     ${BLUE}localhost:5432 (hse_email_automation)${NC}"
 echo -e "  ${BOLD}📨 Escuchador de Gmail:${NC}     ${BLUE}Activo en tiempo real${NC}"
 echo -e "${GREEN}================================================================${NC}"
 echo -e "${YELLOW}Presiona Ctrl+C en cualquier momento para detener todos los servicios.${NC}\n"
 
-# Mantener en ejecución
-wait "$BACKEND_PID" "$FRONTEND_PID" "$LISTENER_PID"
+# Desactivar salida inmediata en caso de errores en hilos secundarios para mantener la demo activa
+set +e
+
+# Mantener servidores principales en ejecución
+while kill -0 "$FRONTEND_PID" 2>/dev/null && kill -0 "$BACKEND_PID" 2>/dev/null; do
+    sleep 2
+done
