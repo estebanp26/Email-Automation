@@ -316,6 +316,7 @@ export const api = {
         reason: payload.description,
         attachment_filename: payload.attachments?.[0]?.filename,
         attachment_mime_type: payload.attachments?.[0]?.mime_type,
+        attachment_data_base64: payload.attachments?.[0]?.data_base64,
       };
 
       const res = await fetch(`${API_BASE}/api/v1/coders/excuses`, {

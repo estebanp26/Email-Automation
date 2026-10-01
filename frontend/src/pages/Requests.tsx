@@ -4,7 +4,7 @@ import {
   Mail, Send, FileEdit, Trash, Reply, Inbox, Paperclip, User, 
   CheckCircle2, XCircle, AlertCircle, Zap,
   Calendar, ShieldCheck, MessageSquare, AlertTriangle, RotateCw, Search,
-  ArrowLeft, Download
+  ArrowLeft, Download, FileText, Image as ImageIcon, X
 } from 'lucide-react';
 import clsx from 'clsx';
 import { api } from '../services/api';
@@ -19,6 +19,43 @@ export default function Requests() {
   const [searchQuery, setSearchQuery] = useState('');
   const [showMobileDetail, setShowMobileDetail] = useState(false);
   
+  // Preview Modal State for Attachments (Images and Documents)
+  const [previewModalAttachment, setPreviewModalAttachment] = useState<{
+    name: string;
+    url: string;
+    mime_type?: string;
+  } | null>(null);
+
+  const isImageAttachment = (att: { name: string; url: string; mime_type?: string }) => {
+    const mime = (att.mime_type || '').toLowerCase();
+    if (mime.startsWith('image/')) return true;
+    if (att.url && att.url.startsWith('data:image/')) return true;
+    const ext = (att.name || '').toLowerCase();
+    return ext.endsWith('.png') || ext.endsWith('.jpg') || ext.endsWith('.jpeg') || ext.endsWith('.gif') || ext.endsWith('.webp') || ext.endsWith('.svg');
+  };
+
+  const handleDownloadAttachment = (e: React.MouseEvent, att: { name: string; url: string }) => {
+    e.stopPropagation();
+    e.preventDefault();
+    if (!att.url || att.url === '#') return;
+    try {
+      const link = document.createElement('a');
+      link.href = att.url;
+      link.download = att.name || 'documento_soporte';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch (err) {
+      console.error('Error al descargar archivo:', err);
+    }
+  };
+
+  const handleOpenPreview = (e: React.MouseEvent, att: { name: string; url: string; mime_type?: string }) => {
+    e.stopPropagation();
+    e.preventDefault();
+    setPreviewModalAttachment(att);
+  };
+
   // Composing state
   const [isComposing, setIsComposing] = useState(false);
   const [composeData, setComposeData] = useState({ to: '', subject: '', body: '' });
@@ -676,38 +713,58 @@ export default function Requests() {
                 {selectedEmail.emailInfo?.body || selectedEmail.body}
               </div>
 
-              {/* Adjuntos */}
-              {selectedEmail.emailInfo?.attachments && selectedEmail.emailInfo.attachments.length > 0 && (
+              {/* Adjuntos y Evidencias */}
+              {((selectedEmail.emailInfo?.attachments && selectedEmail.emailInfo.attachments.length > 0) || (selectedEmail.emailInfo?.images && selectedEmail.emailInfo.images.length > 0)) && (
                 <div className="pt-2">
-                  <p className="text-xs font-bold uppercase tracking-wider text-[#7C8499] mb-3">Adjuntos y Documentos</p>
+                  <p className="text-xs font-bold uppercase tracking-wider text-[#7C8499] mb-3">Adjuntos y Documentos Probatorios</p>
                   <div className="flex flex-wrap gap-3">
-                    {selectedEmail.emailInfo.attachments.map((att: any, i: number) => {
+                    {[
+                      ...(selectedEmail.emailInfo?.attachments || []),
+                      ...((selectedEmail.emailInfo?.images || []).map((imgUrl: string, idx: number) => ({
+                        name: `soporte_evidencia_${idx + 1}.png`,
+                        url: imgUrl,
+                        mime_type: 'image/png'
+                      })))
+                    ].map((att: any, i: number) => {
                       const hasValidUrl = Boolean(att.url && att.url !== '#');
+                      const isImg = isImageAttachment(att);
                       return (
-                        <a
+                        <div
                           key={i}
-                          href={hasValidUrl ? att.url : undefined}
-                          target={hasValidUrl ? '_blank' : undefined}
-                          rel={hasValidUrl ? 'noopener noreferrer' : undefined}
-                          title={hasValidUrl ? 'Click para abrir o previsualizar el documento' : 'Documento adjunto'}
-                          className={`flex items-center gap-2.5 border border-[#E2E8F0] p-2.5 pr-4 rounded-xl transition-all bg-white shadow-xs ${
+                          onClick={(e) => hasValidUrl && handleOpenPreview(e, att)}
+                          title={hasValidUrl ? 'Click para previsualizar documento o imagen' : 'Documento adjunto'}
+                          className={`flex items-center justify-between gap-3 border border-[#E2E8F0] p-2.5 px-3.5 rounded-xl transition-all bg-white shadow-xs ${
                             hasValidUrl
                               ? 'hover:border-[#5B3FF5] hover:bg-[#F2F0FF]/30 hover:shadow-sm cursor-pointer group'
                               : 'cursor-default'
                           }`}
                         >
-                          <div className="w-8 h-8 bg-red-100 text-red-500 rounded-lg flex items-center justify-center group-hover:scale-105 transition-transform shrink-0">
-                            <Paperclip size={16} />
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            <div className={`w-8 h-8 rounded-lg flex items-center justify-center group-hover:scale-105 transition-transform shrink-0 ${
+                              isImg ? 'bg-[#5B3FF5]/10 text-[#5B3FF5]' : 'bg-red-100 text-red-500'
+                            }`}>
+                              {isImg ? <ImageIcon size={16} /> : <FileText size={16} />}
+                            </div>
+                            <div className="flex flex-col min-w-0">
+                              <span className="text-sm font-medium text-[#111827] group-hover:text-[#5B3FF5] transition-colors truncate max-w-[200px]">
+                                {att.name}
+                              </span>
+                              {hasValidUrl && (
+                                <span className="text-[10px] text-[#5B3FF5] font-bold">Ver evidencia ↗</span>
+                              )}
+                            </div>
                           </div>
-                          <div className="flex flex-col min-w-0">
-                            <span className="text-sm font-medium text-[#111827] group-hover:text-[#5B3FF5] transition-colors truncate max-w-[200px]">
-                              {att.name}
-                            </span>
-                            {hasValidUrl && (
-                              <span className="text-[10px] text-[#5B3FF5] font-bold">Ver evidencia ↗</span>
-                            )}
-                          </div>
-                        </a>
+                          {hasValidUrl && (
+                            <button
+                              type="button"
+                              onClick={(e) => handleDownloadAttachment(e, att)}
+                              title="Descargar archivo a tu dispositivo"
+                              className="p-1.5 text-[#7C8499] hover:text-[#5B3FF5] hover:bg-[#5B3FF5]/10 rounded-lg transition-colors ml-2 shrink-0 cursor-pointer"
+                            >
+                              <Download size={15} />
+                            </button>
+                          )}
+                        </div>
                       );
                     })}
                   </div>
@@ -962,6 +1019,86 @@ export default function Requests() {
           </div>
         )}
       </div>
+
+      {/* Modal de Previsualización y Descarga de Archivos / Imágenes */}
+      <AnimatePresence>
+        {previewModalAttachment && (
+          <div 
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs"
+            onClick={() => setPreviewModalAttachment(null)}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden"
+            >
+              {/* Header Modal */}
+              <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/90">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className={`p-2 rounded-xl ${
+                    isImageAttachment(previewModalAttachment) 
+                      ? 'bg-[#5B3FF5]/10 text-[#5B3FF5]' 
+                      : 'bg-red-50 text-red-500'
+                  }`}>
+                    {isImageAttachment(previewModalAttachment) ? <ImageIcon size={20} /> : <FileText size={20} />}
+                  </div>
+                  <div className="min-w-0">
+                    <h3 className="font-bold text-[#111827] text-sm md:text-base truncate max-w-[320px] md:max-w-md">
+                      {previewModalAttachment.name}
+                    </h3>
+                    <p className="text-xs text-[#7C8499]">
+                      {isImageAttachment(previewModalAttachment) ? 'Soporte Fotográfico / Imagen' : 'Documento Probatorio / PDF'}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    type="button"
+                    onClick={(e) => handleDownloadAttachment(e, previewModalAttachment)}
+                    className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold text-white bg-[#5B3FF5] hover:bg-[#492fe0] rounded-xl transition-all shadow-xs cursor-pointer"
+                    title="Descargar archivo a tu dispositivo"
+                  >
+                    <Download size={14} />
+                    <span>Descargar</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPreviewModalAttachment(null)}
+                    className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-200/60 rounded-xl transition-colors cursor-pointer"
+                    title="Cerrar visor"
+                  >
+                    <X size={20} />
+                  </button>
+                </div>
+              </div>
+
+              {/* Visor Content */}
+              <div className="p-4 md:p-6 flex-1 overflow-auto flex items-center justify-center bg-slate-100/60 min-h-[350px]">
+                {isImageAttachment(previewModalAttachment) ? (
+                  <div className="flex flex-col items-center justify-center max-w-full">
+                    <img
+                      src={previewModalAttachment.url}
+                      alt={previewModalAttachment.name}
+                      className="max-h-[68vh] max-w-full object-contain rounded-xl shadow-md border border-slate-200 bg-white"
+                    />
+                  </div>
+                ) : (
+                  <div className="w-full h-full flex flex-col items-center">
+                    <iframe
+                      src={previewModalAttachment.url}
+                      title={previewModalAttachment.name}
+                      className="w-full h-[68vh] rounded-xl border border-slate-200 bg-white shadow-sm"
+                    />
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
       
     </div>
   </div>

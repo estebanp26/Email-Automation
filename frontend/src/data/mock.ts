@@ -32,7 +32,11 @@ export const mockRequests: Request[] = [
       subject: 'Incapacidad médica por 3 días',
       body: 'Adjunto incapacidad médica debido a una fuerte gripe. Estaré ausente hasta el jueves.',
       date: '2023-10-25T10:00:00Z',
-      attachments: [{ name: 'incapacidad_ana.pdf', url: '#' }]
+      attachments: [{ 
+        name: 'incapacidad_ana.pdf', 
+        url: 'data:application/pdf;base64,JVBERi0xLjQKJcOkw7zDtsOfCjEgMCBvYmoKPDwKL1R5cGUgL0NhdGFsb2cKL1BhZ2VzIDIgMCBSCj4+CmVuZG9iagoyIDAgb2JqCjw8Ci9UeXBlIC9QYWdlcwovS2lkcyBbMyAwIFJdCi9Db3VudCAxCj4+CmVuZG9iagozIDAgb2JqCjw8Ci9UeXBlIC9QYWdlCi9QYXJlbnQgMiAwIFIKL01lZGlhQm94IFswIDAgNjEyIDc5Ml0KL0NvbnRlbnRzIDQgMCBSCj4+CmVuZG9iago0IDAgb2JqCjw8Ci9MZW5ndGggODAKPj4Kc3RyZWFtCkJUCi9GMSAxMiBUZgoxMDAgNzAwIFREClsoQ2VydGlmaWNhZG8gZGUgSW5jYXBhY2lkYWQgTWVkaWNhIC0gQW5hIEdvbWV6IC0gUml3aSBFZHVjYXRpb24pXSBUSgpFVAplbmRzdHJlYW0KZW5kb2JqCnhyZWYKMCA1CjAwMDAwMDAwMDAgNjU1MzUgZiAKMDAwMDAwMDAxNSAwMDAwMCBuIAowMDAwMDAwMDY4IDAwMDAwIG4gCjAwMDAwMDAxMjUgMDAwMDAgbiAKMDAwMDAwMDIxMyAwMDAwMCBuIAp0cmFpbGVyCjw8Ci9TaXplIDUKL1Jvb3QgMSAwIFIKPj4Kc3RhcnR4cmVmCjM0MgolJUVPRg==',
+        mime_type: 'application/pdf'
+      }]
     },
     status: 'approved',
     decision: {
