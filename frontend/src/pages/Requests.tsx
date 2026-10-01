@@ -167,8 +167,18 @@ export default function Requests() {
     details?: string;
   } | null>(null);
 
-  const inboxList = requests.filter((r: any) => !r.hasHumanIntervention && !r.hseDecision && !r.isResponded);
-  const resolvedRequests = requests.filter((r: any) => r.hasHumanIntervention || r.hseDecision || r.isResponded);
+  const isRequestResolved = (r: any) => Boolean(
+    r.hasHumanIntervention || 
+    r.hseDecision || 
+    r.isResponded || 
+    r.isAutomatic || 
+    r.status === 'approved' || 
+    r.status === 'denied' ||
+    (r.decision?.source === 'ai' && (r.decision?.confidence ?? 0) >= 0.90 && (r.category === 'POSIBLEMENTE_VALIDO' || r.recommendation === 'POSIBLEMENTE_VALIDO' || r.status === 'approved'))
+  );
+
+  const inboxList = requests.filter((r: any) => !isRequestResolved(r));
+  const resolvedRequests = requests.filter((r: any) => isRequestResolved(r));
   const sentList = [...resolvedRequests, ...sentEmails];
   const activeList = activeFolder === 'inbox' ? inboxList : activeFolder === 'sent' ? sentList : [];
 
@@ -192,8 +202,10 @@ export default function Requests() {
       setRequests(data);
       setSelectedEmail((prev: any) => {
         if (!prev) {
-          const pending = data.filter((r: any) => !r.hasHumanIntervention && !r.hseDecision && !r.isResponded);
-          return pending.length > 0 ? pending[0] : (data.length > 0 ? data[0] : null);
+          const currentList = activeFolder === 'inbox' 
+            ? data.filter((r: any) => !isRequestResolved(r)) 
+            : data.filter((r: any) => isRequestResolved(r));
+          return currentList.length > 0 ? currentList[0] : (data.length > 0 ? data[0] : null);
         }
         const updated = data.find((r: any) => r.id === prev.id);
         return updated || prev;
@@ -610,7 +622,7 @@ export default function Requests() {
                   <h4 className="text-[13px] font-semibold text-[#17203A] truncate">{subject}</h4>
                   {item.isAutomatic ? (
                     <span className="text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 flex items-center gap-1 bg-[#00B4D8]/15 text-[#007799] border border-[#00B4D8]/30">
-                      <Bot size={11} /> 100% Automática
+                      <Bot size={11} /> Automatizada
                     </span>
                   ) : (item.category || status) ? (
                     <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 flex items-center gap-1 ${
@@ -966,7 +978,7 @@ export default function Requests() {
               {/* ============================================================== */}
               {/* PANEL DE DETALLE: ENVIADOS (NOTIFICADO) vs BANDEJA (POR RESOLVER) */}
               {/* ============================================================== */}
-              {(activeFolder === 'sent' || selectedEmail.hasHumanIntervention || selectedEmail.hseDecision) ? (
+              {(activeFolder === 'sent' || isRequestResolved(selectedEmail)) ? (
                 <div className="border border-[#20B486]/30 bg-[#F4FDF9] rounded-2xl p-6 shadow-sm space-y-4">
                   <div className="flex items-center justify-between border-b border-[#20B486]/20 pb-3">
                     <div className="flex items-center gap-2.5">
@@ -985,7 +997,7 @@ export default function Requests() {
                     <div className="flex items-center gap-2">
                       {selectedEmail.isAutomatic && (
                         <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-[#00B4D8]/15 text-[#007799] border border-[#00B4D8]/30 flex items-center gap-1">
-                          <Bot size={13} /> 100% Automática
+                          <Bot size={13} /> Automatizada
                         </span>
                       )}
                       <span className={`text-xs font-bold px-3 py-1 rounded-full ${

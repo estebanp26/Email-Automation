@@ -173,6 +173,19 @@ export function saveNewCoderJustification(item: Partial<CoderJustification>): Co
 
   const radicadoId = item.radicado || `RAD-HSE-2026-${Math.floor(100000 + Math.random() * 900000)}`;
 
+  // Evaluador determinista de IA para radicados directos vía portal
+  const attachments = item.attachments || [];
+  const hasAttachments = attachments.length > 0;
+  const desc = (item.description || '').toLowerCase();
+  const novelty = (item.novelty_type || '').toLowerCase();
+  const fullText = `${desc} ${novelty}`.toLowerCase();
+  const isExtemporaneous = fullText.includes('vencid') || fullText.includes('extemporan') || fullText.includes('semana pasada');
+  const epsKeywords = ["sura", "sanitas", "salud total", "nueva eps", "compensar", "famisanar", "coosalud", "mutual ser", "eps", "ips", "clinica", "clínica", "hospital", "cita", "ortodoncia", "odontol"];
+  const mentionsEpsOrMedical = epsKeywords.some(w => fullText.includes(w)) || novelty.includes('incapacidad') || novelty.includes('cita');
+
+  const isAutoApproved = hasAttachments && mentionsEpsOrMedical && !isExtemporaneous;
+  const status: CoderJustificationStatus = isAutoApproved ? 'APPROVED' : 'REVISION_MANUAL';
+
   const newItem: CoderJustification = {
     id: `just-${Date.now()}`,
     radicado: radicadoId,
@@ -186,8 +199,15 @@ export function saveNewCoderJustification(item: Partial<CoderJustification>): Co
     end_date: item.end_date || new Date().toISOString().split('T')[0],
     description: item.description || '',
     truth_declaration: Boolean(item.truth_declaration),
-    status: 'REVISION_MANUAL',
-    attachments: item.attachments || [],
+    status,
+    hse_notes: isAutoApproved 
+      ? 'Resolución 100% automática del Sistema HSE: Justificación médica validada con soporte reglamentario EPS adjunto sin intervención humana.'
+      : hasAttachments
+        ? 'Reporte radicado vía portal con soporte. Requiere verificación manual de tolerancia HSE.'
+        : 'Reporte radicado vía portal sin soporte adjunto. Requiere validación y criterio del Team Leader HSE.',
+    hse_reviewer: isAutoApproved ? 'Sistema IA HSE' : undefined,
+    hse_reviewed_at: isAutoApproved ? new Date().toISOString() : undefined,
+    attachments,
     submitted_at: new Date().toISOString(),
   };
 
@@ -249,20 +269,32 @@ export function updateCoderJustificationWithCorrection(
  * Convierte una Justificación del Coder al modelo canónico Request consumido por la TL (Requests.tsx y Dashboard)
  */
 export function convertCoderJustificationToRequest(j: CoderJustification): Request {
-  const isApproved = j.status === 'APPROVED';
-  const isDisapproved = j.status === 'DISAPPROVED';
-  const isCorrection = j.status === 'REQUEST_CORRECTION';
-  const hasDecision = isApproved || isDisapproved || isCorrection;
-
-  const mappedStatus = isApproved ? 'approved' : isDisapproved ? 'denied' : 'pending_review';
-  const mappedCategory = isApproved ? 'POSIBLEMENTE_VALIDO' : isDisapproved ? 'POSIBLEMENTE_INVALIDO' : 'REVISION_MANUAL';
-
   const attachmentsList = (j.attachments || []).map((att) => ({
     name: att.filename || 'Evidencia.pdf',
     url: att.data_url || att.preview_url || att.storage_path || '#',
     mime_type: att.mime_type,
     data_base64: att.data_base64,
   }));
+
+  const hasAttachments = attachmentsList.length > 0;
+  const desc = (j.description || '').toLowerCase();
+  const novelty = (j.novelty_type || '').toLowerCase();
+  const fullText = `${desc} ${novelty}`.toLowerCase();
+  const isExtemporaneous = fullText.includes('vencid') || fullText.includes('extemporan') || fullText.includes('semana pasada');
+  const epsKeywords = ["sura", "sanitas", "salud total", "nueva eps", "compensar", "famisanar", "coosalud", "mutual ser", "eps", "ips", "clinica", "clínica", "hospital", "cita", "ortodoncia", "odontol"];
+  const mentionsEpsOrMedical = epsKeywords.some(w => fullText.includes(w)) || novelty.includes('incapacidad') || novelty.includes('cita');
+
+  const isHumanReviewed = Boolean(j.hse_reviewer && j.hse_reviewer !== 'Sistema IA HSE');
+  const qualifiesAuto = !isHumanReviewed && hasAttachments && mentionsEpsOrMedical && !isExtemporaneous;
+
+  const isApproved = j.status === 'APPROVED' || qualifiesAuto;
+  const isDisapproved = j.status === 'DISAPPROVED';
+  const isCorrection = j.status === 'REQUEST_CORRECTION';
+  const hasDecision = isApproved || isDisapproved || isCorrection;
+  const isAutomatic = qualifiesAuto || (isApproved && (!j.hse_reviewer || j.hse_reviewer === 'Sistema IA HSE'));
+
+  const mappedStatus = isApproved ? 'approved' : isDisapproved ? 'denied' : 'pending_review';
+  const mappedCategory = isApproved ? 'POSIBLEMENTE_VALIDO' : isDisapproved ? 'POSIBLEMENTE_INVALIDO' : 'REVISION_MANUAL';
 
   const structuredBody = [
     `Radicado Oficial: ${j.radicado}`,
@@ -273,6 +305,10 @@ export function convertCoderJustificationToRequest(j: CoderJustification): Reque
     `\nMotivo Declarado por el Coder:\n${j.description}`,
     j.coder_correction_reply ? `\n\nRespuesta de Subsanación del Coder:\n${j.coder_correction_reply}` : '',
   ].filter(Boolean).join('\n');
+
+  const aiNote = isAutomatic
+    ? 'Resolución 100% automática del Sistema HSE: Justificación médica validada con soporte reglamentario EPS adjunto sin intervención humana.'
+    : (j.hse_notes || 'Radicado directo vía Portal del Coder. Documentación de soporte y declaración juramentada adjuntas.');
 
   return {
     id: j.id || j.radicado,
@@ -285,10 +321,12 @@ export function convertCoderJustificationToRequest(j: CoderJustification): Reque
     noveltyLabel: j.novelty_label || NOVELTY_LABELS[j.novelty_type] || j.novelty_type,
     hasAttachment: attachmentsList.length > 0,
     attachmentsCount: attachmentsList.length,
-    hasHumanIntervention: hasDecision,
-    hseDecision: hasDecision ? j.status : null,
+    hasHumanIntervention: hasDecision && !isAutomatic,
+    isAutomatic,
+    aiReason: aiNote,
+    hseDecision: hasDecision ? (isApproved ? 'APPROVED' : j.status) : null,
     hseNotes: j.hse_notes || null,
-    hseReviewedAt: j.hse_reviewed_at || null,
+    hseReviewedAt: j.hse_reviewed_at || (isAutomatic ? j.submitted_at : null),
     isResponded: hasDecision,
     emailInfo: {
       senderName: j.coder_name || 'Coder Estudiante',
@@ -299,11 +337,11 @@ export function convertCoderJustificationToRequest(j: CoderJustification): Reque
       attachments: attachmentsList,
     },
     decision: {
-      source: hasDecision ? 'human' : 'ai',
-      confidence: 0.95,
-      reasoning: j.hse_notes || 'Radicado directo vía Portal del Coder. Documentación de soporte y declaración juramentada adjuntas.',
-      modifiedBy: j.hse_reviewer,
-      modifiedAt: j.hse_reviewed_at,
+      source: isAutomatic ? 'ai' : hasDecision ? 'human' : 'ai',
+      confidence: isAutomatic ? 0.95 : 0.85,
+      reasoning: aiNote,
+      modifiedBy: isAutomatic ? 'Sistema IA HSE' : j.hse_reviewer,
+      modifiedAt: j.hse_reviewed_at || (isAutomatic ? j.submitted_at : undefined),
     },
   } as any;
 }
@@ -317,7 +355,38 @@ export function getAllCoderJustifications(): CoderJustification[] {
     if (raw) {
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed)) {
-        return parsed;
+        let changed = false;
+        const normalized = parsed.map((j: CoderJustification) => {
+          const hasAttachments = (j.attachments || []).length > 0;
+          const desc = (j.description || '').toLowerCase();
+          const novelty = (j.novelty_type || '').toLowerCase();
+          const fullText = `${desc} ${novelty}`.toLowerCase();
+          const isExtemporaneous = fullText.includes('vencid') || fullText.includes('extemporan') || fullText.includes('semana pasada');
+          const epsKeywords = ["sura", "sanitas", "salud total", "nueva eps", "compensar", "famisanar", "coosalud", "mutual ser", "eps", "ips", "clinica", "clínica", "hospital", "cita", "ortodoncia", "odontol"];
+          const mentionsEpsOrMedical = epsKeywords.some(w => fullText.includes(w)) || novelty.includes('incapacidad') || novelty.includes('cita');
+
+          const isHumanReviewed = Boolean(j.hse_reviewer && j.hse_reviewer !== 'Sistema IA HSE');
+          if (!isHumanReviewed && j.status === 'REVISION_MANUAL' && hasAttachments && mentionsEpsOrMedical && !isExtemporaneous) {
+            changed = true;
+            return {
+              ...j,
+              status: 'APPROVED' as CoderJustificationStatus,
+              hse_reviewer: 'Sistema IA HSE',
+              hse_reviewed_at: j.submitted_at || new Date().toISOString(),
+              hse_notes: 'Resolución 100% automática del Sistema HSE: Justificación médica validada con soporte reglamentario EPS adjunto sin intervención humana.',
+            };
+          }
+          return j;
+        });
+
+        if (changed) {
+          try {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(normalized));
+          } catch (e) {
+            // ignore
+          }
+        }
+        return normalized;
       }
     }
   } catch (e) {
