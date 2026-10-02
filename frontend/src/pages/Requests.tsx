@@ -837,34 +837,61 @@ export default function Requests() {
         ) : selectedEmail ? (
           /* VISTA DE LECTURA Y RESOLUCIÓN */
           <div className="flex flex-col h-full overflow-hidden">
-            {/* Cabecera del correo */}
-            <div className="p-4 sm:p-6 border-b border-[#E2E8F0] flex flex-col sm:flex-row justify-between items-start gap-3 bg-gray-50/30 shrink-0">
-              <div className="w-full sm:w-auto">
-                <div className="flex items-center gap-2 mb-2">
+            {/* Cabecera del correo compacta y de alta densidad de información */}
+            <div className="px-4 py-3 sm:px-5 border-b border-[#E2E8F0] bg-gray-50/40 shrink-0 space-y-2">
+              {/* Fila 1: Asunto y Fecha */}
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2 min-w-0">
                   <button
                     type="button"
                     onClick={() => setShowMobileDetail(false)}
-                    className="lg:hidden p-1.5 -ml-1 rounded-lg text-[#7C8499] hover:bg-white hover:text-[#111827] transition-colors shrink-0 cursor-pointer"
+                    className="lg:hidden p-1 -ml-1 rounded-lg text-[#7C8499] hover:bg-white hover:text-[#111827] transition-colors shrink-0 cursor-pointer"
                     aria-label="Volver a la lista"
                   >
-                    <ArrowLeft size={18} />
+                    <ArrowLeft size={16} />
                   </button>
-                  <h2 className="text-[17px] sm:text-[20px] font-bold text-[#111827] line-clamp-1 sm:line-clamp-none">
+                  <h2 className="text-[15px] sm:text-[17px] font-bold text-[#111827] truncate">
                     {selectedEmail.emailInfo?.subject || selectedEmail.subject}
                   </h2>
                 </div>
+                <span className="text-[11px] text-[#7C8499] shrink-0 font-medium">
+                  {new Date(selectedEmail.emailInfo?.date || selectedEmail.date).toLocaleString('es-ES', { 
+                    day: 'numeric', 
+                    month: 'short', 
+                    hour: '2-digit', 
+                    minute: '2-digit' 
+                  })}
+                </span>
+              </div>
 
-                <div className="flex flex-wrap items-center gap-2 mb-3">
+              {/* Fila 2: Remitente a la izquierda y Etiquetas compactas a la derecha */}
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex items-center gap-2 min-w-0">
+                  <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-[#5B3FF5] to-blue-400 flex items-center justify-center text-white font-bold text-xs shrink-0">
+                    {(selectedEmail.emailInfo?.senderName || selectedEmail.to || 'A')[0]}
+                  </div>
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <span className="font-semibold text-xs text-[#111827] truncate">
+                      {selectedEmail.emailInfo?.senderName || (activeFolder === 'sent' ? 'Yo (Admin)' : selectedEmail.to)}
+                    </span>
+                    <span className="text-[11px] text-[#7C8499] truncate hidden sm:inline">
+                      {activeFolder === 'sent' ? `· Para: ${selectedEmail.to}` : `· <${selectedEmail.emailInfo?.senderEmail}>`}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Etiquetas compactas en una sola línea que no desplazan la información principal */}
+                <div className="flex flex-wrap items-center gap-1.5">
                   {/* Estado oficial */}
                   {(selectedEmail.category || selectedEmail.status) && (
-                    <span className={`text-[10px] sm:text-[11px] font-bold px-2.5 sm:px-3 py-1 rounded-full flex items-center gap-1.5 ${
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md flex items-center gap-1 ${
                       (selectedEmail.category === 'POSIBLEMENTE_VALIDO' || selectedEmail.status === 'approved') ? 'bg-[#20B486]/15 text-[#20B486]' :
                       (selectedEmail.category === 'POSIBLEMENTE_INVALIDO' || selectedEmail.status === 'denied') ? 'bg-[#FF5C67]/15 text-[#FF5C67]' :
-                      'bg-[#F5B83D]/15 text-[#F5B83D]'
+                      'bg-[#F5B83D]/15 text-[#b07d10]'
                     }`}>
-                      {(selectedEmail.category === 'POSIBLEMENTE_VALIDO' || selectedEmail.status === 'approved') ? '● POSIBLEMENTE VÁLIDO' :
-                       (selectedEmail.category === 'POSIBLEMENTE_INVALIDO' || selectedEmail.status === 'denied') ? '● POSIBLEMENTE INVÁLIDO' :
-                       '● REVISIÓN MANUAL'}
+                      {(selectedEmail.category === 'POSIBLEMENTE_VALIDO' || selectedEmail.status === 'approved') ? '● Válido' :
+                       (selectedEmail.category === 'POSIBLEMENTE_INVALIDO' || selectedEmail.status === 'denied') ? '● Inválido' :
+                       '● Revisión'}
                     </span>
                   )}
 
@@ -872,9 +899,9 @@ export default function Requests() {
                   {(() => {
                     const novelty = getNoveltyDetails(selectedEmail);
                     return (
-                      <span className={`text-[10px] sm:text-[11px] font-bold px-2.5 sm:px-3 py-1 rounded-full border flex items-center gap-1.5 ${novelty.color}`}>
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md border flex items-center gap-1 ${novelty.color}`}>
                         <span>{novelty.icon}</span>
-                        <span>Tipo: {novelty.label}</span>
+                        <span>{novelty.badge}</span>
                       </span>
                     );
                   })()}
@@ -888,56 +915,45 @@ export default function Requests() {
                     );
                     const count = (selectedEmail.emailInfo?.attachments?.length || 0) + (selectedEmail.emailInfo?.images?.length || 0);
                     return hasSupport ? (
-                      <span className="text-[10px] sm:text-[11px] font-bold px-2.5 sm:px-3 py-1 rounded-full border bg-emerald-50 text-emerald-700 border-emerald-200 flex items-center gap-1">
-                        <Paperclip size={12} />
-                        <span>Con soporte adjunto{count > 0 ? ` (${count})` : ''}</span>
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-md border bg-emerald-50 text-emerald-700 border-emerald-200 flex items-center gap-1">
+                        <Paperclip size={11} />
+                        <span>Soporte{count > 1 ? ` (${count})` : ''}</span>
                       </span>
                     ) : (
-                      <span className="text-[10px] sm:text-[11px] font-bold px-2.5 sm:px-3 py-1 rounded-full border bg-amber-50 text-amber-800 border-amber-300 flex items-center gap-1">
-                        <AlertTriangle size={12} />
-                        <span>Sin soporte adjunto</span>
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-md border bg-amber-50 text-amber-800 border-amber-300 flex items-center gap-1">
+                        <AlertTriangle size={11} />
+                        <span>Sin soporte</span>
                       </span>
                     );
                   })()}
 
-                  {/* Semáforo de Inasistencias Disponibles sin Justificar del Coder */}
+                  {/* Semáforo de Inasistencias Disponibles */}
                   {(() => {
                     const attInfo = getCoderAttendanceInfo(selectedEmail);
                     return attInfo.hasRemaining ? (
-                      <span className="text-[10px] sm:text-[11px] font-bold px-2.5 sm:px-3 py-1 rounded-full border bg-emerald-50 text-emerald-700 border-emerald-200 flex items-center gap-1">
+                      <span 
+                        className="text-[10px] font-bold px-2 py-0.5 rounded-md border bg-emerald-50 text-emerald-700 border-emerald-200 flex items-center gap-1"
+                        title={`${attInfo.remaining} inasistencia(s) disponible(s) sin justificar`}
+                      >
                         <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                        <span>{attInfo.remaining} inasistencia{attInfo.remaining > 1 ? 's' : ''} disponible{attInfo.remaining > 1 ? 's' : ''} sin justificar</span>
+                        <span>{attInfo.remaining} disp.</span>
                       </span>
                     ) : (
-                      <span className="text-[10px] sm:text-[11px] font-bold px-2.5 sm:px-3 py-1 rounded-full border bg-red-50 text-red-700 border-red-300 flex items-center gap-1">
+                      <span 
+                        className="text-[10px] font-bold px-2 py-0.5 rounded-md border bg-red-50 text-red-700 border-red-300 flex items-center gap-1"
+                        title="0 inasistencias disponibles sin justificar (límite alcanzado)"
+                      >
                         <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse"></span>
-                        <span>Sin inasistencias disponibles (Límite excedido)</span>
+                        <span>0 disp.</span>
                       </span>
                     );
                   })()}
                 </div>
-
-                <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-gradient-to-tr from-[#5B3FF5] to-blue-400 flex items-center justify-center text-white font-bold shrink-0">
-                    {(selectedEmail.emailInfo?.senderName || selectedEmail.to || 'A')[0]}
-                  </div>
-                  <div className="min-w-0">
-                    <p className="font-bold text-[13px] sm:text-[14px] text-[#111827] truncate">
-                      {selectedEmail.emailInfo?.senderName || (activeFolder === 'sent' ? 'Yo (Admin)' : selectedEmail.to)}
-                    </p>
-                    <p className="text-[11px] sm:text-[12px] text-[#7C8499] truncate">
-                      {activeFolder === 'sent' ? `Para: ${selectedEmail.to}` : `<${selectedEmail.emailInfo?.senderEmail}>`}
-                    </p>
-                  </div>
-                </div>
               </div>
-              <p className="text-xs sm:text-sm text-[#A3AAC2] self-end sm:self-auto">
-                {new Date(selectedEmail.emailInfo?.date || selectedEmail.date).toLocaleString('es-ES')}
-              </p>
             </div>
             
-            {/* Contenido del correo */}
-            <div className="flex-1 p-6 md:p-8 overflow-y-auto custom-scrollbar space-y-6">
+            {/* Contenido del correo con márgenes y espaciado optimizados */}
+            <div className="flex-1 p-4 sm:p-5 overflow-y-auto custom-scrollbar space-y-3.5">
               
               {/* Cuerpo del correo / Expediente Estructurado */}
               {(() => {
@@ -946,67 +962,67 @@ export default function Requests() {
 
                 if (dossier) {
                   return (
-                    <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
+                    <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
                       {/* Cabecera del Radicado Oficial */}
-                      <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-indigo-950 text-white p-4 sm:p-5 flex flex-wrap items-center justify-between gap-3">
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-xl bg-white/10 border border-white/10 flex items-center justify-center text-white shrink-0">
-                            <FileText size={20} className="text-white" />
+                      <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-indigo-950 text-white px-4 py-2.5 flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2.5">
+                          <div className="w-7 h-7 rounded-lg bg-white/10 border border-white/10 flex items-center justify-center text-white shrink-0">
+                            <FileText size={15} className="text-white" />
                           </div>
-                          <div>
-                            <span className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-indigo-300 block">
-                              Expediente Oficial de Inasistencia
+                          <div className="flex items-center gap-2">
+                            <span className="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-indigo-300">
+                              Expediente:
                             </span>
-                            <h3 className="text-base sm:text-lg font-bold tracking-tight text-white flex items-center gap-2">
-                              <span>{dossier.radicado}</span>
+                            <h3 className="text-xs sm:text-sm font-bold tracking-tight text-white">
+                              {dossier.radicado}
                             </h3>
                           </div>
                         </div>
-                        <span className="text-xs font-semibold px-3 py-1 rounded-full bg-white/15 text-white border border-white/20">
+                        <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-white/15 text-white border border-white/20">
                           Radicado Oficial
                         </span>
                       </div>
 
                       {/* Ficha Técnica de la Novedad */}
-                      <div className="p-5 sm:p-6 space-y-4">
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 bg-slate-50 p-4 rounded-xl border border-slate-200/80">
+                      <div className="p-3.5 sm:p-4 space-y-3">
+                        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 bg-slate-50 p-3 rounded-xl border border-slate-200/80">
                           <div>
-                            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 block mb-0.5">
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block">
                               Estudiante / Coder
                             </span>
-                            <p className="text-sm font-bold text-slate-900">{dossier.coder}</p>
+                            <p className="text-xs sm:text-sm font-bold text-slate-900 truncate">{dossier.coder}</p>
                           </div>
                           <div>
-                            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 block mb-0.5">
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block">
                               Ruta de Formación
                             </span>
-                            <p className="text-sm font-semibold text-slate-800">{dossier.ruta}</p>
+                            <p className="text-xs sm:text-sm font-semibold text-slate-800 truncate">{dossier.ruta}</p>
                           </div>
                           <div>
-                            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 block mb-0.5">
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block">
                               Tipo de Novedad
                             </span>
-                            <span className="inline-block text-xs font-bold px-2.5 py-0.5 rounded-lg bg-indigo-50 text-indigo-700 border border-indigo-200">
+                            <span className="inline-block text-[11px] font-bold px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-700 border border-indigo-200 truncate">
                               {dossier.novedad}
                             </span>
                           </div>
                           <div>
-                            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 block mb-0.5">
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block">
                               Período de Ausencia
                             </span>
-                            <p className="text-sm font-bold text-[#5B3FF5]">{dossier.periodo}</p>
+                            <p className="text-xs sm:text-sm font-bold text-[#5B3FF5] truncate">{dossier.periodo}</p>
                           </div>
                         </div>
 
                         {/* Motivo Declarado por el Coder */}
                         {dossier.motivo && (
-                          <div className="border border-indigo-100 bg-gradient-to-b from-indigo-50/20 to-white rounded-xl p-4 sm:p-5">
-                            <div className="flex items-center gap-2 mb-2 text-xs font-bold uppercase tracking-wider text-indigo-900">
-                              <MessageSquare size={14} className="text-[#5B3FF5]" />
+                          <div className="border border-indigo-100 bg-gradient-to-b from-indigo-50/20 to-white rounded-xl p-3 sm:p-3.5">
+                            <div className="flex items-center gap-1.5 mb-1.5 text-[11px] font-bold uppercase tracking-wider text-indigo-900">
+                              <MessageSquare size={13} className="text-[#5B3FF5]" />
                               <span>Motivo Declarado por el Coder</span>
                             </div>
-                            <div className="pl-3 border-l-3 border-[#5B3FF5] py-0.5">
-                              <p className="text-sm sm:text-base text-slate-800 leading-relaxed font-medium whitespace-pre-wrap">
+                            <div className="pl-2.5 border-l-2 border-[#5B3FF5] py-0.5">
+                              <p className="text-xs sm:text-sm text-slate-800 leading-relaxed font-medium whitespace-pre-wrap">
                                 {dossier.motivo}
                               </p>
                             </div>
@@ -1015,11 +1031,11 @@ export default function Requests() {
 
                         {/* Subsanación del Coder (si aplica) */}
                         {dossier.subsanacion && (
-                          <div className="border border-amber-200 bg-amber-50/50 rounded-xl p-4">
-                            <span className="text-xs font-bold uppercase tracking-wider text-amber-900 block mb-1">
+                          <div className="border border-amber-200 bg-amber-50/50 rounded-xl p-3">
+                            <span className="text-[11px] font-bold uppercase tracking-wider text-amber-900 block mb-1">
                               Respuesta de Subsanación del Coder:
                             </span>
-                            <p className="text-sm text-slate-800 font-medium whitespace-pre-wrap">
+                            <p className="text-xs sm:text-sm text-slate-800 font-medium whitespace-pre-wrap">
                               {dossier.subsanacion}
                             </p>
                           </div>
@@ -1030,7 +1046,7 @@ export default function Requests() {
                 }
 
                 return (
-                  <div className="bg-[#FBFBFE] p-5 sm:p-6 rounded-2xl border border-[#E8EAF2] text-sm sm:text-base text-[#17203A] whitespace-pre-wrap leading-relaxed shadow-2xs font-normal">
+                  <div className="bg-[#FBFBFE] p-4 sm:p-5 rounded-xl border border-[#E8EAF2] text-xs sm:text-sm text-[#17203A] whitespace-pre-wrap leading-relaxed shadow-2xs font-normal">
                     {rawBody}
                   </div>
                 );
@@ -1038,9 +1054,9 @@ export default function Requests() {
 
               {/* Adjuntos y Evidencias */}
               {((selectedEmail.emailInfo?.attachments && selectedEmail.emailInfo.attachments.length > 0) || (selectedEmail.emailInfo?.images && selectedEmail.emailInfo.images.length > 0)) && (
-                <div className="pt-2">
-                  <p className="text-xs font-bold uppercase tracking-wider text-[#7C8499] mb-3">Adjuntos y Documentos Probatorios</p>
-                  <div className="flex flex-wrap gap-3">
+                <div className="pt-1">
+                  <p className="text-[11px] font-bold uppercase tracking-wider text-[#7C8499] mb-2">Adjuntos y Documentos Probatorios</p>
+                  <div className="flex flex-wrap gap-2.5">
                     {[
                       ...(selectedEmail.emailInfo?.attachments || []),
                       ...((selectedEmail.emailInfo?.images || []).map((imgUrl: string, idx: number) => ({
@@ -1056,30 +1072,30 @@ export default function Requests() {
                           key={i}
                           onClick={(e) => hasValidUrl && handleOpenPreview(e, att)}
                           title={hasValidUrl ? 'Click para previsualizar documento o imagen' : 'Documento adjunto'}
-                          className={`flex items-center justify-between gap-3 border border-[#E2E8F0] p-2.5 px-3.5 rounded-xl transition-all bg-white shadow-xs ${
+                          className={`flex items-center justify-between gap-2.5 border border-[#E2E8F0] p-2 px-3 rounded-xl transition-all bg-white shadow-2xs ${
                             hasValidUrl
-                              ? 'hover:border-[#5B3FF5] hover:bg-[#F2F0FF]/30 hover:shadow-sm cursor-pointer group'
+                              ? 'hover:border-[#5B3FF5] hover:bg-[#F2F0FF]/30 hover:shadow-xs cursor-pointer group'
                               : 'cursor-default'
                           }`}
                         >
-                          <div className="flex items-center gap-2.5 min-w-0">
-                            <div className={`w-9 h-9 rounded-lg flex items-center justify-center group-hover:scale-105 transition-transform shrink-0 overflow-hidden ${
+                          <div className="flex items-center gap-2 min-w-0">
+                            <div className={`w-7 h-7 rounded-lg flex items-center justify-center group-hover:scale-105 transition-transform shrink-0 overflow-hidden ${
                               isImg ? 'bg-[#5B3FF5]/10 text-[#5B3FF5]' : 'bg-red-100 text-red-500'
                             }`}>
                               {isImg && hasValidUrl ? (
                                 <img src={att.url} alt="" className="w-full h-full object-cover rounded-lg" onError={(e) => { (e.target as any).style.display = 'none'; }} />
                               ) : isImg ? (
-                                <ImageIcon size={16} />
+                                <ImageIcon size={14} />
                               ) : (
-                                <FileText size={16} />
+                                <FileText size={14} />
                               )}
                             </div>
                             <div className="flex flex-col min-w-0">
-                              <span className="text-sm font-medium text-[#111827] group-hover:text-[#5B3FF5] transition-colors truncate max-w-[200px]">
+                              <span className="text-xs font-medium text-[#111827] group-hover:text-[#5B3FF5] transition-colors truncate max-w-[180px]">
                                 {att.name}
                               </span>
                               {hasValidUrl && (
-                                <span className="text-[10px] text-[#5B3FF5] font-bold">Ver evidencia ↗</span>
+                                <span className="text-[9px] text-[#5B3FF5] font-bold">Ver evidencia ↗</span>
                               )}
                             </div>
                           </div>
@@ -1088,9 +1104,9 @@ export default function Requests() {
                               type="button"
                               onClick={(e) => handleDownloadAttachment(e, att)}
                               title="Descargar archivo a tu dispositivo"
-                              className="p-1.5 text-[#7C8499] hover:text-[#5B3FF5] hover:bg-[#5B3FF5]/10 rounded-lg transition-colors ml-2 shrink-0 cursor-pointer"
+                              className="p-1 text-[#7C8499] hover:text-[#5B3FF5] hover:bg-[#5B3FF5]/10 rounded-lg transition-colors ml-1 shrink-0 cursor-pointer"
                             >
-                              <Download size={15} />
+                              <Download size={13} />
                             </button>
                           )}
                         </div>
@@ -1137,17 +1153,17 @@ export default function Requests() {
                     : 'Requerimiento de Soporte / Subsanación';
 
                   return (
-                    <div className={`border-2 rounded-2xl p-5 sm:p-6 shadow-sm space-y-4 ${cardStyle}`}>
-                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200/80 pb-3">
-                        <div className="flex items-center gap-3">
-                          <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${iconBoxStyle}`}>
-                            {isApproved ? <CheckCircle2 size={20} /> : isDisapproved ? <XCircle size={20} /> : <AlertTriangle size={20} />}
+                    <div className={`border rounded-xl p-3.5 sm:p-4 shadow-xs space-y-3 ${cardStyle}`}>
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 border-b border-slate-200/80 pb-2.5">
+                        <div className="flex items-center gap-2.5">
+                          <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${iconBoxStyle}`}>
+                            {isApproved ? <CheckCircle2 size={18} /> : isDisapproved ? <XCircle size={18} /> : <AlertTriangle size={18} />}
                           </div>
                           <div>
-                            <h3 className="text-base sm:text-lg font-bold text-slate-900">
+                            <h3 className="text-sm sm:text-base font-bold text-slate-900">
                               {statusTitle}
                             </h3>
-                            <p className="text-xs text-slate-500">
+                            <p className="text-[11px] text-slate-500">
                               Esta justificación ya fue tramitada y su respuesta formal fue despachada.
                             </p>
                           </div>
@@ -1155,26 +1171,26 @@ export default function Requests() {
 
                         <div className="flex items-center gap-2 self-start sm:self-auto">
                           {selectedEmail.isAutomatic && (
-                            <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-[#00B4D8]/15 text-[#007799] border border-[#00B4D8]/30 flex items-center gap-1">
-                              <Bot size={13} /> Automatizada
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#00B4D8]/15 text-[#007799] border border-[#00B4D8]/30 flex items-center gap-1">
+                              <Bot size={12} /> Automatizada
                             </span>
                           )}
-                          <span className={`text-xs font-bold px-3 py-1 rounded-full border ${badgeStyle}`}>
+                          <span className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full border ${badgeStyle}`}>
                             {isApproved ? 'Aprobado' : isDisapproved ? 'Rechazado' : isCorrection ? 'Soporte Solicitado' : 'Respondido'}
                           </span>
                         </div>
                       </div>
 
-                      <div className="bg-white p-4.5 rounded-xl border border-slate-200/80 shadow-xs space-y-1.5">
-                        <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+                      <div className="bg-white p-3 rounded-lg border border-slate-200/80 shadow-2xs space-y-1">
+                        <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
                           Respuesta / Justificación registrada por HSE:
                         </p>
-                        <p className="text-sm sm:text-base text-slate-900 leading-relaxed font-medium">
+                        <p className="text-xs sm:text-sm text-slate-900 leading-relaxed font-medium">
                           {selectedEmail.decision?.reasoning || selectedEmail.hseNotes || selectedEmail.body || 'Notificación formal enviada al estudiante.'}
                         </p>
                       </div>
 
-                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 text-xs text-slate-600 pt-1 border-t border-slate-200/70">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-[11px] text-slate-600 pt-1 border-t border-slate-200/70">
                         <div className="flex items-center gap-1.5">
                           <span className="font-semibold text-slate-500">Revisor:</span>
                           <strong className="text-slate-900 font-bold">
@@ -1194,17 +1210,17 @@ export default function Requests() {
                   );
                 })()
               ) : (
-                <div className="border-2 border-[#5B3FF5]/20 bg-white rounded-2xl p-6 shadow-sm space-y-4">
-                  <div className="flex items-center justify-between border-b border-[#E8EAF2] pb-3">
+                <div className="border border-[#5B3FF5]/30 bg-white rounded-xl p-3.5 sm:p-4 shadow-xs space-y-3">
+                  <div className="flex items-center justify-between border-b border-[#E8EAF2] pb-2.5">
                     <div className="flex items-center gap-2">
-                      <div className="w-8 h-8 rounded-lg bg-[#5B3FF5]/10 text-[#5B3FF5] flex items-center justify-center">
-                        <Zap size={18} />
+                      <div className="w-7 h-7 rounded-lg bg-[#5B3FF5]/10 text-[#5B3FF5] flex items-center justify-center shrink-0">
+                        <Zap size={15} />
                       </div>
                       <div>
-                        <h3 className="text-[15px] font-bold text-[#111827]">
+                        <h3 className="text-sm font-bold text-[#111827]">
                           Resolución Oficial HSE
                         </h3>
-                        <p className="text-xs text-[#7C8499]">
+                        <p className="text-[11px] text-[#7C8499]">
                           Al confirmar la decisión, el mensaje se responderá formalmente y se moverá a <strong>Enviados</strong>.
                         </p>
                       </div>
@@ -1213,24 +1229,21 @@ export default function Requests() {
 
                   {/* Observación del Análisis Automático (IA) para casos pendientes */}
                   {(selectedEmail.aiReason || selectedEmail.decision?.reasoning) && (
-                    <div className="bg-[#5B3FF5]/5 border border-[#5B3FF5]/20 rounded-xl p-4 flex items-start gap-3">
-                      <div className="w-8 h-8 rounded-lg bg-[#5B3FF5]/10 text-[#5B3FF5] flex items-center justify-center shrink-0 mt-0.5">
-                        <AlertCircle size={18} />
+                    <div className="bg-[#5B3FF5]/5 border border-[#5B3FF5]/20 rounded-xl p-3 flex items-start gap-2.5">
+                      <div className="w-6 h-6 rounded-lg bg-[#5B3FF5]/10 text-[#5B3FF5] flex items-center justify-center shrink-0 mt-0.5">
+                        <AlertCircle size={15} />
                       </div>
                       <div className="min-w-0">
-                        <div className="flex items-center gap-2 mb-1">
-                          <h4 className="text-xs font-bold uppercase tracking-wider text-[#5B3FF5]">
+                        <div className="flex items-center gap-2 mb-0.5">
+                          <h4 className="text-[10px] font-bold uppercase tracking-wider text-[#5B3FF5]">
                             Observación de la IA
                           </h4>
-                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#F5B83D]/15 text-[#855e09] border border-[#F5B83D]/30">
+                          <span className="text-[9px] font-bold px-1.5 py-0.2 rounded-full bg-[#F5B83D]/15 text-[#855e09] border border-[#F5B83D]/30">
                             Requiere decisión TL
                           </span>
                         </div>
-                        <p className="text-sm text-[#17203A] leading-relaxed">
+                        <p className="text-xs text-[#17203A] leading-relaxed">
                           {selectedEmail.aiReason || selectedEmail.decision?.reasoning}
-                        </p>
-                        <p className="text-[11px] text-[#7C8499] mt-2 font-medium">
-                          Esta justificación requiere tu criterio como Team Leader porque no cumple con todos los requisitos para resolución automática inmediata.
                         </p>
                       </div>
                     </div>
@@ -1238,44 +1251,44 @@ export default function Requests() {
 
                   {/* Feedback de resultado */}
                   {resolutionStatus && (
-                    <div className={`p-4 rounded-xl text-sm border flex items-start gap-3 ${
+                    <div className={`p-3 rounded-lg text-xs border flex items-start gap-2.5 ${
                       resolutionStatus.type === 'success' ? 'bg-[#20B486]/10 border-[#20B486]/30 text-[#136c50]' :
                       resolutionStatus.type === 'warning' ? 'bg-[#F5B83D]/10 border-[#F5B83D]/30 text-[#855e09]' :
                       'bg-[#FF5C67]/10 border-[#FF5C67]/30 text-[#9c242c]'
                     }`}>
-                      {resolutionStatus.type === 'success' ? <CheckCircle2 size={18} className="shrink-0 mt-0.5" /> :
-                       resolutionStatus.type === 'warning' ? <AlertTriangle size={18} className="shrink-0 mt-0.5" /> :
-                       <AlertCircle size={18} className="shrink-0 mt-0.5" />}
+                      {resolutionStatus.type === 'success' ? <CheckCircle2 size={16} className="shrink-0 mt-0.5" /> :
+                       resolutionStatus.type === 'warning' ? <AlertTriangle size={16} className="shrink-0 mt-0.5" /> :
+                       <AlertCircle size={16} className="shrink-0 mt-0.5" />}
                       <div>
                         <p className="font-bold">{resolutionStatus.message}</p>
                         {resolutionStatus.details && (
-                          <p className="text-xs mt-1 opacity-90">{resolutionStatus.details}</p>
+                          <p className="text-[10px] mt-0.5 opacity-90">{resolutionStatus.details}</p>
                         )}
                       </div>
                     </div>
                   )}
 
                   {/* Formulario de corrección */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     <div>
-                      <label className="block text-xs font-bold uppercase tracking-wider text-[#7C8499] mb-1.5 flex items-center gap-1.5">
-                        <Calendar size={13} /> Fecha Afectada
+                      <label className="block text-[11px] font-bold uppercase tracking-wider text-[#7C8499] mb-1 flex items-center gap-1">
+                        <Calendar size={12} /> Fecha Afectada
                       </label>
                       <input 
                         type="date"
                         value={startDate}
                         onChange={e => setStartDate(e.target.value)}
-                        className="w-full bg-[#F8F9FD] border border-[#E8EAF2] rounded-xl px-3.5 py-2 text-sm text-[#111827] focus:outline-none focus:border-[#5B3FF5]"
+                        className="w-full bg-[#F8F9FD] border border-[#E8EAF2] rounded-lg px-3 py-1.5 text-xs text-[#111827] focus:outline-none focus:border-[#5B3FF5]"
                       />
                     </div>
                     <div>
-                      <label className="block text-xs font-bold uppercase tracking-wider text-[#7C8499] mb-1.5 flex items-center gap-1.5">
-                        <ShieldCheck size={13} /> Tipo de Novedad
+                      <label className="block text-[11px] font-bold uppercase tracking-wider text-[#7C8499] mb-1 flex items-center gap-1">
+                        <ShieldCheck size={12} /> Tipo de Novedad
                       </label>
                       <select
                         value={excuseType}
                         onChange={e => setExcuseType(e.target.value)}
-                        className="w-full bg-[#F8F9FD] border border-[#E8EAF2] rounded-xl px-3.5 py-2 text-sm text-[#111827] focus:outline-none focus:border-[#5B3FF5]"
+                        className="w-full bg-[#F8F9FD] border border-[#E8EAF2] rounded-lg px-3 py-1.5 text-xs text-[#111827] focus:outline-none focus:border-[#5B3FF5]"
                       >
                         <option value="inasistencia_medica">Inasistencia Médica / EPS</option>
                         <option value="calamidad">Calamidad Familiar / Doméstica</option>
@@ -1287,41 +1300,41 @@ export default function Requests() {
                   </div>
 
                   <div>
-                    <label className="block text-xs font-bold uppercase tracking-wider text-[#7C8499] mb-1.5 flex items-center gap-1.5">
-                      <MessageSquare size={13} /> Observaciones / Justificación de la Decisión (se incluirá en la notificación oficial)
+                    <label className="block text-[11px] font-bold uppercase tracking-wider text-[#7C8499] mb-1 flex items-center gap-1">
+                      <MessageSquare size={12} /> Observaciones / Justificación de la Decisión
                     </label>
                     <textarea 
-                      rows={3}
+                      rows={2}
                       value={hseNotes}
                       onChange={e => setHseNotes(e.target.value)}
                       placeholder="Escribe las notas de aprobación, rechazo o requerimientos para el coder..."
-                      className="w-full bg-[#F8F9FD] border border-[#E8EAF2] rounded-xl p-3 text-sm text-[#111827] focus:outline-none focus:border-[#5B3FF5] resize-none leading-relaxed"
+                      className="w-full bg-[#F8F9FD] border border-[#E8EAF2] rounded-lg p-2.5 text-xs sm:text-sm text-[#111827] focus:outline-none focus:border-[#5B3FF5] resize-none leading-relaxed"
                     />
                   </div>
 
                   {/* Barra de Auditoría y Botones de Acción */}
-                  <div className="pt-3 border-t border-[#E8EAF2] space-y-3">
-                    <div className="flex flex-wrap items-center justify-between text-xs text-[#7C8499] px-1 gap-2">
+                  <div className="pt-2.5 border-t border-[#E8EAF2] space-y-2.5">
+                    <div className="flex flex-wrap items-center justify-between text-[11px] text-[#7C8499] px-1 gap-2">
                       <span className="flex items-center gap-1.5">
-                        <ShieldCheck size={15} className="text-[#5B3FF5]" />
+                        <ShieldCheck size={13} className="text-[#5B3FF5]" />
                         <span>Revisor Oficial: <strong className="text-[#111827]">Paola Admin (HSE)</strong></span>
                       </span>
-                      <span className="text-[11px] text-[#7C8499] font-medium hidden sm:inline">
-                        La decisión registrará auditoría y notificará formalmente al estudiante.
+                      <span className="text-[10px] text-[#7C8499] font-medium hidden sm:inline">
+                        La decisión registrará auditoría y notificará formalmente al coder.
                       </span>
                     </div>
 
-                    {/* Grilla balanceada y espaciosa de 3 botones */}
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 w-full">
+                    {/* Grilla balanceada de 3 botones con texto e íconos perfectamente centrados */}
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 w-full">
                       {/* Botón Rechazar */}
                       <button
                         type="button"
                         disabled={isResolving}
                         onClick={() => handleResolveAction('DISAPPROVED')}
-                        className="w-full bg-white hover:bg-red-50 text-red-600 hover:text-red-700 border-2 border-red-200 hover:border-red-400 py-3 px-3 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center gap-2 transition-all shadow-2xs cursor-pointer disabled:opacity-50"
+                        className="w-full bg-white hover:bg-red-50 text-red-600 hover:text-red-700 border-2 border-red-200 hover:border-red-400 py-2.5 px-2 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center text-center gap-1.5 sm:gap-2 transition-all shadow-2xs cursor-pointer disabled:opacity-50"
                       >
-                        <XCircle size={18} className="shrink-0 text-red-500" />
-                        <span>Rechazar Caso</span>
+                        <XCircle size={16} className="shrink-0 text-red-500" />
+                        <span className="text-center leading-tight">Rechazar Caso</span>
                       </button>
 
                       {/* Botón Solicitar Corrección */}
@@ -1329,10 +1342,10 @@ export default function Requests() {
                         type="button"
                         disabled={isResolving}
                         onClick={() => handleResolveAction('REQUEST_CORRECTION')}
-                        className="w-full bg-white hover:bg-amber-50 text-amber-700 hover:text-amber-800 border-2 border-amber-200 hover:border-amber-400 py-3 px-3 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center gap-2 transition-all shadow-2xs cursor-pointer disabled:opacity-50"
+                        className="w-full bg-white hover:bg-amber-50 text-amber-700 hover:text-amber-800 border-2 border-amber-200 hover:border-amber-400 py-2.5 px-2 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center text-center gap-1.5 sm:gap-2 transition-all shadow-2xs cursor-pointer disabled:opacity-50"
                       >
-                        <AlertTriangle size={18} className="shrink-0 text-amber-500" />
-                        <span>Pedir Soporte</span>
+                        <AlertTriangle size={16} className="shrink-0 text-amber-500" />
+                        <span className="text-center leading-tight">Pedir Soporte</span>
                       </button>
 
                       {/* Botón Aprobar */}
@@ -1340,14 +1353,14 @@ export default function Requests() {
                         type="button"
                         disabled={isResolving}
                         onClick={() => handleResolveAction('APPROVED')}
-                        className="w-full bg-[#20B486] hover:bg-[#189970] text-white py-3 px-3 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center gap-2 transition-all shadow-md shadow-[#20B486]/30 cursor-pointer disabled:opacity-50"
+                        className="w-full bg-[#20B486] hover:bg-[#189970] text-white py-2.5 px-2 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center text-center gap-1.5 sm:gap-2 transition-all shadow-md shadow-[#20B486]/30 cursor-pointer disabled:opacity-50"
                       >
                         {isResolving ? (
-                          <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                          <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                         ) : (
                           <>
-                            <CheckCircle2 size={18} className="shrink-0" />
-                            <span>Aprobar Excusa</span>
+                            <CheckCircle2 size={16} className="shrink-0" />
+                            <span className="text-center leading-tight">Aprobar Excusa</span>
                           </>
                         )}
                       </button>
