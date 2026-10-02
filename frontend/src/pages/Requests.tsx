@@ -850,7 +850,7 @@ export default function Requests() {
                   >
                     <ArrowLeft size={16} />
                   </button>
-                  <h2 className="text-[15px] sm:text-[17px] font-bold text-[#111827] truncate">
+                  <h2 className="text-[15px] sm:text-[17px] font-bold text-[#111827] line-clamp-2 sm:line-clamp-1 break-words">
                     {selectedEmail.emailInfo?.subject || selectedEmail.subject}
                   </h2>
                 </div>
@@ -955,99 +955,68 @@ export default function Requests() {
             {/* Contenido del correo con márgenes y espaciado optimizados */}
             <div className="flex-1 p-4 sm:p-5 overflow-y-auto custom-scrollbar space-y-3.5">
               
-              {/* Cuerpo del correo / Expediente Estructurado */}
+              {/* Cuerpo del correo / Expediente Oficial del Caso */}
               {(() => {
                 const rawBody = selectedEmail.emailInfo?.body || selectedEmail.body || '';
                 const dossier = parseRadicadoBody(rawBody);
-
-                if (dossier) {
-                  return (
-                    <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
-                      {/* Cabecera del Radicado Oficial */}
-                      <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-indigo-950 text-white px-4 py-2.5 flex items-center justify-between gap-2">
-                        <div className="flex items-center gap-2.5">
-                          <div className="w-7 h-7 rounded-lg bg-white/10 border border-white/10 flex items-center justify-center text-white shrink-0">
-                            <FileText size={15} className="text-white" />
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <span className="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-indigo-300">
-                              Expediente:
-                            </span>
-                            <h3 className="text-xs sm:text-sm font-bold tracking-tight text-white">
-                              {dossier.radicado}
-                            </h3>
-                          </div>
-                        </div>
-                        <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-white/15 text-white border border-white/20">
-                          Radicado Oficial
-                        </span>
-                      </div>
-
-                      {/* Ficha Técnica de la Novedad */}
-                      <div className="p-3.5 sm:p-4 space-y-3">
-                        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 bg-slate-50 p-3 rounded-xl border border-slate-200/80">
-                          <div>
-                            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block">
-                              Estudiante / Coder
-                            </span>
-                            <p className="text-xs sm:text-sm font-bold text-slate-900 truncate">{dossier.coder}</p>
-                          </div>
-                          <div>
-                            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block">
-                              Ruta de Formación
-                            </span>
-                            <p className="text-xs sm:text-sm font-semibold text-slate-800 truncate">{dossier.ruta}</p>
-                          </div>
-                          <div>
-                            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block">
-                              Tipo de Novedad
-                            </span>
-                            <span className="inline-block text-[11px] font-bold px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-700 border border-indigo-200 truncate">
-                              {dossier.novedad}
-                            </span>
-                          </div>
-                          <div>
-                            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block">
-                              Período de Ausencia
-                            </span>
-                            <p className="text-xs sm:text-sm font-bold text-[#5B3FF5] truncate">{dossier.periodo}</p>
-                          </div>
-                        </div>
-
-                        {/* Motivo Declarado por el Coder */}
-                        {dossier.motivo && (
-                          <div className="border border-indigo-100 bg-gradient-to-b from-indigo-50/20 to-white rounded-xl p-3 sm:p-3.5">
-                            <div className="flex items-center gap-1.5 mb-1.5 text-[11px] font-bold uppercase tracking-wider text-indigo-900">
-                              <MessageSquare size={13} className="text-[#5B3FF5]" />
-                              <span>Motivo Declarado por el Coder</span>
-                            </div>
-                            <div className="pl-2.5 border-l-2 border-[#5B3FF5] py-0.5">
-                              <p className="text-xs sm:text-sm text-slate-800 leading-relaxed font-medium whitespace-pre-wrap">
-                                {dossier.motivo}
-                              </p>
-                            </div>
-                          </div>
-                        )}
-
-                        {/* Subsanación del Coder (si aplica) */}
-                        {dossier.subsanacion && (
-                          <div className="border border-amber-200 bg-amber-50/50 rounded-xl p-3">
-                            <span className="text-[11px] font-bold uppercase tracking-wider text-amber-900 block mb-1">
-                              Respuesta de Subsanación del Coder:
-                            </span>
-                            <p className="text-xs sm:text-sm text-slate-800 font-medium whitespace-pre-wrap">
-                              {dossier.subsanacion}
-                            </p>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  );
-                }
+                const radicadoNumber = 
+                  dossier?.radicado || 
+                  selectedEmail.radicado || 
+                  (selectedEmail.id?.startsWith('RAD-') ? selectedEmail.id : null) ||
+                  (selectedEmail.subject?.match(/RAD-[A-Z0-9-]+/i)?.[0]) ||
+                  (selectedEmail.emailInfo?.subject?.match(/RAD-[A-Z0-9-]+/i)?.[0]) ||
+                  (rawBody.match(/RAD-[A-Z0-9-]+/i)?.[0]) ||
+                  null;
 
                 return (
-                  <div className="bg-[#FBFBFE] p-4 sm:p-5 rounded-xl border border-[#E8EAF2] text-xs sm:text-sm text-[#17203A] whitespace-pre-wrap leading-relaxed shadow-2xs font-normal">
-                    {rawBody}
+                  <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
+                    {/* Cabecera Oficial del Radicado (Completo, visible al 100%, sin cortes) */}
+                    <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-indigo-950 text-white px-4 py-3 flex flex-wrap items-center justify-between gap-2.5">
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <div className="w-8 h-8 rounded-lg bg-white/10 border border-white/10 flex items-center justify-center text-white shrink-0">
+                          <FileText size={16} className="text-indigo-300" />
+                        </div>
+                        <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                          <span className="text-xs font-semibold text-indigo-300 shrink-0">
+                            Radicado Oficial:
+                          </span>
+                          <span className="text-sm sm:text-base font-mono font-bold tracking-wider text-white select-all whitespace-nowrap">
+                            {radicadoNumber || selectedEmail.id || 'RAD-HSE-OFICIAL'}
+                          </span>
+                        </div>
+                      </div>
+                      <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-white/15 text-white border border-white/20 shrink-0">
+                        Expediente HSE
+                      </span>
+                    </div>
+
+                    {/* Contenido directo del caso: Motivo y Subsanación */}
+                    <div className="p-4 sm:p-5 space-y-3.5">
+                      {/* Motivo Declarado por el Coder */}
+                      <div className="border border-indigo-100 bg-gradient-to-b from-indigo-50/20 to-white rounded-xl p-4 sm:p-5">
+                        <div className="flex items-center gap-2 mb-2 text-xs font-bold uppercase tracking-wider text-indigo-900">
+                          <MessageSquare size={15} className="text-[#5B3FF5]" />
+                          <span>Motivo Declarado por el Coder</span>
+                        </div>
+                        <div className="pl-3 border-l-3 border-[#5B3FF5] py-0.5">
+                          <p className="text-sm sm:text-base text-slate-800 leading-relaxed font-medium whitespace-pre-wrap">
+                            {dossier?.motivo || rawBody}
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Subsanación del Coder (si aplica) */}
+                      {dossier?.subsanacion && (
+                        <div className="border border-amber-200 bg-amber-50/50 rounded-xl p-3.5">
+                          <span className="text-xs font-bold uppercase tracking-wider text-amber-900 block mb-1">
+                            Respuesta de Subsanación del Coder:
+                          </span>
+                          <p className="text-sm text-slate-800 font-medium whitespace-pre-wrap">
+                            {dossier.subsanacion}
+                          </p>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 );
               })()}
