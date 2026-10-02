@@ -177,6 +177,42 @@ export default function Requests() {
     (r.decision?.source === 'ai' && (r.decision?.confidence ?? 0) >= 0.90 && (r.category === 'POSIBLEMENTE_VALIDO' || r.recommendation === 'POSIBLEMENTE_VALIDO' || r.status === 'approved'))
   );
 
+  const parseRadicadoBody = (bodyText: string) => {
+    if (!bodyText || !bodyText.includes('Radicado Oficial:')) {
+      return null;
+    }
+    const radicadoMatch = bodyText.match(/Radicado Oficial:\s*([^\n]+)/);
+    const coderMatch = bodyText.match(/Coder:\s*([^\n]+)/);
+    const rutaMatch = bodyText.match(/Ruta Académica:\s*([^\n]+)/);
+    const novedadMatch = bodyText.match(/Tipo de Novedad:\s*([^\n]+)/);
+    const periodoMatch = bodyText.match(/Período de Ausencia:\s*([^\n]+)/);
+
+    let motivo = '';
+    let subsanacion = '';
+
+    const motivoSplit = bodyText.split(/Motivo Declarado por el Coder:\s*/);
+    if (motivoSplit.length > 1) {
+      const afterMotivo = motivoSplit[1];
+      const subsanacionSplit = afterMotivo.split(/Respuesta de Subsanación del Coder:\s*/);
+      motivo = subsanacionSplit[0].trim();
+      if (subsanacionSplit.length > 1) {
+        subsanacion = subsanacionSplit[1].trim();
+      }
+    } else {
+      motivo = bodyText.trim();
+    }
+
+    return {
+      radicado: radicadoMatch ? radicadoMatch[1].trim() : null,
+      coder: coderMatch ? coderMatch[1].trim() : null,
+      ruta: rutaMatch ? rutaMatch[1].trim() : null,
+      novedad: novedadMatch ? novedadMatch[1].trim() : null,
+      periodo: periodoMatch ? periodoMatch[1].trim() : null,
+      motivo: motivo || null,
+      subsanacion: subsanacion || null,
+    };
+  };
+
   const inboxList = requests.filter((r: any) => !isRequestResolved(r));
   const resolvedRequests = requests.filter((r: any) => isRequestResolved(r));
   const sentList = [...resolvedRequests, ...sentEmails];
@@ -506,10 +542,10 @@ export default function Requests() {
       </div>
 
       {/* 1. SIDEBAR DE CARPETAS (Paneles Izquierdos en Desktop) */}
-      <div className="hidden lg:flex w-[240px] flex-shrink-0 flex-col gap-4">
+      <div className="hidden lg:flex w-[190px] xl:w-[210px] flex-shrink-0 flex-col gap-4">
         <button
           onClick={handleComposeNew}
-          className="w-full bg-gradient-to-r from-[#5636F5] to-[#633BFF] hover:opacity-90 text-white rounded-[16px] py-4 px-4 flex items-center justify-center gap-2 font-bold shadow-[0_8px_20px_rgba(99,59,255,0.25)] transition-all cursor-pointer"
+          className="w-full bg-gradient-to-r from-[#5636F5] to-[#633BFF] hover:opacity-90 text-white rounded-[16px] py-3.5 px-4 flex items-center justify-center gap-2 font-bold shadow-[0_8px_20px_rgba(99,59,255,0.25)] transition-all cursor-pointer text-sm"
         >
           <FileEdit size={18} /> Redactar
         </button>
@@ -559,7 +595,7 @@ export default function Requests() {
 
       {/* 2. LISTA DE CORREOS (Panel Central) */}
       <div className={clsx(
-        "w-full lg:w-[380px] flex-shrink-0 bg-white border border-[#E2E8F0] rounded-[24px] shadow-sm flex flex-col overflow-hidden",
+        "w-full lg:w-[310px] xl:w-[340px] flex-shrink-0 bg-white border border-[#E2E8F0] rounded-[24px] shadow-sm flex flex-col overflow-hidden",
         showMobileDetail ? "hidden lg:flex" : "flex flex-1 lg:flex-initial"
       )}>
         <div className="p-4 border-b border-[#E2E8F0] bg-gray-50/50 space-y-3">
@@ -903,10 +939,102 @@ export default function Requests() {
             {/* Contenido del correo */}
             <div className="flex-1 p-6 md:p-8 overflow-y-auto custom-scrollbar space-y-6">
               
-              {/* Cuerpo del correo */}
-              <div className="prose prose-sm max-w-none text-[#17203A] whitespace-pre-wrap leading-relaxed bg-[#FBFBFE] p-5 rounded-2xl border border-[#E8EAF2]">
-                {selectedEmail.emailInfo?.body || selectedEmail.body}
-              </div>
+              {/* Cuerpo del correo / Expediente Estructurado */}
+              {(() => {
+                const rawBody = selectedEmail.emailInfo?.body || selectedEmail.body || '';
+                const dossier = parseRadicadoBody(rawBody);
+
+                if (dossier) {
+                  return (
+                    <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
+                      {/* Cabecera del Radicado Oficial */}
+                      <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-indigo-950 text-white p-4 sm:p-5 flex flex-wrap items-center justify-between gap-3">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-xl bg-white/10 border border-white/10 flex items-center justify-center text-white shrink-0">
+                            <FileText size={20} className="text-white" />
+                          </div>
+                          <div>
+                            <span className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-indigo-300 block">
+                              Expediente Oficial de Inasistencia
+                            </span>
+                            <h3 className="text-base sm:text-lg font-bold tracking-tight text-white flex items-center gap-2">
+                              <span>{dossier.radicado}</span>
+                            </h3>
+                          </div>
+                        </div>
+                        <span className="text-xs font-semibold px-3 py-1 rounded-full bg-white/15 text-white border border-white/20">
+                          Radicado Oficial
+                        </span>
+                      </div>
+
+                      {/* Ficha Técnica de la Novedad */}
+                      <div className="p-5 sm:p-6 space-y-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 bg-slate-50 p-4 rounded-xl border border-slate-200/80">
+                          <div>
+                            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 block mb-0.5">
+                              Estudiante / Coder
+                            </span>
+                            <p className="text-sm font-bold text-slate-900">{dossier.coder}</p>
+                          </div>
+                          <div>
+                            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 block mb-0.5">
+                              Ruta de Formación
+                            </span>
+                            <p className="text-sm font-semibold text-slate-800">{dossier.ruta}</p>
+                          </div>
+                          <div>
+                            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 block mb-0.5">
+                              Tipo de Novedad
+                            </span>
+                            <span className="inline-block text-xs font-bold px-2.5 py-0.5 rounded-lg bg-indigo-50 text-indigo-700 border border-indigo-200">
+                              {dossier.novedad}
+                            </span>
+                          </div>
+                          <div>
+                            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 block mb-0.5">
+                              Período de Ausencia
+                            </span>
+                            <p className="text-sm font-bold text-[#5B3FF5]">{dossier.periodo}</p>
+                          </div>
+                        </div>
+
+                        {/* Motivo Declarado por el Coder */}
+                        {dossier.motivo && (
+                          <div className="border border-indigo-100 bg-gradient-to-b from-indigo-50/20 to-white rounded-xl p-4 sm:p-5">
+                            <div className="flex items-center gap-2 mb-2 text-xs font-bold uppercase tracking-wider text-indigo-900">
+                              <MessageSquare size={14} className="text-[#5B3FF5]" />
+                              <span>Motivo Declarado por el Coder</span>
+                            </div>
+                            <div className="pl-3 border-l-3 border-[#5B3FF5] py-0.5">
+                              <p className="text-sm sm:text-base text-slate-800 leading-relaxed font-medium whitespace-pre-wrap">
+                                {dossier.motivo}
+                              </p>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Subsanación del Coder (si aplica) */}
+                        {dossier.subsanacion && (
+                          <div className="border border-amber-200 bg-amber-50/50 rounded-xl p-4">
+                            <span className="text-xs font-bold uppercase tracking-wider text-amber-900 block mb-1">
+                              Respuesta de Subsanación del Coder:
+                            </span>
+                            <p className="text-sm text-slate-800 font-medium whitespace-pre-wrap">
+                              {dossier.subsanacion}
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                }
+
+                return (
+                  <div className="bg-[#FBFBFE] p-5 sm:p-6 rounded-2xl border border-[#E8EAF2] text-sm sm:text-base text-[#17203A] whitespace-pre-wrap leading-relaxed shadow-2xs font-normal">
+                    {rawBody}
+                  </div>
+                );
+              })()}
 
               {/* Adjuntos y Evidencias */}
               {((selectedEmail.emailInfo?.attachments && selectedEmail.emailInfo.attachments.length > 0) || (selectedEmail.emailInfo?.images && selectedEmail.emailInfo.images.length > 0)) && (
@@ -979,55 +1107,92 @@ export default function Requests() {
               {/* PANEL DE DETALLE: ENVIADOS (NOTIFICADO) vs BANDEJA (POR RESOLVER) */}
               {/* ============================================================== */}
               {(activeFolder === 'sent' || isRequestResolved(selectedEmail)) ? (
-                <div className="border border-[#20B486]/30 bg-[#F4FDF9] rounded-2xl p-6 shadow-sm space-y-4">
-                  <div className="flex items-center justify-between border-b border-[#20B486]/20 pb-3">
-                    <div className="flex items-center gap-2.5">
-                      <div className="w-8 h-8 rounded-lg bg-[#20B486]/10 text-[#20B486] flex items-center justify-center">
-                        <CheckCircle2 size={18} />
+                (() => {
+                  const isApproved = selectedEmail.hseDecision === 'APPROVED' || selectedEmail.status === 'approved';
+                  const isDisapproved = selectedEmail.hseDecision === 'DISAPPROVED' || selectedEmail.status === 'denied';
+                  const isCorrection = selectedEmail.hseDecision === 'REQUEST_CORRECTION';
+
+                  const cardStyle = isApproved 
+                    ? 'border-emerald-200 bg-emerald-50/40' 
+                    : isDisapproved 
+                    ? 'border-red-200 bg-red-50/40' 
+                    : 'border-amber-200 bg-amber-50/40';
+
+                  const iconBoxStyle = isApproved 
+                    ? 'bg-emerald-100 text-emerald-600' 
+                    : isDisapproved 
+                    ? 'bg-red-100 text-red-600' 
+                    : 'bg-amber-100 text-amber-600';
+
+                  const badgeStyle = isApproved 
+                    ? 'bg-emerald-100 text-emerald-800 border-emerald-300' 
+                    : isDisapproved 
+                    ? 'bg-red-100 text-red-800 border-red-300' 
+                    : 'bg-amber-100 text-amber-800 border-amber-300';
+
+                  const statusTitle = isApproved 
+                    ? 'Justificación Aprobada Formalmente' 
+                    : isDisapproved 
+                    ? 'Justificación Rechazada por HSE' 
+                    : 'Requerimiento de Soporte / Subsanación';
+
+                  return (
+                    <div className={`border-2 rounded-2xl p-5 sm:p-6 shadow-sm space-y-4 ${cardStyle}`}>
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200/80 pb-3">
+                        <div className="flex items-center gap-3">
+                          <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${iconBoxStyle}`}>
+                            {isApproved ? <CheckCircle2 size={20} /> : isDisapproved ? <XCircle size={20} /> : <AlertTriangle size={20} />}
+                          </div>
+                          <div>
+                            <h3 className="text-base sm:text-lg font-bold text-slate-900">
+                              {statusTitle}
+                            </h3>
+                            <p className="text-xs text-slate-500">
+                              Esta justificación ya fue tramitada y su respuesta formal fue despachada.
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2 self-start sm:self-auto">
+                          {selectedEmail.isAutomatic && (
+                            <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-[#00B4D8]/15 text-[#007799] border border-[#00B4D8]/30 flex items-center gap-1">
+                              <Bot size={13} /> Automatizada
+                            </span>
+                          )}
+                          <span className={`text-xs font-bold px-3 py-1 rounded-full border ${badgeStyle}`}>
+                            {isApproved ? 'Aprobado' : isDisapproved ? 'Rechazado' : isCorrection ? 'Soporte Solicitado' : 'Respondido'}
+                          </span>
+                        </div>
                       </div>
-                      <div>
-                        <h3 className="text-[15px] font-bold text-[#111827]">
-                          Notificación Enviada al Coder
-                        </h3>
-                        <p className="text-xs text-[#7C8499]">
-                          Esta justificación ya fue tramitada y su respuesta formal fue despachada.
+
+                      <div className="bg-white p-4.5 rounded-xl border border-slate-200/80 shadow-xs space-y-1.5">
+                        <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+                          Respuesta / Justificación registrada por HSE:
+                        </p>
+                        <p className="text-sm sm:text-base text-slate-900 leading-relaxed font-medium">
+                          {selectedEmail.decision?.reasoning || selectedEmail.hseNotes || selectedEmail.body || 'Notificación formal enviada al estudiante.'}
                         </p>
                       </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      {selectedEmail.isAutomatic && (
-                        <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-[#00B4D8]/15 text-[#007799] border border-[#00B4D8]/30 flex items-center gap-1">
-                          <Bot size={13} /> Automatizada
-                        </span>
-                      )}
-                      <span className={`text-xs font-bold px-3 py-1 rounded-full ${
-                        (selectedEmail.hseDecision === 'APPROVED' || selectedEmail.status === 'approved') ? 'bg-[#20B486]/15 text-[#20B486]' :
-                        (selectedEmail.hseDecision === 'DISAPPROVED' || selectedEmail.status === 'denied') ? 'bg-[#FF5C67]/15 text-[#FF5C67]' :
-                        'bg-[#F5B83D]/15 text-[#F5B83D]'
-                      }`}>
-                        {(selectedEmail.hseDecision === 'APPROVED' || selectedEmail.status === 'approved') ? 'Aprobado' :
-                         (selectedEmail.hseDecision === 'DISAPPROVED' || selectedEmail.status === 'denied') ? 'Rechazado' :
-                         (selectedEmail.hseDecision === 'REQUEST_CORRECTION') ? 'Soporte Solicitado' : 'Respondido'}
-                      </span>
-                    </div>
-                  </div>
 
-                  <div className="bg-white p-4 rounded-xl border border-emerald-100 shadow-xs">
-                    <p className="text-xs font-bold text-[#7C8499] uppercase tracking-wider mb-1.5">
-                      Respuesta / Justificación registrada por HSE:
-                    </p>
-                    <p className="text-sm text-[#17203A] leading-relaxed">
-                      {selectedEmail.decision?.reasoning || selectedEmail.hseNotes || selectedEmail.body || 'Notificación formal enviada al estudiante.'}
-                    </p>
-                  </div>
-
-                  <div className="flex items-center justify-between text-xs text-[#7C8499] pt-1">
-                    <span>Revisor: <strong className="text-[#111827]">{selectedEmail.isAutomatic ? 'Sistema IA HSE (Sin intervención humana)' : (selectedEmail.decision?.modifiedBy || 'Team Leader Paola')}</strong></span>
-                    {selectedEmail.decision?.modifiedAt && (
-                      <span>Fecha de envío: <strong>{new Date(selectedEmail.decision.modifiedAt).toLocaleString('es-ES')}</strong></span>
-                    )}
-                  </div>
-                </div>
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 text-xs text-slate-600 pt-1 border-t border-slate-200/70">
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-semibold text-slate-500">Revisor:</span>
+                          <strong className="text-slate-900 font-bold">
+                            {selectedEmail.isAutomatic ? 'Sistema IA HSE (Sin intervención humana)' : (selectedEmail.decision?.modifiedBy || 'Team Leader Paola (HSE)')}
+                          </strong>
+                        </div>
+                        {selectedEmail.decision?.modifiedAt && (
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-semibold text-slate-500">Fecha de envío:</span>
+                            <strong className="text-slate-900 font-bold">
+                              {new Date(selectedEmail.decision.modifiedAt).toLocaleString('es-ES')}
+                            </strong>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })()
               ) : (
                 <div className="border-2 border-[#5B3FF5]/20 bg-white rounded-2xl p-6 shadow-sm space-y-4">
                   <div className="flex items-center justify-between border-b border-[#E8EAF2] pb-3">
@@ -1134,21 +1299,29 @@ export default function Requests() {
                     />
                   </div>
 
-                  {/* Botones de Acción */}
-                  <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
-                    <span className="text-xs text-[#7C8499]">
-                      Revisor: <strong>Paola Admin (HSE)</strong>
-                    </span>
+                  {/* Barra de Auditoría y Botones de Acción */}
+                  <div className="pt-3 border-t border-[#E8EAF2] space-y-3">
+                    <div className="flex flex-wrap items-center justify-between text-xs text-[#7C8499] px-1 gap-2">
+                      <span className="flex items-center gap-1.5">
+                        <ShieldCheck size={15} className="text-[#5B3FF5]" />
+                        <span>Revisor Oficial: <strong className="text-[#111827]">Paola Admin (HSE)</strong></span>
+                      </span>
+                      <span className="text-[11px] text-[#7C8499] font-medium hidden sm:inline">
+                        La decisión registrará auditoría y notificará formalmente al estudiante.
+                      </span>
+                    </div>
 
-                    <div className="flex items-center gap-2">
+                    {/* Grilla balanceada y espaciosa de 3 botones */}
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 w-full">
                       {/* Botón Rechazar */}
                       <button
                         type="button"
                         disabled={isResolving}
                         onClick={() => handleResolveAction('DISAPPROVED')}
-                        className="bg-white hover:bg-red-50 text-[#FF5C67] border border-[#FF5C67]/30 hover:border-[#FF5C67] px-4 py-2.5 rounded-xl font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer disabled:opacity-50"
+                        className="w-full bg-white hover:bg-red-50 text-red-600 hover:text-red-700 border-2 border-red-200 hover:border-red-400 py-3 px-3 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center gap-2 transition-all shadow-2xs cursor-pointer disabled:opacity-50"
                       >
-                        <XCircle size={15} /> Rechazar Caso
+                        <XCircle size={18} className="shrink-0 text-red-500" />
+                        <span>Rechazar Caso</span>
                       </button>
 
                       {/* Botón Solicitar Corrección */}
@@ -1156,9 +1329,10 @@ export default function Requests() {
                         type="button"
                         disabled={isResolving}
                         onClick={() => handleResolveAction('REQUEST_CORRECTION')}
-                        className="bg-white hover:bg-amber-50 text-[#F5B83D] border border-[#F5B83D]/30 hover:border-[#F5B83D] px-4 py-2.5 rounded-xl font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer disabled:opacity-50"
+                        className="w-full bg-white hover:bg-amber-50 text-amber-700 hover:text-amber-800 border-2 border-amber-200 hover:border-amber-400 py-3 px-3 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center gap-2 transition-all shadow-2xs cursor-pointer disabled:opacity-50"
                       >
-                        <AlertTriangle size={15} /> Pedir Soporte
+                        <AlertTriangle size={18} className="shrink-0 text-amber-500" />
+                        <span>Pedir Soporte</span>
                       </button>
 
                       {/* Botón Aprobar */}
@@ -1166,12 +1340,15 @@ export default function Requests() {
                         type="button"
                         disabled={isResolving}
                         onClick={() => handleResolveAction('APPROVED')}
-                        className="bg-[#20B486] hover:bg-[#199d74] text-white shadow-md shadow-[#20B486]/25 px-5 py-2.5 rounded-xl font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer disabled:opacity-50"
+                        className="w-full bg-[#20B486] hover:bg-[#189970] text-white py-3 px-3 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center gap-2 transition-all shadow-md shadow-[#20B486]/30 cursor-pointer disabled:opacity-50"
                       >
                         {isResolving ? (
-                          <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                          <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                         ) : (
-                          <><CheckCircle2 size={15} /> Aprobar Excusa</>
+                          <>
+                            <CheckCircle2 size={18} className="shrink-0" />
+                            <span>Aprobar Excusa</span>
+                          </>
                         )}
                       </button>
                     </div>
