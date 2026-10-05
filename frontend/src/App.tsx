@@ -6,6 +6,7 @@ import Dashboard from './pages/Dashboard';
 import Requests from './pages/Requests';
 import Reports from './pages/Reports';
 import Students from './pages/Students';
+import AttendanceRanking from './pages/AttendanceRanking';
 import Login from './pages/Login';
 import Settings from './pages/Settings';
 import Forbidden from './pages/Forbidden';
@@ -13,6 +14,8 @@ import NotFound from './pages/NotFound';
 import { CoderLayout } from './components/coder/CoderLayout';
 import CoderHistory from './pages/coder/CoderHistory';
 import ExcuseSubmissionForm from './pages/coder/ExcuseSubmissionForm';
+import CoderChat from './pages/coder/CoderChat';
+import CoderAttendance from './pages/coder/CoderAttendance';
 import type { UserRole } from './types';
 
 // Roles administrativos autorizados para el portal HSE
@@ -44,6 +47,7 @@ function App() {
             <Route path="/" element={<Dashboard />} />
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/requests" element={<Requests />} />
+            <Route path="/attendance-ranking" element={<AttendanceRanking />} />
             <Route path="/reports" element={<Reports />} />
             <Route path="/students" element={<Students />} />
             <Route path="/settings" element={<Settings />} />
@@ -61,6 +65,8 @@ function App() {
             <Route index element={<Navigate to="new-excuse" replace />} />
             <Route path="history" element={<CoderHistory />} />
             <Route path="new-excuse" element={<ExcuseSubmissionForm />} />
+            <Route path="attendance" element={<CoderAttendance />} />
+            <Route path="chat" element={<CoderChat />} />
           </Route>
 
           {/* Rutas 404 Not Found (explícita y comodín) */}

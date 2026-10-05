@@ -18,10 +18,7 @@ import {
   HelpCircle, 
   Send, 
   Sparkles,
-  RefreshCw,
-  LogOut,
-  Inbox,
-  PlusCircle
+  RefreshCw
 } from 'lucide-react';
 import { 
   excuseFormSchema, 
@@ -33,15 +30,15 @@ import { EvidenceDropzone, type SelectedFile } from '../../components/coder/Evid
 import { getCoderSession } from '../../utils/coderSession';
 import { saveNewCoderJustification } from '../../utils/coderJustifications';
 import { useAuth } from '../../context/AuthContext';
+import { CoderProfileMenu } from '../../components/coder/CoderProfileMenu';
 import { api } from '../../services/api';
 
 export default function ExcuseSubmissionForm() {
   const navigate = useNavigate();
-  const { logout } = useAuth();
+  const { user } = useAuth();
   const [currentStep, setCurrentStep] = useState<1 | 2>(1);
   const [selectedFiles, setSelectedFiles] = useState<SelectedFile[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [submissionSuccess, setSubmissionSuccess] = useState<null | {
     radicadoId: string;
     submittedAt: string;
@@ -49,19 +46,17 @@ export default function ExcuseSubmissionForm() {
     filesCount: number;
   }>(null);
 
-  const session = useMemo(() => getCoderSession(), []);
-
-  const initials = useMemo(() => {
-    if (!session.name) return 'CO';
-    const parts = session.name.trim().split(/\s+/);
-    if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
-    return (parts[0][0] + parts[1][0]).toUpperCase();
-  }, [session.name]);
-
-  const handleLogout = () => {
-    logout();
-    navigate('/login', { replace: true });
-  };
+  const session = useMemo(() => {
+    if (user && user.role === 'CODER') {
+      return {
+        name: user.name,
+        cedula: user.cedula || '',
+        email: user.email,
+        route: user.route || 'Desarrollo de Software',
+      };
+    }
+    return getCoderSession();
+  }, [user]);
 
   // Configuración de React Hook Form + Zod con persistencia de campos no montados
   const {
@@ -138,19 +133,28 @@ export default function ExcuseSubmissionForm() {
         end_date: data.end_date,
         description: data.description,
         truth_declaration: data.truth_declaration,
-        attachments: selectedFiles.map((f) => ({
-          file_id: f.id,
-          filename: f.name,
-          size_bytes: f.size,
-          mime_type: f.type,
-          preview_url: f.previewUrl || f.presignedUrl || undefined,
-          legibility_status: f.legibility,
-          legibility_reason: f.legibilityReason,
-          // Estructura preparada para endpoints de carga o URLs prefirmadas de Supabase Storage
-          storage_bucket: 'hse-evidences',
-          storage_path: f.storagePath || `evidences/coder/${f.id}/${f.name}`,
-          upload_status: f.status,
-        })),
+        attachments: selectedFiles.map((f) => {
+          const effectiveDataUrl = f.dataUrl || (f.previewUrl?.startsWith('data:') ? f.previewUrl : undefined);
+          const base64Data = effectiveDataUrl && effectiveDataUrl.includes(',') 
+            ? effectiveDataUrl.split(',')[1] 
+            : undefined;
+
+          return {
+            file_id: f.id,
+            filename: f.name,
+            size_bytes: f.size,
+            mime_type: f.type,
+            preview_url: effectiveDataUrl || f.previewUrl || f.presignedUrl || undefined,
+            data_url: effectiveDataUrl,
+            data_base64: base64Data,
+            legibility_status: f.legibility,
+            legibility_reason: f.legibilityReason,
+            // Estructura preparada para endpoints de carga o URLs prefirmadas de Supabase Storage
+            storage_bucket: 'hse-evidences',
+            storage_path: f.storagePath || `evidences/coder/${f.id}/${f.name}`,
+            upload_status: f.status,
+          };
+        }),
         submitted_at: new Date().toISOString(),
       };
 
@@ -351,71 +355,7 @@ export default function ExcuseSubmissionForm() {
           </div>
 
           {/* Avatar del Coder con menú desplegable */}
-          <div className="relative">
-            <button
-              type="button"
-              onClick={() => setShowProfileMenu(!showProfileMenu)}
-              className="size-10 rounded-full bg-[#11132C] hover:ring-2 hover:ring-[#5B3FF5] transition-all flex items-center justify-center text-white font-bold text-sm select-none shadow-md shadow-[#11132C]/20 border border-white/10 cursor-pointer"
-              title={`${session.name} · Clic para opciones`}
-            >
-              {initials}
-            </button>
-
-            {showProfileMenu && (
-              <>
-                <div 
-                  className="fixed inset-0 z-40" 
-                  onClick={() => setShowProfileMenu(false)} 
-                />
-                <div className="absolute top-12 right-0 w-60 bg-white rounded-2xl shadow-2xl border border-gray-100 py-3 z-50 divide-y divide-gray-100">
-                  <div className="px-4 py-2">
-                    <p className="text-[10px] text-[#7C8499] uppercase font-bold tracking-wider">Coder Conectado</p>
-                    <p className="text-sm font-bold text-[#111827] truncate mt-0.5">{session.name}</p>
-                    <p className="text-xs text-[#7C8499] font-mono">CC: {session.cedula}</p>
-                    <span className="inline-block mt-1.5 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-[#5B3FF5]/10 text-[#5B3FF5]">
-                      {session.route || 'Ruta Web'}
-                    </span>
-                  </div>
-
-                  <div className="py-1">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setShowProfileMenu(false);
-                        navigate('/coder/history');
-                      }}
-                      className="w-full text-left px-4 py-2 text-xs sm:text-sm text-[#111827] hover:bg-[#F6F7FB] flex items-center gap-3 transition-colors cursor-pointer"
-                    >
-                      <Inbox size={16} className="text-[#5B3FF5]" />
-                      <span>Historial de solicitudes</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setShowProfileMenu(false);
-                        navigate('/coder/new-excuse');
-                      }}
-                      className="w-full text-left px-4 py-2 text-xs sm:text-sm text-[#111827] hover:bg-[#F6F7FB] flex items-center gap-3 transition-colors cursor-pointer font-medium"
-                    >
-                      <PlusCircle size={16} className="text-[#5B3FF5]" />
-                      <span>Radicar Justificación</span>
-                    </button>
-                  </div>
-
-                  <div className="pt-1">
-                    <button
-                      type="button"
-                      onClick={handleLogout}
-                      className="w-full text-left px-4 py-2 text-xs sm:text-sm text-[#FF5C67] hover:bg-red-50 flex items-center gap-3 transition-colors cursor-pointer font-semibold"
-                    >
-                      <LogOut size={16} className="text-[#FF5C67]" />
-                      <span>Cerrar sesión</span>
-                    </button>
-                  </div>
-                </div>
-              </>
-            )}
-          </div>
+          <CoderProfileMenu />
         </div>
       </div>
 

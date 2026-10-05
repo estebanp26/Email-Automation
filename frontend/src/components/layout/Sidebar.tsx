@@ -1,12 +1,14 @@
 import { useState } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { LayoutDashboard, Inbox, Settings, Users, X, Menu } from 'lucide-react';
+import { LayoutDashboard, Inbox, Settings, Users, X, Menu, ShieldAlert } from 'lucide-react';
 import clsx from 'clsx';
+import { useAuth } from '../../context/AuthContext';
 
 const navItems = [
   { path: '/', name: 'Panel de Control', icon: LayoutDashboard },
   { path: '/requests', name: 'Solicitudes', icon: Inbox },
+  { path: '/attendance-ranking', name: 'Top Inasistencias', icon: ShieldAlert },
   { path: '/students', name: 'Coders', icon: Users },
   { path: '/settings', name: 'Configuración HSE', icon: Settings },
 ];
@@ -19,6 +21,7 @@ interface SidebarProps {
 export function Sidebar({ mobileOpen = false, onCloseMobile }: SidebarProps) {
   const [isOpen, setIsOpen] = useState(true);
   const location = useLocation();
+  const { logout } = useAuth();
 
   return (
     <>
@@ -76,6 +79,7 @@ export function Sidebar({ mobileOpen = false, onCloseMobile }: SidebarProps) {
               !isOpen && "w-10 h-10 rounded-xl bg-white/10 hover:bg-white/20 transition-colors"
             )}
             title={isOpen ? "Colapsar menú lateral" : "Expandir menú lateral"}
+            aria-label={isOpen ? "Colapsar menú lateral" : "Expandir menú lateral"}
           >
             {isOpen ? (
               <motion.div
@@ -168,9 +172,9 @@ export function Sidebar({ mobileOpen = false, onCloseMobile }: SidebarProps) {
             )}
           </div>
           <button
+            type="button"
             onClick={() => {
-              localStorage.removeItem('hse_token');
-              localStorage.removeItem('hse_role');
+              logout();
               window.location.href = '/login';
             }}
             className={clsx(

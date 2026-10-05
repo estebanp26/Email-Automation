@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
-  Mail, Send, FileEdit, Trash, Reply, Inbox, Paperclip, User, 
+  Mail, Send, FileEdit, Trash, Reply, Inbox, Paperclip,
   CheckCircle2, XCircle, AlertCircle, Zap,
   Calendar, ShieldCheck, MessageSquare, AlertTriangle, RotateCw, Search,
-  ArrowLeft
+  ArrowLeft, Download, FileText, Image as ImageIcon, X, Bot
 } from 'lucide-react';
 import clsx from 'clsx';
 import { api } from '../services/api';
@@ -19,6 +19,136 @@ export default function Requests() {
   const [searchQuery, setSearchQuery] = useState('');
   const [showMobileDetail, setShowMobileDetail] = useState(false);
   
+  // Preview Modal State for Attachments (Images and Documents)
+  const [previewModalAttachment, setPreviewModalAttachment] = useState<{
+    name: string;
+    url: string;
+    mime_type?: string;
+  } | null>(null);
+
+  // Lista de estudiantes para validar historial y umbrales de asistencia
+  const [students, setStudents] = useState<any[]>([]);
+
+  useEffect(() => {
+    api.getStudents().then((data: any) => {
+      if (Array.isArray(data) && data.length > 0) {
+        setStudents(data);
+      }
+    }).catch(() => {});
+  }, []);
+
+  const isImageAttachment = (att?: { name?: string; url?: string; mime_type?: string } | null) => {
+    if (!att) return false;
+    const mime = (att.mime_type || '').toLowerCase();
+    if (mime.startsWith('image/')) return true;
+    if (att.url && att.url.startsWith('data:image/')) return true;
+    const ext = (att.name || '').toLowerCase();
+    return ext.endsWith('.png') || ext.endsWith('.jpg') || ext.endsWith('.jpeg') || ext.endsWith('.gif') || ext.endsWith('.webp') || ext.endsWith('.svg');
+  };
+
+  const getNoveltyDetails = (item: any) => {
+    if (!item) return { label: 'Inasistencia General', badge: 'General', icon: '📋', color: 'bg-slate-100 text-slate-700 border-slate-200' };
+    const typeKey = (item.noveltyType || item.category || '').toLowerCase();
+    const label = item.noveltyLabel || '';
+    const fullText = `${item.emailInfo?.subject || ''} ${item.emailInfo?.body || ''} ${item.subject || ''} ${label} ${typeKey}`.toLowerCase();
+
+    if (typeKey.includes('medic') || fullText.includes('medic') || fullText.includes('médic') || fullText.includes('incapacidad') || fullText.includes('sura') || fullText.includes('eps') || fullText.includes('salud') || fullText.includes('enfermedad')) {
+      return {
+        label: label || 'Incapacidad Médica / Salud',
+        badge: 'Médica',
+        icon: '🩺',
+        color: 'bg-emerald-50 text-emerald-700 border-emerald-200'
+      };
+    }
+    if (typeKey.includes('calamidad') || fullText.includes('calamidad') || fullText.includes('luto') || fullText.includes('falleci') || fullText.includes('urgencia') || fullText.includes('domestica') || fullText.includes('doméstica')) {
+      return {
+        label: label || 'Calamidad Doméstica',
+        badge: 'Calamidad',
+        icon: '🏠',
+        color: 'bg-amber-50 text-amber-700 border-amber-200'
+      };
+    }
+    if (typeKey.includes('falla') || fullText.includes('falla') || fullText.includes('conectividad') || fullText.includes('internet') || fullText.includes('luz') || fullText.includes('energia')) {
+      return {
+        label: label || 'Falla Técnica / Conectividad',
+        badge: 'Falla Técnica',
+        icon: '⚡',
+        color: 'bg-blue-50 text-blue-700 border-blue-200'
+      };
+    }
+    if (typeKey.includes('legal') || fullText.includes('legal') || fullText.includes('judicial') || fullText.includes('tramite') || fullText.includes('trámite')) {
+      return {
+        label: label || 'Trámite Legal / Judicial',
+        badge: 'Trámite Legal',
+        icon: '⚖️',
+        color: 'bg-indigo-50 text-indigo-700 border-indigo-200'
+      };
+    }
+    if (typeKey.includes('permiso') || fullText.includes('permiso') || fullText.includes('academico') || fullText.includes('académico') || fullText.includes('universidad')) {
+      return {
+        label: label || 'Permiso Académico / Otro',
+        badge: 'Permiso Académico',
+        icon: '🎓',
+        color: 'bg-purple-50 text-purple-700 border-purple-200'
+      };
+    }
+    return {
+      label: label || 'Novedad de Asistencia',
+      badge: 'Revisión General',
+      icon: '📋',
+      color: 'bg-slate-50 text-slate-700 border-slate-200'
+    };
+  };
+
+  const getCoderAttendanceInfo = (emailItem: any) => {
+    if (!emailItem) return { remaining: 1, hasRemaining: true, unjustifiedCount: 1 };
+    const senderEmail = (emailItem.emailInfo?.senderEmail || emailItem.sender_email || emailItem.to || '').toLowerCase().trim();
+    const senderName = (emailItem.emailInfo?.senderName || emailItem.sender_name || '').toLowerCase().trim();
+    
+    const student = students.find((s: any) => 
+      (s.email && s.email.toLowerCase().trim() === senderEmail) ||
+      (s.name && s.name.toLowerCase().trim() === senderName) ||
+      s.id === emailItem.studentId
+    );
+
+    const unjustifiedCount = student?.attendance?.unjustifiedAbsence ?? 1;
+    // Reglamento Riwi Barranquilla: tolerancia de 2 inasistencias injustificadas acumulables
+    const maxAllowedUnjustified = 2;
+    const remaining = Math.max(0, maxAllowedUnjustified - unjustifiedCount);
+
+    return {
+      student,
+      unjustifiedCount,
+      remaining,
+      hasRemaining: remaining > 0,
+    };
+  };
+
+  const handleDownloadAttachment = (e: React.MouseEvent, att: { name: string; url: string }) => {
+    e.stopPropagation();
+    e.preventDefault();
+    if (!att.url || att.url === '#') return;
+    try {
+      const downloadUrl = att.url.includes('?') 
+        ? `${att.url}&download=1` 
+        : (att.url.startsWith('data:') ? att.url : `${att.url}?download=1`);
+      const link = document.createElement('a');
+      link.href = downloadUrl;
+      link.download = att.name || 'documento_soporte';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch (err) {
+      console.error('Error al descargar archivo:', err);
+    }
+  };
+
+  const handleOpenPreview = (e: React.MouseEvent, att: { name: string; url: string; mime_type?: string }) => {
+    e.stopPropagation();
+    e.preventDefault();
+    setPreviewModalAttachment(att);
+  };
+
   // Composing state
   const [isComposing, setIsComposing] = useState(false);
   const [composeData, setComposeData] = useState({ to: '', subject: '', body: '' });
@@ -37,8 +167,54 @@ export default function Requests() {
     details?: string;
   } | null>(null);
 
-  const inboxList = requests.filter((r: any) => !r.hasHumanIntervention && !r.hseDecision && !r.isResponded);
-  const resolvedRequests = requests.filter((r: any) => r.hasHumanIntervention || r.hseDecision || r.isResponded);
+  const isRequestResolved = (r: any) => Boolean(
+    r.hasHumanIntervention || 
+    r.hseDecision || 
+    r.isResponded || 
+    r.isAutomatic || 
+    r.status === 'approved' || 
+    r.status === 'denied' ||
+    (r.decision?.source === 'ai' && (r.decision?.confidence ?? 0) >= 0.90 && (r.category === 'POSIBLEMENTE_VALIDO' || r.recommendation === 'POSIBLEMENTE_VALIDO' || r.status === 'approved'))
+  );
+
+  const parseRadicadoBody = (bodyText: string) => {
+    if (!bodyText || !bodyText.includes('Radicado Oficial:')) {
+      return null;
+    }
+    const radicadoMatch = bodyText.match(/Radicado Oficial:\s*([^\n]+)/);
+    const coderMatch = bodyText.match(/Coder:\s*([^\n]+)/);
+    const rutaMatch = bodyText.match(/Ruta Académica:\s*([^\n]+)/);
+    const novedadMatch = bodyText.match(/Tipo de Novedad:\s*([^\n]+)/);
+    const periodoMatch = bodyText.match(/Período de Ausencia:\s*([^\n]+)/);
+
+    let motivo = '';
+    let subsanacion = '';
+
+    const motivoSplit = bodyText.split(/Motivo Declarado por el Coder:\s*/);
+    if (motivoSplit.length > 1) {
+      const afterMotivo = motivoSplit[1];
+      const subsanacionSplit = afterMotivo.split(/Respuesta de Subsanación del Coder:\s*/);
+      motivo = subsanacionSplit[0].trim();
+      if (subsanacionSplit.length > 1) {
+        subsanacion = subsanacionSplit[1].trim();
+      }
+    } else {
+      motivo = bodyText.trim();
+    }
+
+    return {
+      radicado: radicadoMatch ? radicadoMatch[1].trim() : null,
+      coder: coderMatch ? coderMatch[1].trim() : null,
+      ruta: rutaMatch ? rutaMatch[1].trim() : null,
+      novedad: novedadMatch ? novedadMatch[1].trim() : null,
+      periodo: periodoMatch ? periodoMatch[1].trim() : null,
+      motivo: motivo || null,
+      subsanacion: subsanacion || null,
+    };
+  };
+
+  const inboxList = requests.filter((r: any) => !isRequestResolved(r));
+  const resolvedRequests = requests.filter((r: any) => isRequestResolved(r));
   const sentList = [...resolvedRequests, ...sentEmails];
   const activeList = activeFolder === 'inbox' ? inboxList : activeFolder === 'sent' ? sentList : [];
 
@@ -62,8 +238,10 @@ export default function Requests() {
       setRequests(data);
       setSelectedEmail((prev: any) => {
         if (!prev) {
-          const pending = data.filter((r: any) => !r.hasHumanIntervention && !r.hseDecision && !r.isResponded);
-          return pending.length > 0 ? pending[0] : (data.length > 0 ? data[0] : null);
+          const currentList = activeFolder === 'inbox' 
+            ? data.filter((r: any) => !isRequestResolved(r)) 
+            : data.filter((r: any) => isRequestResolved(r));
+          return currentList.length > 0 ? currentList[0] : (data.length > 0 ? data[0] : null);
         }
         const updated = data.find((r: any) => r.id === prev.id);
         return updated || prev;
@@ -120,6 +298,14 @@ export default function Requests() {
       ? new Date(email.emailInfo.date).toISOString().split('T')[0] 
       : new Date().toISOString().split('T')[0];
     setStartDate(dateStr);
+
+    const rawType = (email.noveltyType || email.noveltyLabel || email.category || email.emailInfo?.subject || '').toLowerCase();
+    if (rawType.includes('calamidad')) setExcuseType('calamidad');
+    else if (rawType.includes('falla') || rawType.includes('conectividad') || rawType.includes('internet')) setExcuseType('falla_tecnica');
+    else if (rawType.includes('legal') || rawType.includes('judicial') || rawType.includes('tramite') || rawType.includes('trámite')) setExcuseType('tramite_legal');
+    else if (rawType.includes('fuerza')) setExcuseType('fuerza_mayor');
+    else if (rawType.includes('permiso') || rawType.includes('academico') || rawType.includes('académico')) setExcuseType('permiso_academico_otro');
+    else setExcuseType('inasistencia_medica');
   };
 
   const handleReply = () => {
@@ -247,7 +433,7 @@ export default function Requests() {
       }
 
       const actionLabel = action === 'APPROVED' ? 'Aprobado' : action === 'DISAPPROVED' ? 'Rechazado' : 'Notificado';
-      setToastMessage(`Caso ${actionLabel} exitosamente y registrado en backend`);
+      setToastMessage(`Caso ${actionLabel} exitosamente`);
       setShowToast(true);
       setTimeout(() => setShowToast(false), 3500);
 
@@ -270,8 +456,47 @@ export default function Requests() {
     }
   };
 
+  const handleDownloadReport = () => {
+    const list = [...inboxList, ...sentList];
+    const headers = ['ID Radicado', 'Remitente', 'Asunto', 'Fecha', 'Estado'];
+    const rows = list.map((item) => [
+      `"${item.id || ''}"`,
+      `"${item.from_address || item.to_address || ''}"`,
+      `"${(item.subject || '').replace(/"/g, '""')}"`,
+      `"${item.received_at || item.sent_at || ''}"`,
+      `"${item.status || 'PROCESADO'}"`,
+    ]);
+    const csvContent = '\uFEFF' + [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `reporte_solicitudes_hse_${new Date().toISOString().slice(0, 10)}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   return (
-    <div className="h-[calc(100vh-5.5rem)] lg:h-[calc(100vh-6rem)] flex flex-col lg:flex-row gap-3 sm:gap-4 overflow-hidden">
+    <div className="h-[calc(100vh-5.5rem)] lg:h-[calc(100vh-6rem)] flex flex-col gap-3 overflow-hidden">
+      {/* Top Header con Título y Botón Descargar Reporte en la esquina superior derecha */}
+      <div className="flex items-center justify-between gap-3 shrink-0">
+        <div>
+          <h1 className="text-xl sm:text-2xl font-bold text-[#111827]">Bandeja de Solicitudes HSE</h1>
+          <p className="text-xs text-[#7C8499]">Gestión de justificaciones, incapacidades y radicados de bienestar.</p>
+        </div>
+        <button
+          type="button"
+          onClick={handleDownloadReport}
+          className="flex items-center gap-2 px-4 py-2 bg-white hover:bg-gray-50 border border-[#E2E8F0] rounded-xl text-xs sm:text-sm font-semibold text-[#111827] shadow-2xs transition-all cursor-pointer hover:border-[#5B3FF5]"
+          title="Descargar reporte consolidado en CSV"
+        >
+          <Download size={14} className="text-[#5B3FF5]" />
+          <span>Descargar reporte</span>
+        </button>
+      </div>
+
+      <div className="flex-1 flex flex-col lg:flex-row gap-3 sm:gap-4 overflow-hidden min-h-0">
       
       {/* Selector móvil de carpetas (solo visible en < 1024px) */}
       <div className="lg:hidden flex items-center justify-between gap-2 overflow-x-auto pb-1 shrink-0">
@@ -317,10 +542,10 @@ export default function Requests() {
       </div>
 
       {/* 1. SIDEBAR DE CARPETAS (Paneles Izquierdos en Desktop) */}
-      <div className="hidden lg:flex w-[240px] flex-shrink-0 flex-col gap-4">
+      <div className="hidden lg:flex w-[190px] xl:w-[210px] flex-shrink-0 flex-col gap-4">
         <button
           onClick={handleComposeNew}
-          className="w-full bg-gradient-to-r from-[#5636F5] to-[#633BFF] hover:opacity-90 text-white rounded-[16px] py-4 px-4 flex items-center justify-center gap-2 font-bold shadow-[0_8px_20px_rgba(99,59,255,0.25)] transition-all cursor-pointer"
+          className="w-full bg-gradient-to-r from-[#5636F5] to-[#633BFF] hover:opacity-90 text-white rounded-[16px] py-3.5 px-4 flex items-center justify-center gap-2 font-bold shadow-[0_8px_20px_rgba(99,59,255,0.25)] transition-all cursor-pointer text-sm"
         >
           <FileEdit size={18} /> Redactar
         </button>
@@ -350,18 +575,18 @@ export default function Requests() {
             />
           </div>
 
-          {/* Backend Status Badge */}
+          {/* Service Status Badge */}
           <div className="mt-auto pt-4 border-t border-[#E8EAF2]">
             <div className="p-3 bg-[#F8F9FE] border border-[#E8EAF2] rounded-[16px] text-xs">
               <div className="flex items-center gap-2 mb-1">
                 <span className="w-2 h-2 rounded-full bg-[#20B486] animate-pulse" />
-                <span className="font-bold text-[#111827]">Backend REST Nativo</span>
+                <span className="font-bold text-[#111827]">Servicio Central HSE</span>
               </div>
-              <p className="text-[11px] text-[#7C8499] truncate font-mono">
-                /api/v1/justifications
+              <p className="text-[11px] text-[#7C8499] truncate">
+                Conexión en línea activa
               </p>
               <div className="mt-1 flex items-center gap-1 text-[10px] font-semibold text-[#5B3FF5]">
-                <Zap size={11} /> Conexión Directa HSE
+                <Zap size={11} /> Plataforma Oficial Riwi
               </div>
             </div>
           </div>
@@ -370,7 +595,7 @@ export default function Requests() {
 
       {/* 2. LISTA DE CORREOS (Panel Central) */}
       <div className={clsx(
-        "w-full lg:w-[380px] flex-shrink-0 bg-white border border-[#E2E8F0] rounded-[24px] shadow-sm flex flex-col overflow-hidden",
+        "w-full lg:w-[310px] xl:w-[340px] flex-shrink-0 bg-white border border-[#E2E8F0] rounded-[24px] shadow-sm flex flex-col overflow-hidden",
         showMobileDetail ? "hidden lg:flex" : "flex flex-1 lg:flex-initial"
       )}>
         <div className="p-4 border-b border-[#E2E8F0] bg-gray-50/50 space-y-3">
@@ -429,9 +654,13 @@ export default function Requests() {
                   <span className="text-[11px] text-[#A3AAC2] whitespace-nowrap">{date}</span>
                 </div>
                 
-                <div className="flex items-center justify-between gap-2 mb-1">
+                <div className="flex items-center justify-between gap-2 mb-1.5">
                   <h4 className="text-[13px] font-semibold text-[#17203A] truncate">{subject}</h4>
-                  {(item.category || status) && (
+                  {item.isAutomatic ? (
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 flex items-center gap-1 bg-[#00B4D8]/15 text-[#007799] border border-[#00B4D8]/30">
+                      <Bot size={11} /> Automatizada
+                    </span>
+                  ) : (item.category || status) ? (
                     <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 flex items-center gap-1 ${
                       (item.category === 'POSIBLEMENTE_VALIDO' || status === 'approved') ? 'bg-[#20B486]/10 text-[#20B486]' :
                       (item.category === 'POSIBLEMENTE_INVALIDO' || status === 'denied') ? 'bg-[#FF5C67]/10 text-[#FF5C67]' :
@@ -440,11 +669,45 @@ export default function Requests() {
                       {(item.category === 'POSIBLEMENTE_VALIDO' || status === 'approved') ? 'Posiblemente Válido' :
                        (item.category === 'POSIBLEMENTE_INVALIDO' || status === 'denied') ? 'Posiblemente Inválido' :
                        'Revisión Manual'}
-                      {typeof item.decision?.confidence === 'number' && item.decision.confidence > 0 && (
-                        <span className="font-semibold opacity-90">({(item.decision.confidence * 100).toFixed(0)}%)</span>
-                      )}
                     </span>
-                  )}
+                  ) : null}
+                </div>
+
+                {/* Sub-etiquetas de Clasificación y Soporte */}
+                <div className="flex flex-wrap items-center gap-1.5 mb-1.5">
+                  {(() => {
+                    const nov = getNoveltyDetails(item);
+                    const hasSupp = Boolean(
+                      (item.emailInfo?.attachments && item.emailInfo.attachments.length > 0) ||
+                      (item.emailInfo?.images && item.emailInfo.images.length > 0) ||
+                      item.hasAttachment
+                    );
+                    const attInfo = getCoderAttendanceInfo(item);
+                    return (
+                      <>
+                        <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border flex items-center gap-1 ${nov.color}`}>
+                          <span>{nov.icon}</span>
+                          <span>{nov.badge}</span>
+                        </span>
+                        {hasSupp ? (
+                          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded border bg-emerald-50 text-emerald-700 border-emerald-200 flex items-center gap-0.5">
+                            <Paperclip size={10} />
+                            <span>Con soporte</span>
+                          </span>
+                        ) : (
+                          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded border bg-amber-50 text-amber-800 border-amber-300 flex items-center gap-0.5">
+                            <AlertTriangle size={10} />
+                            <span>Sin soporte</span>
+                          </span>
+                        )}
+                        {!attInfo.hasRemaining && (
+                          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded border bg-red-50 text-red-700 border-red-300" title="Coder sin inasistencias disponibles sin justificar">
+                            0 disp.
+                          </span>
+                        )}
+                      </>
+                    );
+                  })()}
                 </div>
 
                 <p className="text-[12px] text-[#7C8499] line-clamp-2 leading-relaxed">{snippet}</p>
@@ -574,148 +837,251 @@ export default function Requests() {
         ) : selectedEmail ? (
           /* VISTA DE LECTURA Y RESOLUCIÓN */
           <div className="flex flex-col h-full overflow-hidden">
-            {/* Cabecera del correo */}
-            <div className="p-4 sm:p-6 border-b border-[#E2E8F0] flex flex-col sm:flex-row justify-between items-start gap-3 bg-gray-50/30 shrink-0">
-              <div className="w-full sm:w-auto">
-                <div className="flex items-center gap-2 mb-2">
+            {/* Cabecera del correo compacta y de alta densidad de información */}
+            <div className="px-4 py-3 sm:px-5 border-b border-[#E2E8F0] bg-gray-50/40 shrink-0 space-y-2">
+              {/* Fila 1: Asunto y Fecha */}
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2 min-w-0">
                   <button
                     type="button"
                     onClick={() => setShowMobileDetail(false)}
-                    className="lg:hidden p-1.5 -ml-1 rounded-lg text-[#7C8499] hover:bg-white hover:text-[#111827] transition-colors shrink-0 cursor-pointer"
+                    className="lg:hidden p-1 -ml-1 rounded-lg text-[#7C8499] hover:bg-white hover:text-[#111827] transition-colors shrink-0 cursor-pointer"
                     aria-label="Volver a la lista"
                   >
-                    <ArrowLeft size={18} />
+                    <ArrowLeft size={16} />
                   </button>
-                  <h2 className="text-[17px] sm:text-[20px] font-bold text-[#111827] line-clamp-1 sm:line-clamp-none">
+                  <h2 className="text-[15px] sm:text-[17px] font-bold text-[#111827] line-clamp-2 sm:line-clamp-1 break-words">
                     {selectedEmail.emailInfo?.subject || selectedEmail.subject}
                   </h2>
                 </div>
+                <span className="text-[11px] text-[#7C8499] shrink-0 font-medium">
+                  {new Date(selectedEmail.emailInfo?.date || selectedEmail.date).toLocaleString('es-ES', { 
+                    day: 'numeric', 
+                    month: 'short', 
+                    hour: '2-digit', 
+                    minute: '2-digit' 
+                  })}
+                </span>
+              </div>
 
-                <div className="flex flex-wrap items-center gap-2 mb-3">
-                  {(selectedEmail.category || selectedEmail.status) && (
-                    <span className={`text-[10px] sm:text-[11px] font-bold px-2.5 sm:px-3 py-1 rounded-full flex items-center gap-1.5 ${
-                      (selectedEmail.category === 'POSIBLEMENTE_VALIDO' || selectedEmail.status === 'approved') ? 'bg-[#20B486]/15 text-[#20B486]' :
-                      (selectedEmail.category === 'POSIBLEMENTE_INVALIDO' || selectedEmail.status === 'denied') ? 'bg-[#FF5C67]/15 text-[#FF5C67]' :
-                      'bg-[#F5B83D]/15 text-[#F5B83D]'
-                    }`}>
-                      {(selectedEmail.category === 'POSIBLEMENTE_VALIDO' || selectedEmail.status === 'approved') ? '● POSIBLEMENTE VÁLIDO' :
-                       (selectedEmail.category === 'POSIBLEMENTE_INVALIDO' || selectedEmail.status === 'denied') ? '● POSIBLEMENTE INVÁLIDO' :
-                       '● REVISIÓN MANUAL'}
-                      {typeof selectedEmail.decision?.confidence === 'number' && selectedEmail.decision.confidence > 0 && (
-                        <span className="font-mono bg-white/70 px-1.5 py-0.5 rounded text-[10px] text-gray-700">
-                          {(selectedEmail.decision.confidence * 100).toFixed(0)}%
-                        </span>
-                      )}
-                    </span>
-                  )}
-                </div>
-
-                <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-gradient-to-tr from-[#5B3FF5] to-blue-400 flex items-center justify-center text-white font-bold shrink-0">
+              {/* Fila 2: Remitente a la izquierda y Etiquetas compactas a la derecha */}
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex items-center gap-2 min-w-0">
+                  <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-[#5B3FF5] to-blue-400 flex items-center justify-center text-white font-bold text-xs shrink-0">
                     {(selectedEmail.emailInfo?.senderName || selectedEmail.to || 'A')[0]}
                   </div>
-                  <div className="min-w-0">
-                    <p className="font-bold text-[13px] sm:text-[14px] text-[#111827] truncate">
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <span className="font-semibold text-xs text-[#111827] truncate">
                       {selectedEmail.emailInfo?.senderName || (activeFolder === 'sent' ? 'Yo (Admin)' : selectedEmail.to)}
-                    </p>
-                    <p className="text-[11px] sm:text-[12px] text-[#7C8499] truncate">
-                      {activeFolder === 'sent' ? `Para: ${selectedEmail.to}` : `<${selectedEmail.emailInfo?.senderEmail}>`}
-                    </p>
+                    </span>
+                    <span className="text-[11px] text-[#7C8499] truncate hidden sm:inline">
+                      {activeFolder === 'sent' ? `· Para: ${selectedEmail.to}` : `· <${selectedEmail.emailInfo?.senderEmail}>`}
+                    </span>
                   </div>
                 </div>
+
+                {/* Etiquetas compactas en una sola línea que no desplazan la información principal */}
+                <div className="flex flex-wrap items-center gap-1.5">
+                  {/* Estado oficial */}
+                  {(selectedEmail.category || selectedEmail.status) && (
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md flex items-center gap-1 ${
+                      (selectedEmail.category === 'POSIBLEMENTE_VALIDO' || selectedEmail.status === 'approved') ? 'bg-[#20B486]/15 text-[#20B486]' :
+                      (selectedEmail.category === 'POSIBLEMENTE_INVALIDO' || selectedEmail.status === 'denied') ? 'bg-[#FF5C67]/15 text-[#FF5C67]' :
+                      'bg-[#F5B83D]/15 text-[#b07d10]'
+                    }`}>
+                      {(selectedEmail.category === 'POSIBLEMENTE_VALIDO' || selectedEmail.status === 'approved') ? '● Válido' :
+                       (selectedEmail.category === 'POSIBLEMENTE_INVALIDO' || selectedEmail.status === 'denied') ? '● Inválido' :
+                       '● Revisión'}
+                    </span>
+                  )}
+
+                  {/* Clasificación de Tema / Novedad */}
+                  {(() => {
+                    const novelty = getNoveltyDetails(selectedEmail);
+                    return (
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md border flex items-center gap-1 ${novelty.color}`}>
+                        <span>{novelty.icon}</span>
+                        <span>{novelty.badge}</span>
+                      </span>
+                    );
+                  })()}
+
+                  {/* Indicador de Soporte Adjunto */}
+                  {(() => {
+                    const hasSupport = Boolean(
+                      (selectedEmail.emailInfo?.attachments && selectedEmail.emailInfo.attachments.length > 0) ||
+                      (selectedEmail.emailInfo?.images && selectedEmail.emailInfo.images.length > 0) ||
+                      selectedEmail.hasAttachment
+                    );
+                    const count = (selectedEmail.emailInfo?.attachments?.length || 0) + (selectedEmail.emailInfo?.images?.length || 0);
+                    return hasSupport ? (
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-md border bg-emerald-50 text-emerald-700 border-emerald-200 flex items-center gap-1">
+                        <Paperclip size={11} />
+                        <span>Soporte{count > 1 ? ` (${count})` : ''}</span>
+                      </span>
+                    ) : (
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-md border bg-amber-50 text-amber-800 border-amber-300 flex items-center gap-1">
+                        <AlertTriangle size={11} />
+                        <span>Sin soporte</span>
+                      </span>
+                    );
+                  })()}
+
+                  {/* Semáforo de Inasistencias Disponibles */}
+                  {(() => {
+                    const attInfo = getCoderAttendanceInfo(selectedEmail);
+                    return attInfo.hasRemaining ? (
+                      <span 
+                        className="text-[10px] font-bold px-2 py-0.5 rounded-md border bg-emerald-50 text-emerald-700 border-emerald-200 flex items-center gap-1"
+                        title={`${attInfo.remaining} inasistencia(s) disponible(s) sin justificar`}
+                      >
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                        <span>{attInfo.remaining} disp.</span>
+                      </span>
+                    ) : (
+                      <span 
+                        className="text-[10px] font-bold px-2 py-0.5 rounded-md border bg-red-50 text-red-700 border-red-300 flex items-center gap-1"
+                        title="0 inasistencias disponibles sin justificar (límite alcanzado)"
+                      >
+                        <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse"></span>
+                        <span>0 disp.</span>
+                      </span>
+                    );
+                  })()}
+                </div>
               </div>
-              <p className="text-xs sm:text-sm text-[#A3AAC2] self-end sm:self-auto">
-                {new Date(selectedEmail.emailInfo?.date || selectedEmail.date).toLocaleString('es-ES')}
-              </p>
             </div>
             
-            {/* Contenido del correo */}
-            <div className="flex-1 p-6 md:p-8 overflow-y-auto custom-scrollbar space-y-6">
+            {/* Contenido del correo con márgenes y espaciado optimizados */}
+            <div className="flex-1 p-4 sm:p-5 overflow-y-auto custom-scrollbar space-y-3.5">
               
-              {/* Cuerpo del correo */}
-              <div className="prose prose-sm max-w-none text-[#17203A] whitespace-pre-wrap leading-relaxed bg-[#FBFBFE] p-5 rounded-2xl border border-[#E8EAF2]">
-                {selectedEmail.emailInfo?.body || selectedEmail.body}
-              </div>
+              {/* Cuerpo del correo / Expediente Oficial del Caso */}
+              {(() => {
+                const rawBody = selectedEmail.emailInfo?.body || selectedEmail.body || '';
+                const dossier = parseRadicadoBody(rawBody);
+                const radicadoNumber = 
+                  dossier?.radicado || 
+                  selectedEmail.radicado || 
+                  (selectedEmail.id?.startsWith('RAD-') ? selectedEmail.id : null) ||
+                  (selectedEmail.subject?.match(/RAD-[A-Z0-9-]+/i)?.[0]) ||
+                  (selectedEmail.emailInfo?.subject?.match(/RAD-[A-Z0-9-]+/i)?.[0]) ||
+                  (rawBody.match(/RAD-[A-Z0-9-]+/i)?.[0]) ||
+                  null;
 
-              {/* Adjuntos */}
-              {selectedEmail.emailInfo?.attachments && selectedEmail.emailInfo.attachments.length > 0 && (
-                <div className="pt-2">
-                  <p className="text-xs font-bold uppercase tracking-wider text-[#7C8499] mb-3">Adjuntos y Documentos</p>
-                  <div className="flex flex-wrap gap-3">
-                    {selectedEmail.emailInfo.attachments.map((att: any, i: number) => {
+                return (
+                  <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
+                    {/* Cabecera Oficial del Radicado (Completo, visible al 100%, sin cortes) */}
+                    <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-indigo-950 text-white px-4 py-3 flex flex-wrap items-center justify-between gap-2.5">
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <div className="w-8 h-8 rounded-lg bg-white/10 border border-white/10 flex items-center justify-center text-white shrink-0">
+                          <FileText size={16} className="text-indigo-300" />
+                        </div>
+                        <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                          <span className="text-xs font-semibold text-indigo-300 shrink-0">
+                            Radicado Oficial:
+                          </span>
+                          <span className="text-sm sm:text-base font-mono font-bold tracking-wider text-white select-all whitespace-nowrap">
+                            {radicadoNumber || selectedEmail.id || 'RAD-HSE-OFICIAL'}
+                          </span>
+                        </div>
+                      </div>
+                      <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-white/15 text-white border border-white/20 shrink-0">
+                        Expediente HSE
+                      </span>
+                    </div>
+
+                    {/* Contenido directo del caso: Motivo y Subsanación */}
+                    <div className="p-4 sm:p-5 space-y-3.5">
+                      {/* Motivo Declarado por el Coder */}
+                      <div className="border border-indigo-100 bg-gradient-to-b from-indigo-50/20 to-white rounded-xl p-4 sm:p-5">
+                        <div className="flex items-center gap-2 mb-2 text-xs font-bold uppercase tracking-wider text-indigo-900">
+                          <MessageSquare size={15} className="text-[#5B3FF5]" />
+                          <span>Motivo Declarado por el Coder</span>
+                        </div>
+                        <div className="pl-3 border-l-3 border-[#5B3FF5] py-0.5">
+                          <p className="text-sm sm:text-base text-slate-800 leading-relaxed font-medium whitespace-pre-wrap">
+                            {dossier?.motivo || rawBody}
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Subsanación del Coder (si aplica) */}
+                      {dossier?.subsanacion && (
+                        <div className="border border-amber-200 bg-amber-50/50 rounded-xl p-3.5">
+                          <span className="text-xs font-bold uppercase tracking-wider text-amber-900 block mb-1">
+                            Respuesta de Subsanación del Coder:
+                          </span>
+                          <p className="text-sm text-slate-800 font-medium whitespace-pre-wrap">
+                            {dossier.subsanacion}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* Adjuntos y Evidencias */}
+              {((selectedEmail.emailInfo?.attachments && selectedEmail.emailInfo.attachments.length > 0) || (selectedEmail.emailInfo?.images && selectedEmail.emailInfo.images.length > 0)) && (
+                <div className="pt-1">
+                  <p className="text-[11px] font-bold uppercase tracking-wider text-[#7C8499] mb-2">Adjuntos y Documentos Probatorios</p>
+                  <div className="flex flex-wrap gap-2.5">
+                    {[
+                      ...(selectedEmail.emailInfo?.attachments || []),
+                      ...((selectedEmail.emailInfo?.images || []).map((imgUrl: string, idx: number) => ({
+                        name: `soporte_evidencia_${idx + 1}.png`,
+                        url: imgUrl,
+                        mime_type: 'image/png'
+                      })))
+                    ].map((att: any, i: number) => {
                       const hasValidUrl = Boolean(att.url && att.url !== '#');
+                      const isImg = isImageAttachment(att);
                       return (
-                        <a
+                        <div
                           key={i}
-                          href={hasValidUrl ? att.url : undefined}
-                          target={hasValidUrl ? '_blank' : undefined}
-                          rel={hasValidUrl ? 'noopener noreferrer' : undefined}
-                          title={hasValidUrl ? 'Click para abrir o previsualizar el documento' : 'Documento adjunto'}
-                          className={`flex items-center gap-2.5 border border-[#E2E8F0] p-2.5 pr-4 rounded-xl transition-all bg-white shadow-xs ${
+                          onClick={(e) => hasValidUrl && handleOpenPreview(e, att)}
+                          title={hasValidUrl ? 'Click para previsualizar documento o imagen' : 'Documento adjunto'}
+                          className={`flex items-center justify-between gap-2.5 border border-[#E2E8F0] p-2 px-3 rounded-xl transition-all bg-white shadow-2xs ${
                             hasValidUrl
-                              ? 'hover:border-[#5B3FF5] hover:bg-[#F2F0FF]/30 hover:shadow-sm cursor-pointer group'
+                              ? 'hover:border-[#5B3FF5] hover:bg-[#F2F0FF]/30 hover:shadow-xs cursor-pointer group'
                               : 'cursor-default'
                           }`}
                         >
-                          <div className="w-8 h-8 bg-red-100 text-red-500 rounded-lg flex items-center justify-center group-hover:scale-105 transition-transform shrink-0">
-                            <Paperclip size={16} />
+                          <div className="flex items-center gap-2 min-w-0">
+                            <div className={`w-7 h-7 rounded-lg flex items-center justify-center group-hover:scale-105 transition-transform shrink-0 overflow-hidden ${
+                              isImg ? 'bg-[#5B3FF5]/10 text-[#5B3FF5]' : 'bg-red-100 text-red-500'
+                            }`}>
+                              {isImg && hasValidUrl ? (
+                                <img src={att.url} alt="" className="w-full h-full object-cover rounded-lg" onError={(e) => { (e.target as any).style.display = 'none'; }} />
+                              ) : isImg ? (
+                                <ImageIcon size={14} />
+                              ) : (
+                                <FileText size={14} />
+                              )}
+                            </div>
+                            <div className="flex flex-col min-w-0">
+                              <span className="text-xs font-medium text-[#111827] group-hover:text-[#5B3FF5] transition-colors truncate max-w-[180px]">
+                                {att.name}
+                              </span>
+                              {hasValidUrl && (
+                                <span className="text-[9px] text-[#5B3FF5] font-bold">Ver evidencia ↗</span>
+                              )}
+                            </div>
                           </div>
-                          <div className="flex flex-col min-w-0">
-                            <span className="text-sm font-medium text-[#111827] group-hover:text-[#5B3FF5] transition-colors truncate max-w-[200px]">
-                              {att.name}
-                            </span>
-                            {hasValidUrl && (
-                              <span className="text-[10px] text-[#5B3FF5] font-bold">Ver evidencia ↗</span>
-                            )}
-                          </div>
-                        </a>
+                          {hasValidUrl && (
+                            <button
+                              type="button"
+                              onClick={(e) => handleDownloadAttachment(e, att)}
+                              title="Descargar archivo a tu dispositivo"
+                              className="p-1 text-[#7C8499] hover:text-[#5B3FF5] hover:bg-[#5B3FF5]/10 rounded-lg transition-colors ml-1 shrink-0 cursor-pointer"
+                            >
+                              <Download size={13} />
+                            </button>
+                          )}
+                        </div>
                       );
                     })}
                   </div>
-                </div>
-              )}
-
-              {/* Caja de Análisis Asistido de IA HSE */}
-              {selectedEmail.decision && (
-                <div className="p-5 bg-gradient-to-br from-[#F2F0FF] to-[#FAF8FF] border border-[#5B3FF5]/25 rounded-2xl shadow-xs">
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center gap-2">
-                      <div className="w-7 h-7 rounded-lg bg-[#5B3FF5] flex items-center justify-center text-white shadow-xs">
-                        <User size={15} />
-                      </div>
-                      <span className="font-bold text-[14px] text-[#5B3FF5]">
-                        {selectedEmail.decision.source === 'human' ? 'Resolución Humana Registrada' : 'Recomendación Asistida para la Team Leader (Strata Core)'}
-                      </span>
-                    </div>
-                    {typeof selectedEmail.decision?.confidence === 'number' && selectedEmail.decision.confidence > 0 && (
-                      <span className="text-[12px] font-bold text-[#5B3FF5] bg-[#5B3FF5]/10 px-3 py-1 rounded-full border border-[#5B3FF5]/20">
-                        {(selectedEmail.decision.confidence * 100).toFixed(0)}% de Certidumbre
-                      </span>
-                    )}
-                  </div>
-
-                  {/* Indicador de categoría sugerida */}
-                  <div className="mb-2.5 flex items-center gap-2">
-                    <span className="text-xs font-semibold text-[#7C8499] uppercase tracking-wider">Categoría Asistida:</span>
-                    <span className={`text-xs font-bold px-2.5 py-0.5 rounded-full ${
-                      (selectedEmail.category === 'POSIBLEMENTE_VALIDO' || selectedEmail.status === 'approved') ? 'bg-[#20B486]/15 text-[#20B486]' :
-                      (selectedEmail.category === 'POSIBLEMENTE_INVALIDO' || selectedEmail.status === 'denied') ? 'bg-[#FF5C67]/15 text-[#FF5C67]' :
-                      'bg-[#F5B83D]/15 text-[#F5B83D]'
-                    }`}>
-                      {(selectedEmail.category === 'POSIBLEMENTE_VALIDO' || selectedEmail.status === 'approved') ? 'POSIBLEMENTE VÁLIDO' :
-                       (selectedEmail.category === 'POSIBLEMENTE_INVALIDO' || selectedEmail.status === 'denied') ? 'POSIBLEMENTE INVÁLIDO' :
-                       'REVISIÓN MANUAL'}
-                    </span>
-                  </div>
-
-                  <p className="text-sm text-[#17203A] mb-2 leading-relaxed bg-white/70 p-3.5 rounded-xl border border-gray-100">
-                    {selectedEmail.decision.reasoning}
-                  </p>
-                  {selectedEmail.decision.modifiedBy && (
-                    <p className="text-xs text-[#7C8499] font-medium">
-                      Modificado por: <strong className="text-[#111827]">{selectedEmail.decision.modifiedBy}</strong> · {new Date(selectedEmail.decision.modifiedAt).toLocaleTimeString('es-ES')}
-                    </p>
-                  )}
                 </div>
               )}
 
@@ -725,110 +1091,173 @@ export default function Requests() {
               {/* ============================================================== */}
               {/* PANEL DE DETALLE: ENVIADOS (NOTIFICADO) vs BANDEJA (POR RESOLVER) */}
               {/* ============================================================== */}
-              {(activeFolder === 'sent' || selectedEmail.hasHumanIntervention || selectedEmail.hseDecision) ? (
-                <div className="border border-[#20B486]/30 bg-[#F4FDF9] rounded-2xl p-6 shadow-sm space-y-4">
-                  <div className="flex items-center justify-between border-b border-[#20B486]/20 pb-3">
-                    <div className="flex items-center gap-2.5">
-                      <div className="w-8 h-8 rounded-lg bg-[#20B486]/10 text-[#20B486] flex items-center justify-center">
-                        <CheckCircle2 size={18} />
+              {(activeFolder === 'sent' || isRequestResolved(selectedEmail)) ? (
+                (() => {
+                  const isApproved = selectedEmail.hseDecision === 'APPROVED' || selectedEmail.status === 'approved';
+                  const isDisapproved = selectedEmail.hseDecision === 'DISAPPROVED' || selectedEmail.status === 'denied';
+                  const isCorrection = selectedEmail.hseDecision === 'REQUEST_CORRECTION';
+
+                  const cardStyle = isApproved 
+                    ? 'border-emerald-200 bg-emerald-50/40' 
+                    : isDisapproved 
+                    ? 'border-red-200 bg-red-50/40' 
+                    : 'border-amber-200 bg-amber-50/40';
+
+                  const iconBoxStyle = isApproved 
+                    ? 'bg-emerald-100 text-emerald-600' 
+                    : isDisapproved 
+                    ? 'bg-red-100 text-red-600' 
+                    : 'bg-amber-100 text-amber-600';
+
+                  const badgeStyle = isApproved 
+                    ? 'bg-emerald-100 text-emerald-800 border-emerald-300' 
+                    : isDisapproved 
+                    ? 'bg-red-100 text-red-800 border-red-300' 
+                    : 'bg-amber-100 text-amber-800 border-amber-300';
+
+                  const statusTitle = isApproved 
+                    ? 'Justificación Aprobada Formalmente' 
+                    : isDisapproved 
+                    ? 'Justificación Rechazada por HSE' 
+                    : 'Requerimiento de Soporte / Subsanación';
+
+                  return (
+                    <div className={`border rounded-xl p-3.5 sm:p-4 shadow-xs space-y-3 ${cardStyle}`}>
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 border-b border-slate-200/80 pb-2.5">
+                        <div className="flex items-center gap-2.5">
+                          <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${iconBoxStyle}`}>
+                            {isApproved ? <CheckCircle2 size={18} /> : isDisapproved ? <XCircle size={18} /> : <AlertTriangle size={18} />}
+                          </div>
+                          <div>
+                            <h3 className="text-sm sm:text-base font-bold text-slate-900">
+                              {statusTitle}
+                            </h3>
+                            <p className="text-[11px] text-slate-500">
+                              Esta justificación ya fue tramitada y su respuesta formal fue despachada.
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2 self-start sm:self-auto">
+                          {selectedEmail.isAutomatic && (
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#00B4D8]/15 text-[#007799] border border-[#00B4D8]/30 flex items-center gap-1">
+                              <Bot size={12} /> Automatizada
+                            </span>
+                          )}
+                          <span className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full border ${badgeStyle}`}>
+                            {isApproved ? 'Aprobado' : isDisapproved ? 'Rechazado' : isCorrection ? 'Soporte Solicitado' : 'Respondido'}
+                          </span>
+                        </div>
                       </div>
-                      <div>
-                        <h3 className="text-[15px] font-bold text-[#111827]">
-                          Notificación Enviada al Coder
-                        </h3>
-                        <p className="text-xs text-[#7C8499]">
-                          Esta justificación ya fue tramitada y su respuesta formal fue despachada.
+
+                      <div className="bg-white p-3 rounded-lg border border-slate-200/80 shadow-2xs space-y-1">
+                        <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                          Respuesta / Justificación registrada por HSE:
+                        </p>
+                        <p className="text-xs sm:text-sm text-slate-900 leading-relaxed font-medium">
+                          {selectedEmail.decision?.reasoning || selectedEmail.hseNotes || selectedEmail.body || 'Notificación formal enviada al estudiante.'}
                         </p>
                       </div>
+
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-[11px] text-slate-600 pt-1 border-t border-slate-200/70">
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-semibold text-slate-500">Revisor:</span>
+                          <strong className="text-slate-900 font-bold">
+                            {selectedEmail.isAutomatic ? 'Sistema IA HSE (Sin intervención humana)' : (selectedEmail.decision?.modifiedBy || 'Team Leader Paola (HSE)')}
+                          </strong>
+                        </div>
+                        {selectedEmail.decision?.modifiedAt && (
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-semibold text-slate-500">Fecha de envío:</span>
+                            <strong className="text-slate-900 font-bold">
+                              {new Date(selectedEmail.decision.modifiedAt).toLocaleString('es-ES')}
+                            </strong>
+                          </div>
+                        )}
+                      </div>
                     </div>
-                    <span className={`text-xs font-bold px-3 py-1 rounded-full ${
-                      (selectedEmail.hseDecision === 'APPROVED' || selectedEmail.status === 'approved') ? 'bg-[#20B486]/15 text-[#20B486]' :
-                      (selectedEmail.hseDecision === 'DISAPPROVED' || selectedEmail.status === 'denied') ? 'bg-[#FF5C67]/15 text-[#FF5C67]' :
-                      'bg-[#F5B83D]/15 text-[#F5B83D]'
-                    }`}>
-                      {(selectedEmail.hseDecision === 'APPROVED' || selectedEmail.status === 'approved') ? 'Aprobado' :
-                       (selectedEmail.hseDecision === 'DISAPPROVED' || selectedEmail.status === 'denied') ? 'Rechazado' :
-                       (selectedEmail.hseDecision === 'REQUEST_CORRECTION') ? 'Soporte Solicitado' : 'Respondido'}
-                    </span>
-                  </div>
-
-                  <div className="bg-white p-4 rounded-xl border border-emerald-100 shadow-xs">
-                    <p className="text-xs font-bold text-[#7C8499] uppercase tracking-wider mb-1.5">
-                      Respuesta / Justificación registrada por HSE:
-                    </p>
-                    <p className="text-sm text-[#17203A] leading-relaxed">
-                      {selectedEmail.decision?.reasoning || selectedEmail.hseNotes || selectedEmail.body || 'Notificación formal enviada al estudiante.'}
-                    </p>
-                  </div>
-
-                  <div className="flex items-center justify-between text-xs text-[#7C8499] pt-1">
-                    <span>Revisor: <strong className="text-[#111827]">{selectedEmail.decision?.modifiedBy || 'Team Leader Paola'}</strong></span>
-                    {selectedEmail.decision?.modifiedAt && (
-                      <span>Fecha de envío: <strong>{new Date(selectedEmail.decision.modifiedAt).toLocaleString('es-ES')}</strong></span>
-                    )}
-                  </div>
-                </div>
+                  );
+                })()
               ) : (
-                <div className="border-2 border-[#5B3FF5]/20 bg-white rounded-2xl p-6 shadow-sm space-y-4">
-                  <div className="flex items-center justify-between border-b border-[#E8EAF2] pb-3">
+                <div className="border border-[#5B3FF5]/30 bg-white rounded-xl p-3.5 sm:p-4 shadow-xs space-y-3">
+                  <div className="flex items-center justify-between border-b border-[#E8EAF2] pb-2.5">
                     <div className="flex items-center gap-2">
-                      <div className="w-8 h-8 rounded-lg bg-[#5B3FF5]/10 text-[#5B3FF5] flex items-center justify-center">
-                        <Zap size={18} />
+                      <div className="w-7 h-7 rounded-lg bg-[#5B3FF5]/10 text-[#5B3FF5] flex items-center justify-center shrink-0">
+                        <Zap size={15} />
                       </div>
                       <div>
-                        <h3 className="text-[15px] font-bold text-[#111827]">
-                          Resolución Oficial HSE (Backend API Nativo)
+                        <h3 className="text-sm font-bold text-[#111827]">
+                          Resolución Oficial HSE
                         </h3>
-                        <p className="text-xs text-[#7C8499]">
+                        <p className="text-[11px] text-[#7C8499]">
                           Al confirmar la decisión, el mensaje se responderá formalmente y se moverá a <strong>Enviados</strong>.
                         </p>
                       </div>
                     </div>
-                    <span className="text-[11px] font-mono text-[#7C8499] hidden sm:block">
-                      POST /api/v1/justifications/resolve
-                    </span>
                   </div>
+
+                  {/* Observación del Análisis Automático (IA) para casos pendientes */}
+                  {(selectedEmail.aiReason || selectedEmail.decision?.reasoning) && (
+                    <div className="bg-[#5B3FF5]/5 border border-[#5B3FF5]/20 rounded-xl p-3 flex items-start gap-2.5">
+                      <div className="w-6 h-6 rounded-lg bg-[#5B3FF5]/10 text-[#5B3FF5] flex items-center justify-center shrink-0 mt-0.5">
+                        <AlertCircle size={15} />
+                      </div>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2 mb-0.5">
+                          <h4 className="text-[10px] font-bold uppercase tracking-wider text-[#5B3FF5]">
+                            Observación de la IA
+                          </h4>
+                          <span className="text-[9px] font-bold px-1.5 py-0.2 rounded-full bg-[#F5B83D]/15 text-[#855e09] border border-[#F5B83D]/30">
+                            Requiere decisión TL
+                          </span>
+                        </div>
+                        <p className="text-xs text-[#17203A] leading-relaxed">
+                          {selectedEmail.aiReason || selectedEmail.decision?.reasoning}
+                        </p>
+                      </div>
+                    </div>
+                  )}
 
                   {/* Feedback de resultado */}
                   {resolutionStatus && (
-                    <div className={`p-4 rounded-xl text-sm border flex items-start gap-3 ${
+                    <div className={`p-3 rounded-lg text-xs border flex items-start gap-2.5 ${
                       resolutionStatus.type === 'success' ? 'bg-[#20B486]/10 border-[#20B486]/30 text-[#136c50]' :
                       resolutionStatus.type === 'warning' ? 'bg-[#F5B83D]/10 border-[#F5B83D]/30 text-[#855e09]' :
                       'bg-[#FF5C67]/10 border-[#FF5C67]/30 text-[#9c242c]'
                     }`}>
-                      {resolutionStatus.type === 'success' ? <CheckCircle2 size={18} className="shrink-0 mt-0.5" /> :
-                       resolutionStatus.type === 'warning' ? <AlertTriangle size={18} className="shrink-0 mt-0.5" /> :
-                       <AlertCircle size={18} className="shrink-0 mt-0.5" />}
+                      {resolutionStatus.type === 'success' ? <CheckCircle2 size={16} className="shrink-0 mt-0.5" /> :
+                       resolutionStatus.type === 'warning' ? <AlertTriangle size={16} className="shrink-0 mt-0.5" /> :
+                       <AlertCircle size={16} className="shrink-0 mt-0.5" />}
                       <div>
                         <p className="font-bold">{resolutionStatus.message}</p>
                         {resolutionStatus.details && (
-                          <p className="text-xs mt-1 opacity-90">{resolutionStatus.details}</p>
+                          <p className="text-[10px] mt-0.5 opacity-90">{resolutionStatus.details}</p>
                         )}
                       </div>
                     </div>
                   )}
 
                   {/* Formulario de corrección */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     <div>
-                      <label className="block text-xs font-bold uppercase tracking-wider text-[#7C8499] mb-1.5 flex items-center gap-1.5">
-                        <Calendar size={13} /> Fecha Afectada
+                      <label className="block text-[11px] font-bold uppercase tracking-wider text-[#7C8499] mb-1 flex items-center gap-1">
+                        <Calendar size={12} /> Fecha Afectada
                       </label>
                       <input 
                         type="date"
                         value={startDate}
                         onChange={e => setStartDate(e.target.value)}
-                        className="w-full bg-[#F8F9FD] border border-[#E8EAF2] rounded-xl px-3.5 py-2 text-sm text-[#111827] focus:outline-none focus:border-[#5B3FF5]"
+                        className="w-full bg-[#F8F9FD] border border-[#E8EAF2] rounded-lg px-3 py-1.5 text-xs text-[#111827] focus:outline-none focus:border-[#5B3FF5]"
                       />
                     </div>
                     <div>
-                      <label className="block text-xs font-bold uppercase tracking-wider text-[#7C8499] mb-1.5 flex items-center gap-1.5">
-                        <ShieldCheck size={13} /> Tipo de Novedad
+                      <label className="block text-[11px] font-bold uppercase tracking-wider text-[#7C8499] mb-1 flex items-center gap-1">
+                        <ShieldCheck size={12} /> Tipo de Novedad
                       </label>
                       <select
                         value={excuseType}
                         onChange={e => setExcuseType(e.target.value)}
-                        className="w-full bg-[#F8F9FD] border border-[#E8EAF2] rounded-xl px-3.5 py-2 text-sm text-[#111827] focus:outline-none focus:border-[#5B3FF5]"
+                        className="w-full bg-[#F8F9FD] border border-[#E8EAF2] rounded-lg px-3 py-1.5 text-xs text-[#111827] focus:outline-none focus:border-[#5B3FF5]"
                       >
                         <option value="inasistencia_medica">Inasistencia Médica / EPS</option>
                         <option value="calamidad">Calamidad Familiar / Doméstica</option>
@@ -840,33 +1269,41 @@ export default function Requests() {
                   </div>
 
                   <div>
-                    <label className="block text-xs font-bold uppercase tracking-wider text-[#7C8499] mb-1.5 flex items-center gap-1.5">
-                      <MessageSquare size={13} /> Observaciones / Justificación de la Decisión (se incluirá en la notificación oficial)
+                    <label className="block text-[11px] font-bold uppercase tracking-wider text-[#7C8499] mb-1 flex items-center gap-1">
+                      <MessageSquare size={12} /> Observaciones / Justificación de la Decisión
                     </label>
                     <textarea 
-                      rows={3}
+                      rows={2}
                       value={hseNotes}
                       onChange={e => setHseNotes(e.target.value)}
                       placeholder="Escribe las notas de aprobación, rechazo o requerimientos para el coder..."
-                      className="w-full bg-[#F8F9FD] border border-[#E8EAF2] rounded-xl p-3 text-sm text-[#111827] focus:outline-none focus:border-[#5B3FF5] resize-none leading-relaxed"
+                      className="w-full bg-[#F8F9FD] border border-[#E8EAF2] rounded-lg p-2.5 text-xs sm:text-sm text-[#111827] focus:outline-none focus:border-[#5B3FF5] resize-none leading-relaxed"
                     />
                   </div>
 
-                  {/* Botones de Acción */}
-                  <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
-                    <span className="text-xs text-[#7C8499]">
-                      Revisor: <strong>Paola Admin (HSE)</strong>
-                    </span>
+                  {/* Barra de Auditoría y Botones de Acción */}
+                  <div className="pt-2.5 border-t border-[#E8EAF2] space-y-2.5">
+                    <div className="flex flex-wrap items-center justify-between text-[11px] text-[#7C8499] px-1 gap-2">
+                      <span className="flex items-center gap-1.5">
+                        <ShieldCheck size={13} className="text-[#5B3FF5]" />
+                        <span>Revisor Oficial: <strong className="text-[#111827]">Paola Admin (HSE)</strong></span>
+                      </span>
+                      <span className="text-[10px] text-[#7C8499] font-medium hidden sm:inline">
+                        La decisión registrará auditoría y notificará formalmente al coder.
+                      </span>
+                    </div>
 
-                    <div className="flex items-center gap-2">
+                    {/* Grilla balanceada de 3 botones con texto e íconos perfectamente centrados */}
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 w-full">
                       {/* Botón Rechazar */}
                       <button
                         type="button"
                         disabled={isResolving}
                         onClick={() => handleResolveAction('DISAPPROVED')}
-                        className="bg-white hover:bg-red-50 text-[#FF5C67] border border-[#FF5C67]/30 hover:border-[#FF5C67] px-4 py-2.5 rounded-xl font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer disabled:opacity-50"
+                        className="w-full bg-white hover:bg-red-50 text-red-600 hover:text-red-700 border-2 border-red-200 hover:border-red-400 py-2.5 px-2 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center text-center gap-1.5 sm:gap-2 transition-all shadow-2xs cursor-pointer disabled:opacity-50"
                       >
-                        <XCircle size={15} /> Rechazar Caso
+                        <XCircle size={16} className="shrink-0 text-red-500" />
+                        <span className="text-center leading-tight">Rechazar Caso</span>
                       </button>
 
                       {/* Botón Solicitar Corrección */}
@@ -874,9 +1311,10 @@ export default function Requests() {
                         type="button"
                         disabled={isResolving}
                         onClick={() => handleResolveAction('REQUEST_CORRECTION')}
-                        className="bg-white hover:bg-amber-50 text-[#F5B83D] border border-[#F5B83D]/30 hover:border-[#F5B83D] px-4 py-2.5 rounded-xl font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer disabled:opacity-50"
+                        className="w-full bg-white hover:bg-amber-50 text-amber-700 hover:text-amber-800 border-2 border-amber-200 hover:border-amber-400 py-2.5 px-2 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center text-center gap-1.5 sm:gap-2 transition-all shadow-2xs cursor-pointer disabled:opacity-50"
                       >
-                        <AlertTriangle size={15} /> Pedir Soporte
+                        <AlertTriangle size={16} className="shrink-0 text-amber-500" />
+                        <span className="text-center leading-tight">Pedir Soporte</span>
                       </button>
 
                       {/* Botón Aprobar */}
@@ -884,12 +1322,15 @@ export default function Requests() {
                         type="button"
                         disabled={isResolving}
                         onClick={() => handleResolveAction('APPROVED')}
-                        className="bg-[#20B486] hover:bg-[#199d74] text-white shadow-md shadow-[#20B486]/25 px-5 py-2.5 rounded-xl font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer disabled:opacity-50"
+                        className="w-full bg-[#20B486] hover:bg-[#189970] text-white py-2.5 px-2 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center text-center gap-1.5 sm:gap-2 transition-all shadow-md shadow-[#20B486]/30 cursor-pointer disabled:opacity-50"
                       >
                         {isResolving ? (
                           <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                         ) : (
-                          <><CheckCircle2 size={15} /> Aprobar Excusa</>
+                          <>
+                            <CheckCircle2 size={16} className="shrink-0" />
+                            <span className="text-center leading-tight">Aprobar Excusa</span>
+                          </>
                         )}
                       </button>
                     </div>
@@ -908,9 +1349,8 @@ export default function Requests() {
               </button>
 
               <div className="flex items-center gap-2 text-xs text-[#7C8499]">
-                <Zap size={14} className="text-[#5B3FF5]" />
-                <span>Servicio destino:</span>
-                <span className="font-mono text-[#111827]">API REST Nativa</span>
+                <ShieldCheck size={14} className="text-[#20B486]" />
+                <span className="font-medium text-[#7C8499]">Gestión HSE Riwi</span>
               </div>
             </div>
           </div>
@@ -923,8 +1363,89 @@ export default function Requests() {
           </div>
         )}
       </div>
+
+      {/* Modal de Previsualización y Descarga de Archivos / Imágenes */}
+      <AnimatePresence>
+        {previewModalAttachment && (
+          <div 
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs"
+            onClick={() => setPreviewModalAttachment(null)}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden"
+            >
+              {/* Header Modal */}
+              <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/90">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className={`p-2 rounded-xl ${
+                    isImageAttachment(previewModalAttachment) 
+                      ? 'bg-[#5B3FF5]/10 text-[#5B3FF5]' 
+                      : 'bg-red-50 text-red-500'
+                  }`}>
+                    {isImageAttachment(previewModalAttachment) ? <ImageIcon size={20} /> : <FileText size={20} />}
+                  </div>
+                  <div className="min-w-0">
+                    <h3 className="font-bold text-[#111827] text-sm md:text-base truncate max-w-[320px] md:max-w-md">
+                      {previewModalAttachment.name}
+                    </h3>
+                    <p className="text-xs text-[#7C8499]">
+                      {isImageAttachment(previewModalAttachment) ? 'Soporte Fotográfico / Imagen' : 'Documento Probatorio / PDF'}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    type="button"
+                    onClick={(e) => handleDownloadAttachment(e, previewModalAttachment)}
+                    className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold text-white bg-[#5B3FF5] hover:bg-[#492fe0] rounded-xl transition-all shadow-xs cursor-pointer"
+                    title="Descargar archivo a tu dispositivo"
+                  >
+                    <Download size={14} />
+                    <span>Descargar</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPreviewModalAttachment(null)}
+                    className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-200/60 rounded-xl transition-colors cursor-pointer"
+                    title="Cerrar visor"
+                  >
+                    <X size={20} />
+                  </button>
+                </div>
+              </div>
+
+              {/* Visor Content */}
+              <div className="p-4 md:p-6 flex-1 overflow-auto flex items-center justify-center bg-slate-100/60 min-h-[350px]">
+                {isImageAttachment(previewModalAttachment) ? (
+                  <div className="flex flex-col items-center justify-center max-w-full">
+                    <img
+                      src={previewModalAttachment.url}
+                      alt={previewModalAttachment.name}
+                      className="max-h-[68vh] max-w-full object-contain rounded-xl shadow-md border border-slate-200 bg-white"
+                    />
+                  </div>
+                ) : (
+                  <div className="w-full h-full flex flex-col items-center">
+                    <iframe
+                      src={previewModalAttachment.url}
+                      title={previewModalAttachment.name}
+                      className="w-full h-[68vh] rounded-xl border border-slate-200 bg-white shadow-sm"
+                    />
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
       
     </div>
+  </div>
   );
 }
 

@@ -6,3 +6,5 @@ python-multipart
 requests
 pydantic-settings
 httpx
+openpyxl
+psycopg2-binary

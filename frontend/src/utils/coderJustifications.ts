@@ -43,6 +43,7 @@ function getInitialSeedData(coderName: string, coderCedula: string, coderEmail: 
           filename: 'foto_evidencia_inicial.jpg',
           size_bytes: 1420500,
           mime_type: 'image/jpeg',
+          data_url: 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="600" height="400" viewBox="0 0 600 400"><rect width="100%" height="100%" fill="%23f1f5f9"/><rect x="20" y="20" width="560" height="360" rx="12" fill="%23ffffff" stroke="%23cbd5e1" stroke-width="2"/><text x="300" y="190" font-family="sans-serif" font-size="18" font-weight="bold" fill="%23334155" text-anchor="middle">Soporte Evidencia Fotográfica</text><text x="300" y="225" font-family="sans-serif" font-size="13" fill="%2364748b" text-anchor="middle">Calamidad Doméstica - Barranquilla</text></svg>',
           legibility_status: 'warning',
           legibility_reason: 'Baja resolución. El texto y metadatos no son completamente legibles.',
         }
@@ -73,6 +74,7 @@ function getInitialSeedData(coderName: string, coderCedula: string, coderEmail: 
           filename: 'incapacidad_eps_sura.pdf',
           size_bytes: 524288,
           mime_type: 'application/pdf',
+          data_url: 'data:application/pdf;base64,JVBERi0xLjQKJcOkw7zDtsOfCjEgMCBvYmoKPDwKL1R5cGUgL0NhdGFsb2cKL1BhZ2VzIDIgMCBSCj4+CmVuZG9iagoyIDAgb2JqCjw8Ci9UeXBlIC9QYWdlcwovS2lkcyBbMyAwIFJdCi9Db3VudCAxCj4+CmVuZG9iagozIDAgb2JqCjw8Ci9UeXBlIC9QYWdlCi9QYXJlbnQgMiAwIFIKL01lZGlhQm94IFswIDAgNjEyIDc5Ml0KL0NvbnRlbnRzIDQgMCBSCj4+CmVuZG9iago0IDAgb2JqCjw8Ci9MZW5ndGggODAKPj4Kc3RyZWFtCkJUCi9GMSAxMiBUZgoxMDAgNzAwIFREClsoQ2VydGlmaWNhZG8gZGUgSW5jYXBhY2lkYWQgTWVkaWNhIC0gUml3aSBFZHVjYXRpb24pXSBUSgpFVAplbmRzdHJlYW0KZW5kb2JqCnhyZWYKMCA1CjAwMDAwMDAwMDAgNjU1MzUgZiAKMDAwMDAwMDAxNSAwMDAwMCBuIAowMDAwMDAwMDY4IDAwMDAwIG4gCjAwMDAwMDAxMjUgMDAwMDAgbiAKMDAwMDAwMDIxMyAwMDAwMCBuIAp0cmFpbGVyCjw8Ci9TaXplIDUKL1Jvb3QgMSAwIFIKPj4Kc3RhcnR4cmVmCjM0MgolJUVPRg==',
           legibility_status: 'optimal',
           legibility_reason: 'Documento vectorial digital legible.',
         }
@@ -101,6 +103,7 @@ function getInitialSeedData(coderName: string, coderCedula: string, coderEmail: 
           filename: 'reporte_incidencia_aire.png',
           size_bytes: 840100,
           mime_type: 'image/png',
+          data_url: 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="600" height="400" viewBox="0 0 600 400"><rect width="100%" height="100%" fill="%230f172a"/><rect x="20" y="20" width="560" height="360" rx="12" fill="%231e293b" stroke="%23334155" stroke-width="2"/><text x="300" y="190" font-family="sans-serif" font-size="18" font-weight="bold" fill="%2338bdf8" text-anchor="middle">Reporte de Incidencia de Energía</text><text x="300" y="225" font-family="sans-serif" font-size="13" fill="%2394a3b8" text-anchor="middle">Air-e - Circuito Barranquilla Norte</text></svg>',
           legibility_status: 'standard',
           legibility_reason: 'Captura con resolución estándar.',
         }
@@ -137,9 +140,9 @@ function getInitialSeedData(coderName: string, coderCedula: string, coderEmail: 
 export function getCoderJustifications(coderCedula: string, coderName: string, coderEmail: string, route: string): CoderJustification[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) {
+    if (raw !== null) {
       const parsed: CoderJustification[] = JSON.parse(raw);
-      if (Array.isArray(parsed) && parsed.length > 0) {
+      if (Array.isArray(parsed)) {
         return parsed;
       }
     }
@@ -147,7 +150,7 @@ export function getCoderJustifications(coderCedula: string, coderName: string, c
     console.warn('Error leyendo justificaciones de localStorage:', e);
   }
 
-  // Si no hay datos, inicializar con las semillas y persistir
+  // Si no hay datos en localStorage en la primera carga total, inicializar con las semillas
   const initial = getInitialSeedData(coderName, coderCedula, coderEmail, route);
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(initial));
@@ -155,6 +158,27 @@ export function getCoderJustifications(coderCedula: string, coderName: string, c
     console.warn('Error guardando semillas iniciales:', e);
   }
   return initial;
+}
+
+/**
+ * Resetea y limpia todas las justificaciones en localStorage asociadas a una cédula para pruebas limpias
+ */
+export function resetCoderAccount(cedula: string): void {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) {
+      const parsed: CoderJustification[] = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        const filtered = parsed.filter(j => j.coder_cedula !== cedula && !j.coder_cedula?.includes(cedula));
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(filtered));
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('hse_justifications_updated'));
+        }
+      }
+    }
+  } catch (e) {
+    console.warn('Error reseteando cuenta en localStorage:', e);
+  }
 }
 
 /**
@@ -170,6 +194,19 @@ export function saveNewCoderJustification(item: Partial<CoderJustification>): Co
 
   const radicadoId = item.radicado || `RAD-HSE-2026-${Math.floor(100000 + Math.random() * 900000)}`;
 
+  // Evaluador determinista de IA para radicados directos vía portal
+  const attachments = item.attachments || [];
+  const hasAttachments = attachments.length > 0;
+  const desc = (item.description || '').toLowerCase();
+  const novelty = (item.novelty_type || '').toLowerCase();
+  const fullText = `${desc} ${novelty}`.toLowerCase();
+  const isExtemporaneous = fullText.includes('vencid') || fullText.includes('extemporan') || fullText.includes('semana pasada');
+  const epsKeywords = ["sura", "sanitas", "salud total", "nueva eps", "compensar", "famisanar", "coosalud", "mutual ser", "eps", "ips", "clinica", "clínica", "hospital", "cita", "ortodoncia", "odontol"];
+  const mentionsEpsOrMedical = epsKeywords.some(w => fullText.includes(w)) || novelty.includes('incapacidad') || novelty.includes('cita');
+
+  const isAutoApproved = hasAttachments && mentionsEpsOrMedical && !isExtemporaneous;
+  const status: CoderJustificationStatus = isAutoApproved ? 'APPROVED' : 'REVISION_MANUAL';
+
   const newItem: CoderJustification = {
     id: `just-${Date.now()}`,
     radicado: radicadoId,
@@ -183,8 +220,15 @@ export function saveNewCoderJustification(item: Partial<CoderJustification>): Co
     end_date: item.end_date || new Date().toISOString().split('T')[0],
     description: item.description || '',
     truth_declaration: Boolean(item.truth_declaration),
-    status: 'REVISION_MANUAL',
-    attachments: item.attachments || [],
+    status,
+    hse_notes: isAutoApproved 
+      ? 'Resolución 100% automática del Sistema HSE: Justificación médica validada con soporte reglamentario EPS adjunto sin intervención humana.'
+      : hasAttachments
+        ? 'Reporte radicado vía portal con soporte. Requiere verificación manual de tolerancia HSE.'
+        : 'Reporte radicado vía portal sin soporte adjunto. Requiere validación y criterio del Team Leader HSE.',
+    hse_reviewer: isAutoApproved ? 'Sistema IA HSE' : undefined,
+    hse_reviewed_at: isAutoApproved ? new Date().toISOString() : undefined,
+    attachments,
     submitted_at: new Date().toISOString(),
   };
 
@@ -246,18 +290,32 @@ export function updateCoderJustificationWithCorrection(
  * Convierte una Justificación del Coder al modelo canónico Request consumido por la TL (Requests.tsx y Dashboard)
  */
 export function convertCoderJustificationToRequest(j: CoderJustification): Request {
-  const isApproved = j.status === 'APPROVED';
+  const attachmentsList = (j.attachments || []).map((att) => ({
+    name: att.filename || 'Evidencia.pdf',
+    url: att.data_url || att.preview_url || att.storage_path || '#',
+    mime_type: att.mime_type,
+    data_base64: att.data_base64,
+  }));
+
+  const hasAttachments = attachmentsList.length > 0;
+  const desc = (j.description || '').toLowerCase();
+  const novelty = (j.novelty_type || '').toLowerCase();
+  const fullText = `${desc} ${novelty}`.toLowerCase();
+  const isExtemporaneous = fullText.includes('vencid') || fullText.includes('extemporan') || fullText.includes('semana pasada');
+  const epsKeywords = ["sura", "sanitas", "salud total", "nueva eps", "compensar", "famisanar", "coosalud", "mutual ser", "eps", "ips", "clinica", "clínica", "hospital", "cita", "ortodoncia", "odontol"];
+  const mentionsEpsOrMedical = epsKeywords.some(w => fullText.includes(w)) || novelty.includes('incapacidad') || novelty.includes('cita');
+
+  const isHumanReviewed = Boolean(j.hse_reviewer && j.hse_reviewer !== 'Sistema IA HSE');
+  const qualifiesAuto = !isHumanReviewed && hasAttachments && mentionsEpsOrMedical && !isExtemporaneous;
+
+  const isApproved = j.status === 'APPROVED' || qualifiesAuto;
   const isDisapproved = j.status === 'DISAPPROVED';
   const isCorrection = j.status === 'REQUEST_CORRECTION';
   const hasDecision = isApproved || isDisapproved || isCorrection;
+  const isAutomatic = qualifiesAuto || (isApproved && (!j.hse_reviewer || j.hse_reviewer === 'Sistema IA HSE'));
 
   const mappedStatus = isApproved ? 'approved' : isDisapproved ? 'denied' : 'pending_review';
   const mappedCategory = isApproved ? 'POSIBLEMENTE_VALIDO' : isDisapproved ? 'POSIBLEMENTE_INVALIDO' : 'REVISION_MANUAL';
-
-  const attachmentsList = (j.attachments || []).map((att) => ({
-    name: att.filename || 'Evidencia.pdf',
-    url: att.preview_url || att.storage_path || '#',
-  }));
 
   const structuredBody = [
     `Radicado Oficial: ${j.radicado}`,
@@ -269,6 +327,10 @@ export function convertCoderJustificationToRequest(j: CoderJustification): Reque
     j.coder_correction_reply ? `\n\nRespuesta de Subsanación del Coder:\n${j.coder_correction_reply}` : '',
   ].filter(Boolean).join('\n');
 
+  const aiNote = isAutomatic
+    ? 'Resolución 100% automática del Sistema HSE: Justificación médica validada con soporte reglamentario EPS adjunto sin intervención humana.'
+    : (j.hse_notes || 'Radicado directo vía Portal del Coder. Documentación de soporte y declaración juramentada adjuntas.');
+
   return {
     id: j.id || j.radicado,
     studentId: j.coder_id || `coder-${j.coder_cedula}`,
@@ -276,10 +338,16 @@ export function convertCoderJustificationToRequest(j: CoderJustification): Reque
     status: mappedStatus,
     category: mappedCategory,
     recommendation: mappedCategory,
-    hasHumanIntervention: hasDecision,
-    hseDecision: hasDecision ? j.status : null,
+    noveltyType: j.novelty_type,
+    noveltyLabel: j.novelty_label || NOVELTY_LABELS[j.novelty_type] || j.novelty_type,
+    hasAttachment: attachmentsList.length > 0,
+    attachmentsCount: attachmentsList.length,
+    hasHumanIntervention: hasDecision && !isAutomatic,
+    isAutomatic,
+    aiReason: aiNote,
+    hseDecision: hasDecision ? (isApproved ? 'APPROVED' : j.status) : null,
     hseNotes: j.hse_notes || null,
-    hseReviewedAt: j.hse_reviewed_at || null,
+    hseReviewedAt: j.hse_reviewed_at || (isAutomatic ? j.submitted_at : null),
     isResponded: hasDecision,
     emailInfo: {
       senderName: j.coder_name || 'Coder Estudiante',
@@ -290,11 +358,11 @@ export function convertCoderJustificationToRequest(j: CoderJustification): Reque
       attachments: attachmentsList,
     },
     decision: {
-      source: hasDecision ? 'human' : 'ai',
-      confidence: 0.95,
-      reasoning: j.hse_notes || 'Radicado directo vía Portal del Coder. Documentación de soporte y declaración juramentada adjuntas.',
-      modifiedBy: j.hse_reviewer,
-      modifiedAt: j.hse_reviewed_at,
+      source: isAutomatic ? 'ai' : hasDecision ? 'human' : 'ai',
+      confidence: isAutomatic ? 0.95 : 0.85,
+      reasoning: aiNote,
+      modifiedBy: isAutomatic ? 'Sistema IA HSE' : j.hse_reviewer,
+      modifiedAt: j.hse_reviewed_at || (isAutomatic ? j.submitted_at : undefined),
     },
   } as any;
 }
@@ -308,7 +376,38 @@ export function getAllCoderJustifications(): CoderJustification[] {
     if (raw) {
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed)) {
-        return parsed;
+        let changed = false;
+        const normalized = parsed.map((j: CoderJustification) => {
+          const hasAttachments = (j.attachments || []).length > 0;
+          const desc = (j.description || '').toLowerCase();
+          const novelty = (j.novelty_type || '').toLowerCase();
+          const fullText = `${desc} ${novelty}`.toLowerCase();
+          const isExtemporaneous = fullText.includes('vencid') || fullText.includes('extemporan') || fullText.includes('semana pasada');
+          const epsKeywords = ["sura", "sanitas", "salud total", "nueva eps", "compensar", "famisanar", "coosalud", "mutual ser", "eps", "ips", "clinica", "clínica", "hospital", "cita", "ortodoncia", "odontol"];
+          const mentionsEpsOrMedical = epsKeywords.some(w => fullText.includes(w)) || novelty.includes('incapacidad') || novelty.includes('cita');
+
+          const isHumanReviewed = Boolean(j.hse_reviewer && j.hse_reviewer !== 'Sistema IA HSE');
+          if (!isHumanReviewed && j.status === 'REVISION_MANUAL' && hasAttachments && mentionsEpsOrMedical && !isExtemporaneous) {
+            changed = true;
+            return {
+              ...j,
+              status: 'APPROVED' as CoderJustificationStatus,
+              hse_reviewer: 'Sistema IA HSE',
+              hse_reviewed_at: j.submitted_at || new Date().toISOString(),
+              hse_notes: 'Resolución 100% automática del Sistema HSE: Justificación médica validada con soporte reglamentario EPS adjunto sin intervención humana.',
+            };
+          }
+          return j;
+        });
+
+        if (changed) {
+          try {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(normalized));
+          } catch (e) {
+            // ignore
+          }
+        }
+        return normalized;
       }
     }
   } catch (e) {
