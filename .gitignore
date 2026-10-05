@@ -34,10 +34,14 @@ Thumbs.db
 # Python
 .venv
 **/.venv
+venv/
+**/venv/
 __pycache__/
+**/__pycache__/
 *.py[cod]
 *$py.class
-*.pytest_cache/
+.pytest_cache/
+**/.pytest_cache/
 .coverage
 htmlcov/
 temp_processing/
