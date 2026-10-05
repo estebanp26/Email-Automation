@@ -30,6 +30,38 @@ Ninguna regla de negocio o plantilla de correo está quemada en código. Todo se
 
 ---
 
+## 🐳 Despliegue y Ejecución con Docker
+
+Puedes levantar todo el ecosistema (PostgreSQL, Strata Core, Backend API, Frontend y n8n) con un solo comando:
+
+```bash
+# 1. Configurar variables de entorno (usa .env.docker como base)
+cp .env.docker .env
+
+# 2. Levantar todos los servicios principales
+docker compose up -d --build
+
+# 3. (Opcional) Levantar también el escuchador en vivo de Gmail
+docker compose --profile worker up -d
+```
+
+### URLs de Acceso Local
+- **🖥️ Tablero Frontend:** [http://localhost:5173](http://localhost:5173)
+- **⚡ Backend API (FastAPI):** [http://localhost:8000/docs](http://localhost:8000/docs)
+- **🧠 Strata Core API (OCR/IA):** [http://localhost:8001/docs](http://localhost:8001/docs)
+- **🔄 Orquestador n8n:** [http://localhost:5678](http://localhost:5678)
+- **🗄️ PostgreSQL:** `localhost:5432` (`hse_email_automation`)
+
+Comandos útiles de Docker Compose:
+```bash
+docker compose ps               # Ver estado de los contenedores
+docker compose logs -f backend  # Ver logs en vivo del backend
+docker compose down             # Detener todos los servicios conservando datos
+docker compose down -v          # Detener y reiniciar base de datos limpia
+```
+
+---
+
 ## 🔗 Integración Frontend (Dashboard HSE) con Workflow n8n
 
 El frontend se conecta de manera desacoplada con el flujo de automatización orquestado en **n8n** ([`n8n_workflow_email_hse.json`](./n8n_workflow_email_hse.json)) mediante webhooks REST.

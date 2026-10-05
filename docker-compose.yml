@@ -1,68 +1,204 @@
 # ============================================================
-# Email-Automation — PostgreSQL 16 auto-hospedado con Docker
+# Email-Automation — Ecosistema Completo Dockerizado RIWI HSE
 # ------------------------------------------------------------
-# Descripción:
-#   Servicio de base de datos PostgreSQL 16 (imagen Alpine,
-#   ligera y apta para producción) que reemplaza a Supabase
-#   gestionado. Los scripts SQL de ./database/migrations se
-#   ejecutan automáticamente al crear el contenedor por primera
-#   vez gracias a /docker-entrypoint-initdb.d.
+# Servicios:
+#   1. postgres:       PostgreSQL 16 con migraciones automáticas
+#   2. strata-core:    Motor de extracción y OCR (Tesseract + FastAPI :8001)
+#   3. backend:        API de Negocio y Normalización (FastAPI :8000)
+#   4. frontend:       Tablero HSE (React + Vite :5173)
+#   5. n8n:            Motor de Orquestación y Workflows (:5678)
+#   6. gmail-listener: Escuchador IMAP en vivo de Gmail (Worker opcional)
+#
 # Uso:
-#   docker compose up -d        # Levantar la base de datos
-#   docker compose down         # Detener (conserva los datos)
-#   docker compose down -v      # Detener y BORRAR los datos
+#   docker compose up -d --build             # Levantar servicios principales
+#   docker compose --profile worker up -d   # Incluir el escuchador de Gmail
+#   docker compose down                      # Detener conservando datos
+#   docker compose down -v                   # Detener y borrar volúmenes
 # ============================================================
 
 services:
   # ----------------------------------------------------------
-  # Servicio principal: PostgreSQL 16
+  # 1. Base de Datos: PostgreSQL 16
   # ----------------------------------------------------------
   postgres:
     image: postgres:16-alpine
     container_name: hse-postgres
     restart: unless-stopped
-    # Variables de entorno: se cargan desde el archivo .env raíz.
-    # Valores por defecto incluidos para desarrollo local.
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-hse_admin}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-hse_segura_123}
       POSTGRES_DB: ${POSTGRES_DB:-hse_email_automation}
-      # Zona horaria del servidor (recomendado: America/Bogota)
       TZ: ${TZ:-America/Bogota}
       PGTZ: ${TZ:-America/Bogota}
     ports:
-      # Puerto expuesto al host para n8n, Next.js y pgAdmin/psql
       - "${POSTGRES_PORT:-5432}:5432"
     volumes:
-      # Volumen persistente: los datos sobreviven a reinicios
       - postgres_data:/var/lib/postgresql/data
-      # Montaje de migraciones: se ejecutan en orden alfabético
-      # SOLO cuando el volumen está vacío (primer arranque)
       - ./database/migrations:/docker-entrypoint-initdb.d:ro
     healthcheck:
-      # Verificación de salud para orquestar dependencias (n8n, etc.)
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-hse_admin} -d ${POSTGRES_DB:-hse_email_automation}"]
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 10s
+    networks:
+      - hse-network
+
+  # ----------------------------------------------------------
+  # 2. Motor de Percepción & IA: Strata Core (FastAPI :8001)
+  # ----------------------------------------------------------
+  strata-core:
+    build:
+      context: ./strata-core
+      dockerfile: Dockerfile
+    container_name: hse-strata-core
+    restart: unless-stopped
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: ${POSTGRES_USER:-hse_admin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-hse_segura_123}
+      POSTGRES_DB: ${POSTGRES_DB:-hse_email_automation}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-hse_admin}:${POSTGRES_PASSWORD:-hse_segura_123}@postgres:5432/${POSTGRES_DB:-hse_email_automation}
+      OLLAMA_HOST: ${OLLAMA_HOST:-http://host.docker.internal:11434}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen2.5:1.5b}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      TZ: ${TZ:-America/Bogota}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "8001:8001"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
       start_period: 15s
     networks:
       - hse-network
-    # Límites de recursos (ajustar según el servidor productivo)
-    # deploy:
-    #   resources:
-    #     limits:
-    #       cpus: "1.0"
-    #       memory: 1G
+
+  # ----------------------------------------------------------
+  # 3. Backend de Negocio: API Nativa FastAPI (:8000)
+  # ----------------------------------------------------------
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: hse-backend
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-hse_admin}:${POSTGRES_PASSWORD:-hse_segura_123}@postgres:5432/${POSTGRES_DB:-hse_email_automation}
+      STRATA_CORE_URL: http://strata-core:8001
+      ALLOWED_ORIGINS: "http://localhost:5173,http://localhost:3000,http://127.0.0.1:5173,*"
+      DEBUG: ${DEBUG:-false}
+      HSE_DISCORD_WEBHOOK_URL: ${HSE_DISCORD_WEBHOOK_URL:-}
+      SISTER_PLATFORM_API_URL: ${SISTER_PLATFORM_API_URL:-https://api.plataforma-hermana.riwi.io/v1}
+      SISTER_PLATFORM_API_KEY: ${SISTER_PLATFORM_API_KEY:-}
+      SISTER_PLATFORM_USE_MOCK: ${SISTER_PLATFORM_USE_MOCK:-true}
+      TZ: ${TZ:-America/Bogota}
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      strata-core:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    networks:
+      - hse-network
+
+  # ----------------------------------------------------------
+  # 4. Frontend: Tablero HSE (React + Vite :5173)
+  # ----------------------------------------------------------
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: hse-frontend
+    restart: unless-stopped
+    environment:
+      VITE_API_URL: http://localhost:8000
+      VITE_N8N_URL: http://localhost:5678
+      VITE_N8N_USE_TEST_WEBHOOK: ${VITE_N8N_USE_TEST_WEBHOOK:-true}
+    ports:
+      - "5173:5173"
+    depends_on:
+      backend:
+        condition: service_healthy
+      strata-core:
+        condition: service_healthy
+    networks:
+      - hse-network
+
+  # ----------------------------------------------------------
+  # 5. Orquestador de Flujos: n8n Workflow Engine (:5678)
+  # ----------------------------------------------------------
+  n8n:
+    image: docker.n8n.io/n8nio/n8n:latest
+    container_name: novasync-n8n
+    restart: unless-stopped
+    environment:
+      N8N_PORT: 5678
+      N8N_PROTOCOL: http
+      WEBHOOK_URL: http://localhost:5678/
+      GENERIC_TIMEZONE: ${TZ:-America/Bogota}
+      TZ: ${TZ:-America/Bogota}
+    ports:
+      - "5678:5678"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - n8n_data:/home/node/.n8n
+    networks:
+      - hse-network
+
+  # ----------------------------------------------------------
+  # 6. Worker Opcional: Escuchador en vivo de Gmail (IMAP)
+  # ----------------------------------------------------------
+  gmail-listener:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: hse-gmail-listener
+    restart: unless-stopped
+    working_dir: /app
+    volumes:
+      - ./scripts:/app/scripts:ro
+    command: ["python", "scripts/gmail_live_listener.py", "--api-url", "http://strata-core:8001/api/v1/inbound-email"]
+    environment:
+      GMAIL_USER: ${GMAIL_USER:-}
+      GMAIL_APP_PASSWORD: ${GMAIL_APP_PASSWORD:-}
+      INBOUND_API_URL: http://strata-core:8001/api/v1/inbound-email
+      INBOUND_API_KEY: ${INBOUND_API_KEY:-riwi-hse-inbound-secret-key-2026}
+      TZ: ${TZ:-America/Bogota}
+    depends_on:
+      strata-core:
+        condition: service_healthy
+    profiles:
+      - worker
+      - all
+    networks:
+      - hse-network
 
 networks:
-  # Red dedicada para que n8n y el frontend se comuniquen con Postgres
   hse-network:
     name: hse-network
     driver: bridge
 
 volumes:
-  # Volumen nombrado para persistencia de datos en producción
   postgres_data:
     name: hse-postgres-data
+    driver: local
+  n8n_data:
+    name: hse-n8n-data
     driver: local
